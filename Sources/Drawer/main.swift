@@ -31,6 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item.target = self
         }
         add("Show Drawer", "rectangle.topthird.inset.filled", #selector(showDrawer))
+        add("Open Library…", "macwindow", #selector(openLibrary))
+        installMainMenu()
         pauseItem.image = NSImage(systemSymbolName: "pause.circle", accessibilityDescription: nil)
         pauseItem.target = self
         menu.addItem(pauseItem)
@@ -48,12 +50,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         if let path = ProcessInfo.processInfo.environment["DRAWER_SNAPSHOT_VIEW"] {
             // Debug aid: render a view to a PNG. "settings" or "onboarding".
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + ((path.hasSuffix("desktop.png") || path.hasSuffix("palette.png")) ? 4 : 1)) {
+                if let sec = ProcessInfo.processInfo.environment["DRAWER_SECTION"], let sc = DesktopSection(rawValue: sec) { MainNav.shared.section = sc }
                 let view: NSView = path.hasSuffix("onboarding.png")
                     ? NSHostingView(rootView: OnboardingView(finish: {}))
-                    : NSHostingView(rootView: SettingsView())
+                    : (path.hasSuffix("palette.png")
+                        ? { MainNav.shared.paletteOpen = true; return NSHostingView(rootView: MainWindowView().frame(width: 1120, height: 740)) }()
+                    : path.hasSuffix("desktop.png")
+                        ? NSHostingView(rootView: DesktopView().frame(width: 1120, height: 740))
+                    : path.hasSuffix("files-options.png")
+                        ? NSHostingView(rootView: FilesOptionsPopover(store: AppModel.shared.files, close: {}).padding(20).background(Color(white: 0.2)))
+                        : NSHostingView(rootView: SettingsView()))
                 view.frame = NSRect(origin: .zero, size: view.fittingSize)
-                view.appearance = NSAppearance(named: .darkAqua)
+                view.appearance = NSAppearance(named: ProcessInfo.processInfo.environment["DRAWER_LIGHT"] != nil ? .aqua : .darkAqua)
                 if let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
                     view.cacheDisplay(in: view.bounds, to: rep)
                     try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
@@ -71,13 +80,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// A real main menu: needed once the app is in the Dock, and it gives text fields their copy and paste shortcuts.
+    private func installMainMenu() {
+        let main = NSMenu()
+        let appItem = NSMenuItem(); main.addItem(appItem)
+        let appMenu = NSMenu(); appItem.submenu = appMenu
+        appMenu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",").target = self
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Hide Drawer", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(withTitle: "Quit Drawer", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let goItem = NSMenuItem(title: "Go", action: nil, keyEquivalent: ""); main.addItem(goItem)
+        let go = NSMenu(title: "Go"); goItem.submenu = go
+        go.addItem(withTitle: "Search…", action: #selector(openSearch), keyEquivalent: "k").target = self
+        let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: ""); main.addItem(editItem)
+        let edit = NSMenu(title: "Edit"); editItem.submenu = edit
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let windowItem = NSMenuItem(title: "Window", action: nil, keyEquivalent: ""); main.addItem(windowItem)
+        let window = NSMenu(title: "Window"); windowItem.submenu = window
+        window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        NSApp.mainMenu = main
+        NSApp.windowsMenu = window
+    }
+
     func menuNeedsUpdate(_ menu: NSMenu) {
         pauseItem.state = Settings.shared.v.paused ? .on : .off
     }
 
     // Opening the app again from Finder/Applications brings up settings, the way back if the icon is hidden.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        showSettings()
+        SettingsWindow.shared.show(tab: MainNav.shared.tab)
         return true
     }
 
@@ -88,6 +126,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func togglePause() { Settings.shared.v.paused.toggle() }
     @objc func clearClipboard() { AppModel.shared.clipboard.clearUnpinned() }
     @objc func showSettings() { SettingsWindow.shared.show() }
+    @objc func openSearch() {
+        SettingsWindow.shared.show(tab: MainNav.shared.tab)
+        MainNav.shared.paletteOpen.toggle()
+    }
+    @objc func openLibrary() { SettingsWindow.shared.show(tab: .library) }
 }
 
 let app = NSApplication.shared
