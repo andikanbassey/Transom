@@ -9,6 +9,7 @@ enum Pane: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .storage: "iCloud & Storage"
+        case .files: "Quick Access"
         default: rawValue.capitalized
         }
     }
@@ -259,6 +260,7 @@ struct FolderRow: View {
 struct SettingsView: View {
     @ObservedObject private var pane = SettingsNav.shared
     @ObservedObject var settings = Settings.shared
+    @ObservedObject var captureLog = CaptureLog.shared
 
     var body: some View {
         HStack(spacing: 0) {
@@ -398,7 +400,7 @@ struct SettingsView: View {
             }
             if settings.v.filesMode == .folder {
                 RowDivider()
-                FolderRow(title: "Files folder", subtitle: "Dropped files are copied here.", path: settings.v.filesFolder,
+                FolderRow(title: "Quick Access folder", subtitle: "Dropped files are copied here.", path: settings.v.filesFolder,
                           defaultURL: supportDir.appendingPathComponent("Files"), iCloudSub: "Drawer/Files") { settings.v.filesFolder = $0 }
             }
         }
@@ -455,7 +457,7 @@ struct SettingsView: View {
         Section("Show in the drawer") {
             Row("Clipboard", subtitle: "History of everything you copy.") { toggle(\.showClipboard) }
             RowDivider()
-            Row("Files", subtitle: "Pinned files and folders, one click away.") { toggle(\.showFiles) }
+            Row("Quick Access", subtitle: "Pinned files and folders, one click away.") { toggle(\.showFiles) }
             RowDivider()
             Row("Notes", subtitle: "Quick notes for numbers, links and tasks.") { toggle(\.showNotes) }
         }
@@ -553,7 +555,7 @@ struct SettingsView: View {
                 RowDivider()
                 Row("Notes") { cardsOrList(\.notesCards) }
                 RowDivider()
-                Row("Files") { cardsOrList(\.filesCards) }
+                Row("Quick Access") { cardsOrList(\.filesCards) }
             }
         }
         Section("Look") {
@@ -598,6 +600,51 @@ struct SettingsView: View {
             Row("Invert for third-party mice", subtitle: "For wheel mice from Logitech, Razer and others. Turn on if scrolling at the top edge feels backwards with a mouse.") { toggle(\.invertMouseScroll) }
             RowDivider()
             Row("Invert for Apple trackpad and Magic Mouse", subtitle: "Applies to devices that report touch gestures. Separate from the setting above.") { toggle(\.invertTrackpadScroll) }
+        }
+        Section("Automation") {
+            Row("Allow automation", subtitle: "Let other apps and scripts control Drawer with drawer:// links and AppleScript. Off by default.") { toggle(\.automationEnabled) }
+            if settings.v.automationEnabled {
+                RowDivider()
+                Row("Trusted apps", subtitle: settings.v.automationTrusted.isEmpty
+                    ? "No app is trusted yet. The first time an app asks to copy or paste, you will be asked."
+                    : "These apps can copy and paste through Drawer without asking.") { EmptyView() }
+                ForEach(settings.v.automationTrusted) { app in
+                    RowDivider()
+                    Row(app.name, subtitle: app.bundleID) {
+                        Button("Remove") { settings.v.automationTrusted.removeAll { $0.bundleID == app.bundleID } }
+                    }
+                }
+                RowDivider()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Examples").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                    Text("open \"drawer://open\"\nopen \"drawer://search?q=invoice\"\nopen \"drawer://pause\"\nopen \"drawer://paste?index=1&plain=1\"\nosascript -e 'tell application \"Drawer\" to get clip text 1'")
+                        .font(.system(size: 11.5, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+                    Text("Item 1 is the newest. Links that only change Drawer always work once this is on; copying and pasting need a trusted app. Clipboard content can be read out only with AppleScript.")
+                        .font(Look.meta).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 13)
+            }
+        }
+        Section("Capture log") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("What Drawer saw on the clipboard and what it did with it. Useful if something you copied did not show up.")
+                    .font(Look.meta).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                if captureLog.entries.isEmpty {
+                    Text("Nothing copied yet this session.").font(Look.meta).foregroundStyle(.tertiary)
+                } else {
+                    ForEach(captureLog.entries.prefix(12)) { e in
+                        Text(e.line).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+                HStack {
+                    Button("Copy Log") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(captureLog.entries.map(\.line).joined(separator: "\n"), forType: .string)
+                    }
+                    Button("Clear") { captureLog.clear() }
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 13)
         }
         Section("Setup") {
             Row("Welcome screen", subtitle: "Run the first-launch setup again.") {

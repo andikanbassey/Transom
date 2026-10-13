@@ -9,8 +9,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var cancellable: AnyCancellable?
     let pauseItem = NSMenuItem(title: "Pause Clipboard Capture", action: #selector(togglePause), keyEquivalent: "")
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // drawer:// links. Registered this early so a link that launches Drawer is not lost.
+        NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleGetURL(_:withReplyEvent:)),
+                                                     forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
+    }
+
+    @objc func handleGetURL(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
+        guard let text = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue, let url = URL(string: text) else { return }
+        let pid = event.attributeDescriptor(forKeyword: AEKeyword(keySenderPIDAttr))?.int32Value
+        Automation.shared.handle(url: url, source: AutomationSource(pid: pid))
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         drawer = DrawerController()
+        AppModel.shared.showDrawer = { [weak self] in self?.drawer.openIfClosed() }
         AppModel.shared.openSettings = { pane in
             AppModel.shared.hideDrawer()
             SettingsWindow.shared.show(pane: pane)
@@ -50,7 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         if let path = ProcessInfo.processInfo.environment["DRAWER_SNAPSHOT_VIEW"] {
             // Debug aid: render a view to a PNG. "settings" or "onboarding".
-            DispatchQueue.main.asyncAfter(deadline: .now() + ((path.hasSuffix("desktop.png") || path.hasSuffix("palette.png")) ? 4 : 1)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + (Double(ProcessInfo.processInfo.environment["DRAWER_SNAPSHOT_DELAY"] ?? "") ?? ((path.hasSuffix("desktop.png") || path.hasSuffix("palette.png")) ? 4 : 1))) {
+                if ProcessInfo.processInfo.environment["DRAWER_EDIT"] != nil { AppModel.shared.notes.showingList = false }
                 if let sec = ProcessInfo.processInfo.environment["DRAWER_SECTION"], let sc = DesktopSection(rawValue: sec) { MainNav.shared.section = sc }
                 let view: NSView = path.hasSuffix("onboarding.png")
                     ? NSHostingView(rootView: OnboardingView(finish: {}))

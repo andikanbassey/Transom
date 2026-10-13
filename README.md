@@ -18,6 +18,12 @@ Drawer takes its layout from [Unclutter](https://unclutterapp.com) and its clipb
 - Scroll direction can be inverted separately for mouse and trackpad.
 - Right-click anywhere on the drawer for pause, panel toggles and settings.
 
+### Keyboard
+- **← →** (cards) or **↑ ↓** (list) move through clipboard items, **Return** pastes, **⌥Return** pastes as plain text.
+- **Space** previews the selected item, **Esc** steps back, then closes.
+- **⌘F** searches, and so does simply starting to type.
+- **⌘1–⌘9** quick paste still works as before.
+
 ### Clipboard history
 - Every item gets a **cover image and a type pill**: text, link, colour, image, GIF, video, audio, PDF, folder or file.
 - Real previews: first frame of videos and GIFs, first page of PDFs, page title and image for links,
@@ -121,6 +127,30 @@ make-icon.swift       renders the app icon
 ```
 
 Debug aids: `Drawer --show` keeps the drawer open, and `DRAWER_SNAPSHOT=/path.png` renders it to an image.
+
+## Automation
+
+Off by default (Settings › Advanced › Automation). Once on, other apps and scripts can drive Drawer.
+
+**Links** (`open "drawer://…"`):
+
+| Link | Does |
+|---|---|
+| `drawer://open`, `drawer://close` | Show or hide the drawer |
+| `drawer://search?q=invoice` | Open the Library on the clipboard with a search |
+| `drawer://pause`, `resume`, `toggle-pause` | Pause or resume capture |
+| `drawer://note?text=Hello` | Create a note |
+| `drawer://pin?index=1` | Pin a clipboard item (1 is the newest) |
+| `drawer://copy?index=1&plain=1` | Put an item back on the clipboard |
+| `drawer://paste?index=1&plain=1` | Paste an item into the app in front |
+
+**AppleScript:** `clip count`, `get clip text 1`, `copy clip 1`, `paste clip 1`, `pin clip 1`, `pause capture`,
+`resume capture`, `new note "…"`, `search clips "…"`, `open drawer`. For example:
+`osascript -e 'tell application "Drawer" to get clip text 1'`.
+
+**Safety:** links that only change Drawer always work once automation is on. Copying and pasting for another app needs
+that app to be trusted (you are asked the first time; trusted apps are listed in Settings and can be removed).
+Clipboard content can be read out only with AppleScript, never through a link.
 
 ## Roadmap
 

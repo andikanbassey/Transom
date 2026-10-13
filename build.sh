@@ -20,6 +20,7 @@ if [ ! -f AppIcon.icns ]; then
   swift make-icon.swift AppIcon && iconutil -c icns AppIcon.iconset -o AppIcon.icns && rm -rf AppIcon.iconset
 fi
 cp AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp Drawer.sdef "$APP/Contents/Resources/Drawer.sdef"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -32,6 +33,13 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>0.3</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
+  <key>NSAppleScriptEnabled</key><true/>
+  <key>OSAScriptingDefinition</key><string>Drawer.sdef</string>
+  <key>CFBundleURLTypes</key>
+  <array><dict>
+    <key>CFBundleURLName</key><string>Drawer</string>
+    <key>CFBundleURLSchemes</key><array><string>drawer</string></array>
+  </dict></array>
 </dict></plist>
 PLIST
 if [ -n "${DRAWER_SIGN_IDENTITY:-}" ]; then

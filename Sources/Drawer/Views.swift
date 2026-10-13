@@ -87,7 +87,7 @@ struct DrawerView: View {
 enum Panel: String, Codable, CaseIterable {
     case clipboard, files, notes
     var title: String {
-        switch self { case .clipboard: "Clipboard"; case .files: "Files"; case .notes: "Notes" }
+        switch self { case .clipboard: "Clipboard"; case .files: "Quick Access"; case .notes: "Notes" }
     }
     var symbol: String {
         switch self { case .clipboard: "doc.on.clipboard"; case .files: "folder"; case .notes: "note.text" }
@@ -175,13 +175,13 @@ struct AppMenuItems: View {
         Divider()
         Menu("Panels") {
             CheckButton("Clipboard", settings.v.showClipboard) { settings.v.showClipboard.toggle() }
-            CheckButton("Files", settings.v.showFiles) { settings.v.showFiles.toggle() }
+            CheckButton("Quick Access", settings.v.showFiles) { settings.v.showFiles.toggle() }
             CheckButton("Notes", settings.v.showNotes) { settings.v.showNotes.toggle() }
         }
         Divider()
         Button("Settings…") { AppModel.shared.openSettings(nil) }
         Button("Clipboard Settings…") { AppModel.shared.openSettings(.clipboard) }
-        Button("Files Settings…") { AppModel.shared.openSettings(.files) }
+        Button("Quick Access Settings…") { AppModel.shared.openSettings(.files) }
         Button("Notes Settings…") { AppModel.shared.openSettings(.notes) }
         Divider()
         Button("Close Drawer") { AppModel.shared.hideDrawer() }
@@ -327,6 +327,7 @@ struct ClipboardColumn: View {
     @ObservedObject var store: ClipboardStore
     var showsGear: Bool
     var cards = false
+    @FocusState private var searchFocused: Bool
     @ObservedObject var settings = Settings.shared
 
     var body: some View {
@@ -373,6 +374,8 @@ struct ClipboardColumn: View {
             }
             if store.expanded == nil, store.searching {
                 TextField("Search clipboard", text: $store.query)
+                    .focused($searchFocused)
+                    .onAppear { searchFocused = true }
                     .textFieldStyle(.plain).font(.system(size: fs(12)))
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
@@ -396,6 +399,7 @@ struct ClipboardColumn: View {
                     let cardHeight = max(110, geo.size.height - 16 - (sections ? 22 : 0))
                     // Cards keep one shape and scale with the drawer: laid out at a base size, then scaled as a whole.
                     let scale = min(2.4, max(0.7, cardHeight / ClipCard.baseHeight))
+                    ScrollViewReader { proxy in
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(alignment: .top, spacing: 0) {
                             if sections {
@@ -410,19 +414,28 @@ struct ClipboardColumn: View {
                         .padding(.horizontal, 14).padding(.vertical, 4)
                     }
                     .mask(edgeFade)
+                    .onChange(of: store.cursor) { _, id in
+                        if let id { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id, anchor: .center) } }
+                    }
+                    }
                 }
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 3) {
-                        ForEach(groups, id: \.0) { group, items in
-                            GroupHeader(title: group.title)
-                            ForEach(items) { clip in
-                                let n = index[clip.id] ?? 99
-                                ClipRow(clip: clip, store: store, quickKey: settings.v.quickPaste && n < 9 ? n + 1 : nil)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 3) {
+                            ForEach(groups, id: \.0) { group, items in
+                                GroupHeader(title: group.title)
+                                ForEach(items) { clip in
+                                    let n = index[clip.id] ?? 99
+                                    ClipRow(clip: clip, store: store, quickKey: settings.v.quickPaste && n < 9 ? n + 1 : nil).id(clip.id)
+                                }
                             }
                         }
+                        .padding(.horizontal, 8).padding(.bottom, 10)
                     }
-                    .padding(.horizontal, 8).padding(.bottom, 10)
+                    .onChange(of: store.cursor) { _, id in
+                        if let id { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id, anchor: .center) } }
+                    }
                 }
             }
         }
@@ -441,6 +454,9 @@ extension ClipboardColumn {
                 ForEach(items) { clip in
                     let n = index[clip.id] ?? 99
                     ClipCard(clip: clip, store: store, quickKey: settings.v.quickPaste && n < 9 ? n + 1 : nil)
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.accentColor, lineWidth: store.cursor == clip.id ? 3 : 0))
+                        .id(clip.id)
                         .frame(width: ClipCard.baseWidth, height: ClipCard.baseHeight)
                         .scaleEffect(scale, anchor: .topLeading)
                         .frame(width: ClipCard.baseWidth * scale, height: ClipCard.baseHeight * scale, alignment: .topLeading)
@@ -554,7 +570,8 @@ struct ClipRow: View {
             }
         }
         .padding(.horizontal, 8).padding(.vertical, 6)
-        .background(hovering.value ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(store.cursor == clip.id ? Color.accentColor.opacity(0.22) : (hovering.value ? Color.primary.opacity(0.08) : .clear),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .contentShape(Rectangle())
         .onHover { hovering.value = $0 }
         .onTapGesture {
@@ -563,7 +580,7 @@ struct ClipRow: View {
             else { AppModel.shared.use(clip) }
         }
         .onDrag { dragProvider(clip) }
-        .contextMenu { ClipMenu(clip: clip, store: store) }
+        .contextMenu { if inWindow { LibraryClipMenu(clip: clip, store: store) } else { ClipMenu(clip: clip, store: store) } }
     }
 
     /// A square cover that says what the clip is: real artwork for media, a tinted symbol for the rest.
@@ -615,10 +632,10 @@ struct FilesColumn: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ColumnHeader(title: "Files") {
+            ColumnHeader(title: "Quick Access") {
                 HeaderIcon(symbol: "plus", action: addFiles).help(store.mode == .reference ? "Pin files or folders" : "Add files to the folder")
                 HeaderIcon(symbol: "ellipsis", active: optionsOpen.value) { optionsOpen.value.toggle() }
-                    .help("Files options")
+                    .help("Quick Access options")
                     .popover(isPresented: Binding(get: { optionsOpen.value }, set: {
                         optionsOpen.value = $0
                         AppModel.shared.popoverOpen = $0
@@ -806,6 +823,7 @@ struct NotesColumn: View {
 struct NoteRow: View {
     let note: Note
     let store: NotesStore
+    var inWindow = false
     @StateObject private var hovering = Box(false)
 
     var body: some View {
@@ -828,12 +846,8 @@ struct NoteRow: View {
         .onHover { hovering.value = $0 }
         .onTapGesture { store.select(note) }
         .contextMenu {
-            Button("Show in Finder") {
-                if let f = note.fileName { NSWorkspace.shared.activateFileViewerSelecting([store.folder.appendingPathComponent(f)]) }
-            }
-            Button("Delete") { store.delete(note) }
-            Divider()
-            AppMenuItems()
+            NoteMenu(note: note, store: store)
+            if !inWindow { Divider(); AppMenuItems() }
         }
     }
 }
@@ -951,8 +965,8 @@ struct FilesOptionsPopover: View {
             }
             .padding(.horizontal, 12).padding(.vertical, 6)
             OptionDivider()
-            OptionRow("Files Settings…") { close(); AppModel.shared.openSettings(.files) }
-            OptionRow("Hide Files Panel") { close(); settings.v.showFiles = false }
+            OptionRow("Quick Access Settings…") { close(); AppModel.shared.openSettings(.files) }
+            OptionRow("Hide Quick Access Panel") { close(); settings.v.showFiles = false }
         }
         .padding(8)
         .frame(width: 280)

@@ -19,6 +19,12 @@ struct Clip: Codable, Identifiable, Equatable {
     var linkImageFile: String?
     var date = Date()
     var pinned = false
+    /// When this item last changed (copied again, pinned, preview fetched). Newest wins when two Macs disagree.
+    var modified = Date()
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, text, markdown, imageFile, paths, sourceApp, sourceBundleID, linkTitle, linkImageFile, date, pinned
+    }
 
     var linkImageURL: URL? { linkImageFile.map { ClipboardFolder.images.appendingPathComponent($0) } }
     var imageURL: URL? { imageFile.map { ClipboardFolder.images.appendingPathComponent($0) } }
@@ -173,6 +179,8 @@ final class ClipboardStore: ObservableObject {
     @Published var filter = Category.Filter.all
     /// Narrow the Library's clipboard page to a window of time.
     @Published var time = TimeFilter.any
+    /// The item the keyboard has selected in the drawer (arrows move it, Return pastes it).
+    @Published var cursor: UUID?
     /// The clip shown in full in place of the list, when clicking is set to expand.
     @Published var expanded: Clip?
 
@@ -196,21 +204,29 @@ final class ClipboardStore: ObservableObject {
         }
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.poll() }
         Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in self?.trim() }
+        // History changed on another Mac arrives as a changed file: pick it up within seconds.
+        Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in self?.refreshIfChanged() }
     }
 
     // MARK: Storage
 
     private func load() {
         ClipboardFolder.prepare()
-        var all: [Clip] = []
+        ClipboardFolder.pruneTombstones()
+        let dead = ClipboardFolder.tombstones()
+        var best: [UUID: Clip] = [:]
+        var fileCount: [String: Int] = [:]
         for file in ClipboardFolder.monthFiles() {
-            if let text = try? String(contentsOf: file, encoding: .utf8) { all += ClipHistoryFile.parse(text) }
+            fileCount[String(file.lastPathComponent.prefix(7)), default: 0] += 1
+            guard let text = try? String(contentsOf: file, encoding: .utf8) else { continue }
+            for c in ClipHistoryFile.parse(text) where best[c.id].map({ $0.modified < c.modified }) ?? true { best[c.id] = c }
         }
-        var seen = Set<UUID>()
-        clips = all.filter { seen.insert($0.id).inserted }.sorted { $0.date > $1.date }
-        dirtyMonths = []
+        clips = best.values.filter { c in dead[c.id].map { $0 < c.modified } ?? true }.sorted { $0.date > $1.date }
+        // A month with more than one file has sync conflict copies: saving merges them into one.
+        dirtyMonths = Set(fileCount.filter { $0.value > 1 }.keys)
         loadedFolder = ClipboardFolder.url.path
         loadedSignature = ClipboardFolder.signature
+        if !dirtyMonths.isEmpty { save() }
     }
 
     /// History from builds before Markdown storage lived in clips.json with pictures in an images folder.
@@ -250,6 +266,18 @@ final class ClipboardStore: ObservableObject {
         load()
     }
 
+    func moveCursor(_ delta: Int) {
+        let list = visible
+        guard !list.isEmpty else { return }
+        if let current = list.firstIndex(where: { $0.id == cursor }) {
+            cursor = list[min(max(current + delta, 0), list.count - 1)].id
+        } else {
+            cursor = list[delta > 0 ? 0 : list.count - 1].id
+        }
+    }
+
+    var cursorClip: Clip? { visible.first { $0.id == cursor } }
+
     /// The clips the column shows: filtered, pinned first.
     var visible: [Clip] {
         let q = query.trimmingCharacters(in: .whitespaces)
@@ -262,19 +290,24 @@ final class ClipboardStore: ObservableObject {
         return filtered.filter(\.pinned) + filtered.filter { !$0.pinned }
     }
 
+    /// Items bigger than this are not stored: they would bloat the history and slow every launch.
+    static let maxTextBytes = 5_000_000
+    static let maxImageBytes = 60_000_000
+
     private func poll() {
         let pb = NSPasteboard.general
         guard pb.changeCount != lastCount else { return }
         lastCount = pb.changeCount
         let s = settings
-        if s.paused { return }
-        let types = Set((pb.types ?? []).map(\.rawValue))
-        if s.ignoreConfidential, !types.isDisjoint(with: confidentialTypes) { return }
-        if s.ignoreTransient, !types.isDisjoint(with: transientTypes) { return }
-
         let app = NSWorkspace.shared.frontmostApplication
         let isSelf = app?.bundleIdentifier == Bundle.main.bundleIdentifier
-        if !isSelf, !Settings.shared.allows(bundleID: app?.bundleIdentifier) { return }
+        let who = isSelf ? "Drawer" : (app?.localizedName ?? "Unknown app")
+        let log = CaptureLog.shared
+        if s.paused { log.add(app: who, result: "Skipped: capture is paused"); return }
+        let types = Set((pb.types ?? []).map(\.rawValue))
+        if s.ignoreConfidential, !types.isDisjoint(with: confidentialTypes) { log.add(app: who, result: "Skipped: marked confidential"); return }
+        if s.ignoreTransient, !types.isDisjoint(with: transientTypes) { log.add(app: who, result: "Skipped: marked transient"); return }
+        if !isSelf, !Settings.shared.allows(bundleID: app?.bundleIdentifier) { log.add(app: who, result: "Skipped: app is not allowed"); return }
         var base = Clip(kind: .text)
         base.sourceApp = isSelf ? nil : app?.localizedName
         base.sourceBundleID = isSelf ? nil : app?.bundleIdentifier
@@ -285,24 +318,48 @@ final class ClipboardStore: ObservableObject {
             clip.kind = .file
             clip.paths = urls.map(\.path)
             insert(clip, replacing: { $0.paths == clip.paths })
+            log.add(app: who, result: "Stored: \(urls.count == 1 ? "file" : "\(urls.count) files")")
         } else if let str = pb.string(forType: .string), !str.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            guard str.utf8.count <= Self.maxTextBytes else {
+                log.add(app: who, result: "Skipped: text over \(Self.maxTextBytes / 1_000_000) MB")
+                return
+            }
             var clip = base
             clip.text = str
             clip.markdown = Self.richMarkdown(pb)
             insert(clip, replacing: { $0.kind == .text && $0.text == str })
+            log.add(app: who, result: "Stored: text (\(str.count) characters)")
             if s.linkPreviews, clips.first?.category == .link, clips.first?.linkTitle == nil,
                let url = URL(string: str.trimmingCharacters(in: .whitespacesAndNewlines)), let id = clips.first?.id {
                 fetchPreview(id: id, url: url)
             }
-        } else if let tiff = pb.data(forType: .tiff) ?? pb.data(forType: .png),
-                  let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
-            let name = UUID().uuidString + ".png"
-            ClipboardFolder.prepare()
-            try? png.write(to: ClipboardFolder.images.appendingPathComponent(name))
-            var clip = base
-            clip.kind = .image
-            clip.imageFile = name
-            insert(clip, replacing: { _ in false })
+        } else if let data = pb.data(forType: .png) ?? pb.data(forType: .tiff) {
+            guard data.count <= Self.maxImageBytes else {
+                log.add(app: who, result: "Skipped: image over \(Self.maxImageBytes / 1_000_000) MB")
+                return
+            }
+            storeImage(data, alreadyPNG: pb.data(forType: .png) != nil, base: base, who: who)
+        } else {
+            log.add(app: who, result: "Skipped: nothing Drawer can store (\(types.first ?? "empty"))")
+        }
+    }
+
+    /// Encoding a large screenshot takes a moment: do it off the main thread, then add the item.
+    private func storeImage(_ data: Data, alreadyPNG: Bool, base: Clip, who: String) {
+        ClipboardFolder.prepare()
+        let name = UUID().uuidString + ".png"
+        let dest = ClipboardFolder.images.appendingPathComponent(name)
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let png = alreadyPNG ? data : NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:])
+            let saved = png.map { (try? $0.write(to: dest)) != nil } ?? false
+            DispatchQueue.main.async {
+                guard saved else { CaptureLog.shared.add(app: who, result: "Failed: could not save the image"); return }
+                var clip = base
+                clip.kind = .image
+                clip.imageFile = name
+                self?.insert(clip, replacing: { _ in false })
+                CaptureLog.shared.add(app: who, result: "Stored: image")
+            }
         }
     }
 
@@ -313,6 +370,8 @@ final class ClipboardStore: ObservableObject {
             clip.linkTitle = clips[i].linkTitle
             clip.linkImageFile = clips[i].linkImageFile
             dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
+            // The older copy of the same thing is replaced, so other Macs must not bring it back.
+            ClipboardFolder.addTombstone(clips[i].id)
             clips.remove(at: i)
         }
         clips.insert(clip, at: 0)
@@ -345,6 +404,7 @@ final class ClipboardStore: ObservableObject {
                     guard let i = self.clips.firstIndex(where: { $0.id == id }) else { return }
                     self.clips[i].linkTitle = title.map(Self.decodeEntities)?.trimmingCharacters(in: .whitespacesAndNewlines)
                     self.clips[i].linkImageFile = imageFile
+                    self.clips[i].modified = Date()
                     self.dirtyMonths.insert(ClipboardFolder.monthKey(self.clips[i].date))
                     self.save()
                 }
@@ -383,12 +443,12 @@ final class ClipboardStore: ObservableObject {
 
     // MARK: Actions
 
-    func copy(_ clip: Clip) {
+    func copy(_ clip: Clip, plain: Bool = false) {
         let pb = NSPasteboard.general
         pb.clearContents()
         switch clip.kind {
         case .text:
-            if let md = clip.markdown {
+            if let md = clip.markdown, !plain {
                 pb.writeObjects([RichText.attributed(fromMarkdown: md)])
             } else {
                 pb.setString(clip.text ?? "", forType: .string)
@@ -402,6 +462,7 @@ final class ClipboardStore: ObservableObject {
             var moved = clips.remove(at: i)
             dirtyMonths.insert(ClipboardFolder.monthKey(moved.date))
             moved.date = Date()
+            moved.modified = Date()
             dirtyMonths.insert(ClipboardFolder.monthKey(moved.date))
             clips.insert(moved, at: 0)
             save()
@@ -411,27 +472,29 @@ final class ClipboardStore: ObservableObject {
     func togglePin(_ clip: Clip) {
         guard let i = clips.firstIndex(of: clip) else { return }
         clips[i].pinned.toggle()
+        clips[i].modified = Date()
         dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
         save()
     }
 
     func delete(_ clip: Clip) {
         guard let i = clips.firstIndex(of: clip) else { return }
-        remove(at: i)
+        remove(at: i, tombstone: true)
         save()
     }
 
     func clearUnpinned() {
-        for i in clips.indices.reversed() where !clips[i].pinned { remove(at: i) }
+        for i in clips.indices.reversed() where !clips[i].pinned { remove(at: i, tombstone: true) }
         save()
     }
 
     func eraseAll() {
-        for i in clips.indices.reversed() { remove(at: i) }
+        for i in clips.indices.reversed() { remove(at: i, tombstone: true) }
         save()
     }
 
-    private func remove(at i: Int) {
+    private func remove(at i: Int, tombstone: Bool = false) {
+        if tombstone { ClipboardFolder.addTombstone(clips[i].id) }
         for file in [clips[i].imageFile, clips[i].linkImageFile].compactMap({ $0 }) {
             try? FileManager.default.removeItem(at: ClipboardFolder.images.appendingPathComponent(file))
         }
@@ -439,17 +502,37 @@ final class ClipboardStore: ObservableObject {
         clips.remove(at: i)
     }
 
-    /// Rewrite only the months that changed; a month with nothing left loses its file.
+    /// Rewrite only the months that changed. Each month is merged with what is on disk first, so another Mac's
+    /// additions and changes (arriving through iCloud) are kept: newest change per item wins, deletions stay deleted.
     private func save() {
         guard !dirtyMonths.isEmpty else { return }
         ClipboardFolder.prepare()
+        let dead = ClipboardFolder.tombstones()
+        let mine = Dictionary(clips.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let byMonth = Dictionary(grouping: clips, by: { ClipboardFolder.monthKey($0.date) })
         for month in dirtyMonths {
-            let url = ClipboardFolder.fileURL(month: month)
-            if let items = byMonth[month], !items.isEmpty {
-                try? ClipHistoryFile.render(month: month, clips: items).write(to: url, atomically: true, encoding: .utf8)
+            let canonical = ClipboardFolder.fileURL(month: month)
+            let files = ClipboardFolder.files(forMonth: month)
+            var merged: [UUID: Clip] = [:]
+            for file in files {
+                guard let text = try? String(contentsOf: file, encoding: .utf8) else { continue }
+                for c in ClipHistoryFile.parse(text) {
+                    // Copied again on this Mac, so it now belongs to a later month.
+                    if let m = mine[c.id], ClipboardFolder.monthKey(m.date) != month { continue }
+                    if let old = merged[c.id], old.modified >= c.modified { continue }
+                    merged[c.id] = c
+                }
+            }
+            for c in byMonth[month] ?? [] {
+                if let old = merged[c.id], old.modified > c.modified { continue }
+                merged[c.id] = c
+            }
+            let items = merged.values.filter { c in dead[c.id].map { $0 < c.modified } ?? true }
+            if items.isEmpty {
+                for f in files { try? FileManager.default.removeItem(at: f) }
             } else {
-                try? FileManager.default.removeItem(at: url)
+                try? ClipHistoryFile.render(month: month, clips: Array(items)).write(to: canonical, atomically: true, encoding: .utf8)
+                for f in files where f != canonical { try? FileManager.default.removeItem(at: f) }
             }
         }
         dirtyMonths = []
@@ -509,4 +592,23 @@ enum AppIcons {
         cache[id] = img
         return img
     }
+}
+
+/// The last few things the clipboard watcher saw and what it did with them, for finding out why something was not saved.
+final class CaptureLog: ObservableObject {
+    static let shared = CaptureLog()
+    struct Entry: Identifiable {
+        let id = UUID()
+        let date = Date()
+        let app: String
+        let result: String
+        var line: String { "\(date.formatted(date: .omitted, time: .standard))  \(app): \(result)" }
+    }
+    @Published private(set) var entries: [Entry] = []
+
+    func add(app: String, result: String) {
+        entries.insert(Entry(app: app, result: result), at: 0)
+        if entries.count > 40 { entries.removeLast(entries.count - 40) }
+    }
+    func clear() { entries = [] }
 }

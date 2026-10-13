@@ -38,7 +38,8 @@ struct OnboardingView: View {
                 Group {
                     switch step.value {
                     case 0: welcome
-                    case 1: quickStart
+                    case 1: howItWorks
+                    case 2: quickStart
                     default: accessibility
                     }
                 }
@@ -46,7 +47,7 @@ struct OnboardingView: View {
                 .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 10)), removal: .opacity))
                 Spacer(minLength: 0)
                 HStack(spacing: 7) {
-                    ForEach(0..<3) { i in
+                    ForEach(0..<4) { i in
                         Capsule().fill(Color.white.opacity(i == step.value ? 0.9 : 0.22))
                             .frame(width: i == step.value ? 20 : 6, height: 6)
                     }
@@ -110,6 +111,44 @@ struct OnboardingView: View {
         }
     }
 
+    // MARK: How it works
+
+    private var howItWorks: some View {
+        VStack(spacing: 24) {
+            icon
+            heading("How Drawer works", "Four things to know. Everything here can be changed later in Settings.")
+            VStack(spacing: 0) {
+                feature("rectangle.topthird.inset.filled", "Open the drawer",
+                        "Scroll down at the very top edge of your screen, or press ⇧⌘V. Click outside, press esc or scroll up to close it.")
+                RowDivider()
+                feature("doc.on.clipboard", "Clipboard history",
+                        "Everything you copy, with previews. Click to paste, drag to take an item with you, pin what you want to keep.")
+                RowDivider()
+                feature("folder", "Quick Access and Notes",
+                        "Pin files and folders for one-click access, and jot notes. Notes are plain Markdown files you own.")
+                RowDivider()
+                feature("icloud", "Sync across your Macs",
+                        "With iCloud on, notes, Quick Access and clipboard history stay in step both ways. Deleting something on one Mac removes it on the others. Needs iCloud Drive on each Mac.")
+            }
+            .glassSurface(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .padding(.horizontal, 40)
+            primary("Continue") { step.value = 2 }
+        }
+    }
+
+    private func feature(_ symbol: String, _ title: String, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: symbol).font(.system(size: 15, weight: .medium)).foregroundStyle(Color.accentColor)
+                .frame(width: 30, height: 30).background(Color.accentColor.opacity(0.16), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 13.5, weight: .semibold))
+                Text(text).font(.system(size: 12)).foregroundStyle(.white.opacity(0.62)).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18).padding(.vertical, 12)
+    }
+
     private var quickStart: some View {
         VStack(spacing: 26) {
             icon
@@ -119,7 +158,7 @@ struct OnboardingView: View {
                     Toggle("", isOn: SettingsActions.launchAtLogin).toggleStyle(.switch).labelsHidden()
                 }
                 RowDivider()
-                row("iCloud Drive", Settings.iCloudDrive == nil ? "Not available on this Mac" : "Keep notes and files in sync") {
+                row("iCloud Drive", Settings.iCloudDrive == nil ? "Not available on this Mac" : "Sync notes, Quick Access and clipboard history both ways") {
                     ICloudToggle()
                 }
                 RowDivider()
@@ -136,7 +175,7 @@ struct OnboardingView: View {
             }
             .glassSurface(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .padding(.horizontal, 44)
-            primary("Continue") { step.value = 2 }
+            primary("Continue") { step.value = 3 }
         }
     }
 

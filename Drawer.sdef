@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
+<dictionary title="Drawer Terminology">
+  <suite name="Drawer Suite" code="DrwS" description="Control Drawer's clipboard history. Needs Automation turned on in Drawer's Settings.">
+
+    <command name="clip count" code="DrwSCCnt" description="How many items are in the clipboard history.">
+      <cocoa class="DrawerClipCountCommand"/>
+      <result type="integer"/>
+    </command>
+
+    <command name="get clip text" code="DrwSGTxt" description="The text of a clipboard item. Item 1 is the newest.">
+      <cocoa class="DrawerGetClipTextCommand"/>
+      <direct-parameter type="integer" description="Item number. 1 is the newest."/>
+      <result type="text"/>
+    </command>
+
+    <command name="copy clip" code="DrwSCopy" description="Put a clipboard item back on the system clipboard.">
+      <cocoa class="DrawerCopyClipCommand"/>
+      <direct-parameter type="integer" description="Item number. 1 is the newest."/>
+      <parameter name="plain" code="Plin" type="boolean" optional="yes" description="Copy as plain text, without formatting.">
+        <cocoa key="plain"/>
+      </parameter>
+    </command>
+
+    <command name="paste clip" code="DrwSPast" description="Paste a clipboard item into the app in front.">
+      <cocoa class="DrawerPasteClipCommand"/>
+      <direct-parameter type="integer" description="Item number. 1 is the newest."/>
+      <parameter name="plain" code="Plin" type="boolean" optional="yes" description="Paste as plain text, without formatting.">
+        <cocoa key="plain"/>
+      </parameter>
+    </command>
+
+    <command name="pin clip" code="DrwSPin_" description="Pin a clipboard item so it is kept.">
+      <cocoa class="DrawerPinClipCommand"/>
+      <direct-parameter type="integer" description="Item number. 1 is the newest."/>
+    </command>
+
+    <command name="pause capture" code="DrwSPaus" description="Stop recording new clipboard items.">
+      <cocoa class="DrawerPauseCommand"/>
+    </command>
+
+    <command name="resume capture" code="DrwSResm" description="Start recording clipboard items again.">
+      <cocoa class="DrawerResumeCommand"/>
+    </command>
+
+    <command name="new note" code="DrwSNote" description="Create a note with some text.">
+      <cocoa class="DrawerNewNoteCommand"/>
+      <direct-parameter type="text" description="The note's text."/>
+    </command>
+
+    <command name="search clips" code="DrwSSrch" description="Open the Library on the clipboard with a search.">
+      <cocoa class="DrawerSearchCommand"/>
+      <direct-parameter type="text" description="What to search for."/>
+    </command>
+
+    <command name="open drawer" code="DrwSOpen" description="Show the drawer.">
+      <cocoa class="DrawerOpenCommand"/>
+    </command>
+  </suite>
+</dictionary>

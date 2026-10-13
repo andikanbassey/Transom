@@ -17,6 +17,8 @@ private struct PaletteItem: Identifiable {
 
 /// Global search and jump: clipboard items, notes, files and app actions in one list, driven from the keyboard.
 struct SearchPalette: View {
+    /// The open search is exactly as wide as the field it opens from.
+    static let width: CGFloat = 340
     @ObservedObject var nav = MainNav.shared
     @ObservedObject var clipboard = AppModel.shared.clipboard
     @ObservedObject var notes = AppModel.shared.notes
@@ -38,7 +40,7 @@ struct SearchPalette: View {
                     .onChange(of: query.value) { _, _ in selected.value = 0 }
             }
             .padding(.horizontal, 12)
-            .frame(width: 460, height: 34)
+            .frame(width: SearchPalette.width, height: 34)
             .background(Look.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.accentColor.opacity(0.7), lineWidth: 1.5))
             ScrollViewReader { proxy in
@@ -66,12 +68,15 @@ struct SearchPalette: View {
                     if items.indices.contains(i) { proxy.scrollTo(items[i].id) }
                 }
             }
-            .frame(width: 460)
+            .frame(width: SearchPalette.width)
             .background(Look.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
             .shadow(color: .black.opacity(0.22), radius: 28, y: 12)
         }
-        .onAppear { focused = true; selected.value = 0 }
+        .onAppear {
+            focused = true; selected.value = 0
+            if let q = nav.pendingQuery { query.value = q; nav.pendingQuery = nil }
+        }
         .onKeyPress(.downArrow) { selected.value = min(selected.value + 1, max(0, items.count - 1)); return .handled }
         .onKeyPress(.upArrow) { selected.value = max(selected.value - 1, 0); return .handled }
         .onExitCommand { nav.paletteOpen = false }
@@ -127,7 +132,7 @@ struct SearchPalette: View {
         }
         func fileItem(_ p: String) -> PaletteItem {
             let url = URL(fileURLWithPath: p)
-            return PaletteItem(id: "file-\(p)", section: "Files", symbol: "doc", tint: .blue, title: url.lastPathComponent,
+            return PaletteItem(id: "file-\(p)", section: "Quick Access", symbol: "doc", tint: .blue, title: url.lastPathComponent,
                                subtitle: url.deletingLastPathComponent().path.replacingOccurrences(of: NSHomeDirectory(), with: "~"),
                                thumb: url) { NSWorkspace.shared.open(url) }
         }
@@ -204,7 +209,7 @@ struct SearchBarButton: View {
             Text("⌘K").font(.system(size: 11, weight: .medium, design: .rounded)).foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 12)
-        .frame(width: 300, height: 34)
+        .frame(width: SearchPalette.width, height: 34)
         .background(Look.card.opacity(hovering.value ? 1 : 0.85), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.09), lineWidth: 1))
         .contentShape(Rectangle())

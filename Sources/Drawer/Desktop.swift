@@ -10,6 +10,8 @@ final class MainNav: ObservableObject {
     @Published var tab = MainTab.library
     @Published var section = DesktopSection.all
     @Published var paletteOpen = false
+    /// A search handed in from outside (drawer://search), picked up when the search opens.
+    var pendingQuery: String?
     /// The last few things searched for, shown under "Earlier" when the search opens.
     @Published var recents: [String] = UserDefaults.standard.stringArray(forKey: "recentSearches") ?? []
 
@@ -29,7 +31,7 @@ final class MainNav: ObservableObject {
         case .all: "Search everything"
         case .clipboard: "Search clipboard"
         case .notes: "Search notes"
-        case .files: "Search files"
+        case .files: "Search quick access"
         case .settings: "Search settings"
         }
     }
@@ -90,7 +92,7 @@ struct MainWindowView: View {
                     let r = geo[anchor]
                     ZStack(alignment: .topLeading) {
                         Color.black.opacity(0.14).contentShape(Rectangle()).onTapGesture { nav.paletteOpen = false }
-                        SearchPalette().fixedSize().offset(x: r.maxX - 460, y: r.minY)
+                        SearchPalette().fixedSize().offset(x: r.maxX - SearchPalette.width, y: r.minY)
                     }
                     .frame(width: geo.size.width, height: geo.size.height)
                     .transition(.opacity)
@@ -135,7 +137,7 @@ enum DesktopSection: String, CaseIterable {
         case .clipboard: "Clipboard"
         case .pinned: "Pinned"
         case .notes: "Notes"
-        case .files: "Files"
+        case .files: "Quick Access"
         }
     }
     var symbol: String {
@@ -167,6 +169,7 @@ struct DesktopView: View {
     @ObservedObject var files = AppModel.shared.files
     @ObservedObject private var nav = MainNav.shared
     @StateObject private var collapsed = Box(Set<String>())
+    @StateObject private var editor = NoteEditorController()
 
     private let grid = [GridItem(.adaptive(minimum: 250, maximum: 340), spacing: 18, alignment: .top)]
     private let cardHeight: CGFloat = 250
@@ -286,7 +289,7 @@ struct DesktopView: View {
         } else {
             listBox {
                 ForEach(list) { n in
-                    NoteRow(note: n, store: notes).simultaneousGesture(TapGesture().onEnded { nav.section = .notes })
+                    NoteRow(note: n, store: notes, inWindow: true).simultaneousGesture(TapGesture().onEnded { nav.section = .notes })
                 }
             }
         }
@@ -327,7 +330,7 @@ struct DesktopView: View {
                     }
                     section("Clipboard", target: .clipboard, count: recent.count) { clipboardItems(Array(recent.prefix(6))) }
                     section("Notes", target: .notes, count: notes.notes.count) { notesItems(Array(notes.notes.prefix(6))) }
-                    section("Files", target: .files, count: files.paths.count) { filesItems(Array(files.paths.prefix(6))) }
+                    section("Quick Access", target: .files, count: files.paths.count) { filesItems(Array(files.paths.prefix(6))) }
                 }
                 .padding(.horizontal, 32).padding(.bottom, 36)
             }
@@ -373,7 +376,7 @@ struct DesktopView: View {
     private func emptyHint(_ title: String) -> String {
         switch title {
         case "Notes": "Press + to start a note"
-        case "Files": "Pin files to keep them close"
+        case "Quick Access": "Pin files to keep them close"
         default: "Copy something to see it here"
         }
     }
@@ -406,7 +409,7 @@ struct DesktopView: View {
         .frame(height: cardHeight)
         .onTapGesture { nav.section = .notes; notes.select(n) }
         .onDrag { NSItemProvider(object: n.text as NSString) }
-        .contextMenu { Button("Delete Note") { notes.delete(n) } }
+        .contextMenu { NoteMenu(note: n, store: notes) }
     }
 
     private func fileCard(_ p: String) -> some View {
@@ -433,12 +436,19 @@ struct DesktopView: View {
                 Spacer()
                 SearchBarButton()
             }
-            .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, 8).zIndex(10)
-            TextEditor(text: notes.binding(for: id))
-                .font(.system(size: settings.v.notesFontSize + 2))
-                .scrollContentBackground(.hidden)
-                .padding(.horizontal, 24).padding(.bottom, 16)
-                .id(id)
+            .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, 12).zIndex(10)
+            NoteToolbar(controller: editor).padding(.bottom, 14)
+            // The page: a soft card, centred, with the Markdown shown formatted as you type.
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                MarkdownEditor(text: notes.binding(for: id), fontSize: settings.v.notesFontSize + 2, controller: editor)
+                    .padding(.horizontal, 40).padding(.vertical, 22)
+                    .frame(maxWidth: 780, maxHeight: .infinity)
+                    .lookCard(radius: 18)
+                    .id(id)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 32).padding(.bottom, 28)
         }
     }
 
@@ -540,7 +550,7 @@ struct LibraryClipCard: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { withAnimation { copied.value = false } }
         }
         .onDrag { dragProvider(clip) }
-        .contextMenu { ClipMenu(clip: clip, store: store) }
+        .contextMenu { LibraryClipMenu(clip: clip, store: store) }
     }
 }
 
@@ -566,5 +576,67 @@ struct TimeChip: View {
                         in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+    }
+}
+
+// MARK: - Library item menu
+
+/// Right-click menu for a clipboard item in the Library: only things you can do with the item itself.
+struct LibraryClipMenu: View {
+    let clip: Clip
+    let store: ClipboardStore
+
+    var body: some View {
+        let cat = clip.category
+        let file = clip.imageURL ?? clip.fileURLs.first
+        Button(cat == .image || cat == .gif ? "Copy Image" : "Copy") {
+            store.copy(clip)
+            if Settings.shared.v.sounds { NSSound(named: "Pop")?.play() }
+        }
+        Button("Open in Full") { store.expanded = clip }
+        Divider()
+        switch cat {
+        case .image, .gif:
+            if let url = file {
+                Button("Open in Preview") { Self.open(url, withBundleID: "com.apple.Preview") }
+                Button("Save Image As…") { Self.save(url) }
+            }
+        case .video, .audio:
+            if let url = file { Button(cat == .video ? "Play" : "Play Audio") { NSWorkspace.shared.open(url) } }
+        case .pdf:
+            if let url = file { Button("Open in Preview") { Self.open(url, withBundleID: "com.apple.Preview") } }
+        case .folder:
+            if let url = file { Button("Open Folder") { NSWorkspace.shared.open(url) } }
+        case .file:
+            if let url = file { Button("Open") { NSWorkspace.shared.open(url) } }
+        case .link:
+            if let t = clip.text?.trimmingCharacters(in: .whitespacesAndNewlines), let url = URL(string: t) {
+                Button("Open Link") { NSWorkspace.shared.open(url) }
+            }
+        case .text, .color:
+            EmptyView()
+        }
+        if let url = clip.fileURLs.first ?? clip.imageURL {
+            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+        }
+        Divider()
+        Button(clip.pinned ? "Unpin" : "Pin") { store.togglePin(clip) }
+        Button("Delete") { store.delete(clip) }
+    }
+
+    private static func open(_ url: URL, withBundleID id: String) {
+        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else { NSWorkspace.shared.open(url); return }
+        NSWorkspace.shared.open([url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+    }
+
+    private static func save(_ url: URL) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = url.lastPathComponent
+        panel.level = .modalPanel
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, let dest = panel.url {
+            try? FileManager.default.removeItem(at: dest)
+            try? FileManager.default.copyItem(at: url, to: dest)
+        }
     }
 }
