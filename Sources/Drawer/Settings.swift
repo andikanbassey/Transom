@@ -83,7 +83,11 @@ enum Retention: Int, Codable, CaseIterable {
     }
 }
 
-enum PasteMode: String, Codable { case activeApp, clipboard }
+enum PasteMode: String, Codable { case activeApp, clipboard, expand }
+enum ItemsStyle: String, Codable, CaseIterable {
+    case cards, lists, custom
+    var label: String { rawValue.capitalized }
+}
 enum NotesOpen: String, Codable { case lastView, list }
 enum FileSort: String, Codable, CaseIterable {
     case name, kind, dateAdded, dateModified
@@ -151,6 +155,25 @@ struct HotKeySpec: Codable, Equatable {
 struct SettingsValues: Codable, Equatable {
     var onboarded = false
 
+    /// Panels in display order, with any missing from the saved order added at the end.
+    var orderedPanels: [Panel] {
+        var o: [Panel] = []
+        for p in panelOrder where !o.contains(p) { o.append(p) }
+        for p in Panel.allCases where !o.contains(p) { o.append(p) }
+        return o
+    }
+    /// The drawer never gets shorter than its content needs; cards need a little more than rows.
+    var minimumHeight: Double { clipboardCards ? 270 : 200 }
+    var activeHeight: Double {
+        get { max(minimumHeight, drawerHeight) }
+        set { drawerHeight = newValue }
+    }
+    var defaultActiveHeight: Double { 300 }
+    func isShown(_ p: Panel) -> Bool {
+        switch p { case .clipboard: showClipboard; case .files: showFiles; case .notes: showNotes }
+    }
+    func weight(_ p: Panel) -> Double { max(0.2, panelWeights[p.rawValue] ?? 1) }
+
     // Opening the drawer
     var scrollOpen = true
     var holdOpen = false
@@ -169,11 +192,22 @@ struct SettingsValues: Codable, Equatable {
     var showClipboard = true
     var showFiles = true
     var showNotes = true
+    /// Left-to-right order of the panels, and each panel's share of the width.
+    var panelOrder: [Panel] = [.files, .clipboard, .notes]
+    /// Clipboard takes three fifths of the width, files and notes one fifth each.
+    var panelWeights: [String: Double] = ["clipboard": 3, "files": 1, "notes": 1]
+    /// Set once the layout defaults above have been applied to settings saved by older builds.
+    var layoutV2 = false
+    /// Clipboard items as a strip of cards (true) or a list of rows (false).
+    var clipboardCards = true
+    var notesCards = true
+    var filesCards = true
+    /// Cards or lists for everything at once, or "custom" to choose clipboard, notes and files separately.
+    var itemsMode = ItemsStyle.cards
 
     // Clipboard
     var paused = false
     var retention = Retention.month
-    var historyLimit = 500
     var pasteMode = PasteMode.activeApp
     var quickPaste = true
     var quickPasteModifier = Mod.command
@@ -197,6 +231,7 @@ struct SettingsValues: Codable, Equatable {
 
     // Storage. nil means the app's own folder.
     var notesFolder: String?
+    var clipboardFolder: String?
     var filesMode = FilesMode.reference
     var filesFolder: String?
 
@@ -232,6 +267,14 @@ final class Settings: ObservableObject {
             v = decoded
             // The old single "invert scroll" switch was set against a mouse, so carry it over to the mouse.
             if (savedObj["reverseScroll"] as? Bool) == true, savedObj["invertMouseScroll"] == nil { v.invertMouseScroll = true }
+        }
+        // Settings from before the new default layout (files, clipboard at three fifths, notes) move to it once.
+        if !v.layoutV2 {
+            v.panelOrder = SettingsValues().panelOrder
+            v.panelWeights = SettingsValues().panelWeights
+            v.drawerHeight = SettingsValues().drawerHeight
+            v.layoutV2 = true
+            save()
         }
     }
 
