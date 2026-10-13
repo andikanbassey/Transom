@@ -25,7 +25,8 @@ Drawer takes its layout from [Unclutter](https://unclutterapp.com) and its clipb
 - Grouped by recency: Pinned, Past Hour, Today, Yesterday, This Week, This Month, Older.
 - **Paste straight into the app you were using**, or just copy. ⌘1–⌘9 quick paste.
 - Pin, search, filter by type, and see which app each item came from.
-- History kept for a day, week, month, year or forever, with an item cap on top.
+- History kept for a day, week, month, year or forever. Time is the only limit.
+- Stored as one Markdown file per month, with formatting kept as Markdown, in the Clipboard folder.
 
 ### Files
 - Pin files and folders by dragging them in, or keep copies in a folder of your choice.
@@ -99,7 +100,7 @@ Opening the drawer by scrolling, holding a key, waiting or the hotkey needs no p
 
 Stored in `~/Library/Application Support/Drawer/`:
 
-- `settings.json`, `clips.json`, `images/` for clipboard history and previews
+- `settings.json` for settings; `Clipboard/` (monthly Markdown files and an `Images/` folder) for clipboard history
 - `Notes/` and `Files/` unless you pick other folders (or iCloud Drive) in Settings
 
 ## Project layout
