@@ -2,7 +2,7 @@
 
 Each release is written as what you can now do.
 
-## 0.5 (draft, not released)
+## 0.5 (2026-10-13)
 
 The first public release. Drawer is a clipboard manager that lives at the top of your screen.
 
@@ -39,4 +39,4 @@ The first public release. Drawer is a clipboard manager that lives at the top of
 
 **Good to know**
 - This build is not notarized yet, so macOS asks you to confirm opening it the first time. See [Install](README.md#install).
-- SHA-256 of `Drawer.dmg`: *(paste here when the release is built)*
+- SHA-256 of `Drawer.dmg`: `a2b0d4ae6b3683066afdd02030eed8457006f92e55e7357c121fc0a398403e4a`
