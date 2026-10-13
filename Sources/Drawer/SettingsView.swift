@@ -600,6 +600,30 @@ struct SettingsView: View {
             RowDivider()
             Row("Invert for Apple trackpad and Magic Mouse", subtitle: "Applies to devices that report touch gestures. Separate from the setting above.") { toggle(\.invertTrackpadScroll) }
         }
+        Section("Automation") {
+            Row("Allow automation", subtitle: "Let other apps and scripts control Drawer with drawer:// links and AppleScript. Off by default.") { toggle(\.automationEnabled) }
+            if settings.v.automationEnabled {
+                RowDivider()
+                Row("Trusted apps", subtitle: settings.v.automationTrusted.isEmpty
+                    ? "No app is trusted yet. The first time an app asks to copy or paste, you will be asked."
+                    : "These apps can copy and paste through Drawer without asking.") { EmptyView() }
+                ForEach(settings.v.automationTrusted) { app in
+                    RowDivider()
+                    Row(app.name, subtitle: app.bundleID) {
+                        Button("Remove") { settings.v.automationTrusted.removeAll { $0.bundleID == app.bundleID } }
+                    }
+                }
+                RowDivider()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Examples").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                    Text("open \"drawer://open\"\nopen \"drawer://search?q=invoice\"\nopen \"drawer://pause\"\nopen \"drawer://paste?index=1&plain=1\"\nosascript -e 'tell application \"Drawer\" to get clip text 1'")
+                        .font(.system(size: 11.5, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
+                    Text("Item 1 is the newest. Links that only change Drawer always work once this is on; copying and pasting need a trusted app. Clipboard content can be read out only with AppleScript.")
+                        .font(Look.meta).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 13)
+            }
+        }
         Section("Setup") {
             Row("Welcome screen", subtitle: "Run the first-launch setup again.") {
                 Button("Show Welcome…") { AppModel.shared.showOnboarding() }

@@ -370,15 +370,16 @@ final class AppModel {
     var hideDrawerThen: (@escaping () -> Void) -> Void = { $0() }
     var openSettings: (Pane?) -> Void = { _ in }
     var showOnboarding: () -> Void = {}
+    var showDrawer: () -> Void = {}
     /// True while an options popover is open, so the auto-close timer does not run under it.
     var popoverOpen = false
     /// The app that was frontmost when the drawer opened; pasted text goes there.
     var previousApp: NSRunningApplication?
 
     /// Use a clipboard item: copy it, close the drawer, and paste into the app underneath when allowed.
-    func use(_ clip: Clip, paste: Bool? = nil) {
+    func use(_ clip: Clip, paste: Bool? = nil, plain: Bool = false) {
         let s = Settings.shared.v
-        clipboard.copy(clip)
+        clipboard.copy(clip, plain: plain)
         if s.sounds { NSSound(named: "Pop")?.play() }
         let wantsPaste = paste ?? (s.pasteMode == .activeApp)
         if wantsPaste, !Paster.trusted { Paster.requestTrust() }

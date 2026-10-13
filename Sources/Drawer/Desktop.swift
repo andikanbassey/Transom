@@ -10,6 +10,8 @@ final class MainNav: ObservableObject {
     @Published var tab = MainTab.library
     @Published var section = DesktopSection.all
     @Published var paletteOpen = false
+    /// A search handed in from outside (drawer://search), picked up when the search opens.
+    var pendingQuery: String?
     /// The last few things searched for, shown under "Earlier" when the search opens.
     @Published var recents: [String] = UserDefaults.standard.stringArray(forKey: "recentSearches") ?? []
 

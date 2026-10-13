@@ -400,12 +400,12 @@ final class ClipboardStore: ObservableObject {
 
     // MARK: Actions
 
-    func copy(_ clip: Clip) {
+    func copy(_ clip: Clip, plain: Bool = false) {
         let pb = NSPasteboard.general
         pb.clearContents()
         switch clip.kind {
         case .text:
-            if let md = clip.markdown {
+            if let md = clip.markdown, !plain {
                 pb.writeObjects([RichText.attributed(fromMarkdown: md)])
             } else {
                 pb.setString(clip.text ?? "", forType: .string)

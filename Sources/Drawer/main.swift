@@ -9,8 +9,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var cancellable: AnyCancellable?
     let pauseItem = NSMenuItem(title: "Pause Clipboard Capture", action: #selector(togglePause), keyEquivalent: "")
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // drawer:// links. Registered this early so a link that launches Drawer is not lost.
+        NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleGetURL(_:withReplyEvent:)),
+                                                     forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
+    }
+
+    @objc func handleGetURL(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
+        guard let text = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue, let url = URL(string: text) else { return }
+        let pid = event.attributeDescriptor(forKeyword: AEKeyword(keySenderPIDAttr))?.int32Value
+        Automation.shared.handle(url: url, source: AutomationSource(pid: pid))
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         drawer = DrawerController()
+        AppModel.shared.showDrawer = { [weak self] in self?.drawer.openIfClosed() }
         AppModel.shared.openSettings = { pane in
             AppModel.shared.hideDrawer()
             SettingsWindow.shared.show(pane: pane)

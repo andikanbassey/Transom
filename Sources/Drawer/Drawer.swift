@@ -176,6 +176,12 @@ final class DrawerController {
         panel.setFrame(f, display: true)
     }
 
+    /// Show the drawer on the screen the pointer is on, if it is not already open.
+    func openIfClosed() {
+        guard !isVisible else { return }
+        show(on: screenUnderMouse() ?? NSScreen.main!, focus: true)
+    }
+
     func toggle(focus: Bool = false) {
         isVisible ? hide() : show(on: screenUnderMouse() ?? NSScreen.main!, focus: focus)
     }

@@ -73,7 +73,10 @@ struct SearchPalette: View {
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
             .shadow(color: .black.opacity(0.22), radius: 28, y: 12)
         }
-        .onAppear { focused = true; selected.value = 0 }
+        .onAppear {
+            focused = true; selected.value = 0
+            if let q = nav.pendingQuery { query.value = q; nav.pendingQuery = nil }
+        }
         .onKeyPress(.downArrow) { selected.value = min(selected.value + 1, max(0, items.count - 1)); return .handled }
         .onKeyPress(.upArrow) { selected.value = max(selected.value - 1, 0); return .handled }
         .onExitCommand { nav.paletteOpen = false }

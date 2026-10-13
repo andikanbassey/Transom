@@ -229,6 +229,11 @@ struct SettingsValues: Codable, Equatable {
     var drawerHeight = 300.0
     var showMenuBarIcon = true
 
+    // Automation: drawer:// links and AppleScript. Off until the user turns it on.
+    var automationEnabled = false
+    /// Apps that may copy or paste through Drawer without being asked each time.
+    var automationTrusted: [AppRef] = []
+
     // Storage. nil means the app's own folder.
     var notesFolder: String?
     var clipboardFolder: String?
