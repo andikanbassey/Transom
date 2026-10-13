@@ -289,7 +289,7 @@ struct SettingsView: View {
             }
             Spacer()
             SidebarSwitch(title: "Library", symbol: "square.grid.2x2") { MainNav.shared.tab = .library }
-            Text("Drawer 0.4").font(.system(size: 11)).foregroundStyle(.tertiary).padding(.leading, 10).padding(.top, 6)
+            Text("Drawer 0.5").font(.system(size: 11)).foregroundStyle(.tertiary).padding(.leading, 10).padding(.top, 6)
         }
         .padding(.horizontal, 14).padding(.bottom, 16)
     }

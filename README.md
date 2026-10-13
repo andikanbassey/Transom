@@ -7,7 +7,7 @@ images for pictures, videos, links and files.
 Drawer takes its layout from [Unclutter](https://unclutterapp.com) and its clipboard feature set from
 [Paste](https://pasteapp.io). It is an independent project and is not affiliated with either.
 
-> **Status:** early (v0.4). It is a native Swift app with no third-party dependencies.
+> **Status:** early (v0.5). It is a native Swift app with no third-party dependencies.
 
 ## Features
 
