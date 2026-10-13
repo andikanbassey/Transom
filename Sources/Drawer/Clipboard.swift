@@ -19,6 +19,12 @@ struct Clip: Codable, Identifiable, Equatable {
     var linkImageFile: String?
     var date = Date()
     var pinned = false
+    /// When this item last changed (copied again, pinned, preview fetched). Newest wins when two Macs disagree.
+    var modified = Date()
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, text, markdown, imageFile, paths, sourceApp, sourceBundleID, linkTitle, linkImageFile, date, pinned
+    }
 
     var linkImageURL: URL? { linkImageFile.map { ClipboardFolder.images.appendingPathComponent($0) } }
     var imageURL: URL? { imageFile.map { ClipboardFolder.images.appendingPathComponent($0) } }
@@ -196,21 +202,29 @@ final class ClipboardStore: ObservableObject {
         }
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.poll() }
         Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in self?.trim() }
+        // History changed on another Mac arrives as a changed file: pick it up within seconds.
+        Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in self?.refreshIfChanged() }
     }
 
     // MARK: Storage
 
     private func load() {
         ClipboardFolder.prepare()
-        var all: [Clip] = []
+        ClipboardFolder.pruneTombstones()
+        let dead = ClipboardFolder.tombstones()
+        var best: [UUID: Clip] = [:]
+        var fileCount: [String: Int] = [:]
         for file in ClipboardFolder.monthFiles() {
-            if let text = try? String(contentsOf: file, encoding: .utf8) { all += ClipHistoryFile.parse(text) }
+            fileCount[String(file.lastPathComponent.prefix(7)), default: 0] += 1
+            guard let text = try? String(contentsOf: file, encoding: .utf8) else { continue }
+            for c in ClipHistoryFile.parse(text) where best[c.id].map({ $0.modified < c.modified }) ?? true { best[c.id] = c }
         }
-        var seen = Set<UUID>()
-        clips = all.filter { seen.insert($0.id).inserted }.sorted { $0.date > $1.date }
-        dirtyMonths = []
+        clips = best.values.filter { c in dead[c.id].map { $0 < c.modified } ?? true }.sorted { $0.date > $1.date }
+        // A month with more than one file has sync conflict copies: saving merges them into one.
+        dirtyMonths = Set(fileCount.filter { $0.value > 1 }.keys)
         loadedFolder = ClipboardFolder.url.path
         loadedSignature = ClipboardFolder.signature
+        if !dirtyMonths.isEmpty { save() }
     }
 
     /// History from builds before Markdown storage lived in clips.json with pictures in an images folder.
@@ -313,6 +327,8 @@ final class ClipboardStore: ObservableObject {
             clip.linkTitle = clips[i].linkTitle
             clip.linkImageFile = clips[i].linkImageFile
             dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
+            // The older copy of the same thing is replaced, so other Macs must not bring it back.
+            ClipboardFolder.addTombstone(clips[i].id)
             clips.remove(at: i)
         }
         clips.insert(clip, at: 0)
@@ -345,6 +361,7 @@ final class ClipboardStore: ObservableObject {
                     guard let i = self.clips.firstIndex(where: { $0.id == id }) else { return }
                     self.clips[i].linkTitle = title.map(Self.decodeEntities)?.trimmingCharacters(in: .whitespacesAndNewlines)
                     self.clips[i].linkImageFile = imageFile
+                    self.clips[i].modified = Date()
                     self.dirtyMonths.insert(ClipboardFolder.monthKey(self.clips[i].date))
                     self.save()
                 }
@@ -402,6 +419,7 @@ final class ClipboardStore: ObservableObject {
             var moved = clips.remove(at: i)
             dirtyMonths.insert(ClipboardFolder.monthKey(moved.date))
             moved.date = Date()
+            moved.modified = Date()
             dirtyMonths.insert(ClipboardFolder.monthKey(moved.date))
             clips.insert(moved, at: 0)
             save()
@@ -411,27 +429,29 @@ final class ClipboardStore: ObservableObject {
     func togglePin(_ clip: Clip) {
         guard let i = clips.firstIndex(of: clip) else { return }
         clips[i].pinned.toggle()
+        clips[i].modified = Date()
         dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
         save()
     }
 
     func delete(_ clip: Clip) {
         guard let i = clips.firstIndex(of: clip) else { return }
-        remove(at: i)
+        remove(at: i, tombstone: true)
         save()
     }
 
     func clearUnpinned() {
-        for i in clips.indices.reversed() where !clips[i].pinned { remove(at: i) }
+        for i in clips.indices.reversed() where !clips[i].pinned { remove(at: i, tombstone: true) }
         save()
     }
 
     func eraseAll() {
-        for i in clips.indices.reversed() { remove(at: i) }
+        for i in clips.indices.reversed() { remove(at: i, tombstone: true) }
         save()
     }
 
-    private func remove(at i: Int) {
+    private func remove(at i: Int, tombstone: Bool = false) {
+        if tombstone { ClipboardFolder.addTombstone(clips[i].id) }
         for file in [clips[i].imageFile, clips[i].linkImageFile].compactMap({ $0 }) {
             try? FileManager.default.removeItem(at: ClipboardFolder.images.appendingPathComponent(file))
         }
@@ -439,17 +459,37 @@ final class ClipboardStore: ObservableObject {
         clips.remove(at: i)
     }
 
-    /// Rewrite only the months that changed; a month with nothing left loses its file.
+    /// Rewrite only the months that changed. Each month is merged with what is on disk first, so another Mac's
+    /// additions and changes (arriving through iCloud) are kept: newest change per item wins, deletions stay deleted.
     private func save() {
         guard !dirtyMonths.isEmpty else { return }
         ClipboardFolder.prepare()
+        let dead = ClipboardFolder.tombstones()
+        let mine = Dictionary(clips.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let byMonth = Dictionary(grouping: clips, by: { ClipboardFolder.monthKey($0.date) })
         for month in dirtyMonths {
-            let url = ClipboardFolder.fileURL(month: month)
-            if let items = byMonth[month], !items.isEmpty {
-                try? ClipHistoryFile.render(month: month, clips: items).write(to: url, atomically: true, encoding: .utf8)
+            let canonical = ClipboardFolder.fileURL(month: month)
+            let files = ClipboardFolder.files(forMonth: month)
+            var merged: [UUID: Clip] = [:]
+            for file in files {
+                guard let text = try? String(contentsOf: file, encoding: .utf8) else { continue }
+                for c in ClipHistoryFile.parse(text) {
+                    // Copied again on this Mac, so it now belongs to a later month.
+                    if let m = mine[c.id], ClipboardFolder.monthKey(m.date) != month { continue }
+                    if let old = merged[c.id], old.modified >= c.modified { continue }
+                    merged[c.id] = c
+                }
+            }
+            for c in byMonth[month] ?? [] {
+                if let old = merged[c.id], old.modified > c.modified { continue }
+                merged[c.id] = c
+            }
+            let items = merged.values.filter { c in dead[c.id].map { $0 < c.modified } ?? true }
+            if items.isEmpty {
+                for f in files { try? FileManager.default.removeItem(at: f) }
             } else {
-                try? FileManager.default.removeItem(at: url)
+                try? ClipHistoryFile.render(month: month, clips: Array(items)).write(to: canonical, atomically: true, encoding: .utf8)
+                for f in files where f != canonical { try? FileManager.default.removeItem(at: f) }
             }
         }
         dirtyMonths = []

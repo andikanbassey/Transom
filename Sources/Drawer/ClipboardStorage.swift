@@ -18,6 +18,51 @@ enum ClipboardFolder {
         return items.filter { $0.pathExtension == "md" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
+    /// The month file for `month` and any conflict copies a sync service made of it ("2026-10 2.md").
+    static func files(forMonth month: String) -> [URL] {
+        monthFiles().filter { $0.lastPathComponent.hasPrefix(month) }
+    }
+
+    // MARK: Deletions, remembered so a delete on one Mac is not undone by another Mac's copy of the file
+
+    static var deletedFile: URL { url.appendingPathComponent("deleted.txt") }
+
+    private static func tombstoneFiles() -> [URL] {
+        let items = (try? FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+        return items.filter { $0.lastPathComponent.hasPrefix("deleted") && $0.pathExtension == "txt" }
+    }
+
+    static func tombstones() -> [UUID: Date] {
+        var out: [UUID: Date] = [:]
+        for f in tombstoneFiles() {
+            guard let text = try? String(contentsOf: f, encoding: .utf8) else { continue }
+            for line in text.split(separator: "\n") {
+                let parts = line.split(separator: "\t")
+                guard parts.count == 2, let id = UUID(uuidString: String(parts[0])), let t = Double(parts[1]) else { continue }
+                let date = Date(timeIntervalSince1970: t)
+                if out[id].map({ $0 < date }) ?? true { out[id] = date }
+            }
+        }
+        return out
+    }
+
+    static func addTombstone(_ id: UUID) {
+        let line = "\(id.uuidString)\t\(Date().timeIntervalSince1970)\n"
+        if let h = try? FileHandle(forWritingTo: deletedFile) { h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close() }
+        else { try? line.write(to: deletedFile, atomically: true, encoding: .utf8) }
+    }
+
+    /// Forget deletions older than 90 days and fold sync conflict copies into one file.
+    static func pruneTombstones() {
+        let files = tombstoneFiles()
+        guard !files.isEmpty else { return }
+        let cutoff = Date().addingTimeInterval(-90 * 86400)
+        let kept = tombstones().filter { $0.value > cutoff }
+        let text = kept.map { "\($0.key.uuidString)\t\($0.value.timeIntervalSince1970)\n" }.joined()
+        try? text.write(to: deletedFile, atomically: true, encoding: .utf8)
+        for f in files where f != deletedFile { try? FileManager.default.removeItem(at: f) }
+    }
+
     static func monthKey(_ date: Date) -> String { monthFormatter.string(from: date) }
     static func fileURL(month: String) -> URL { url.appendingPathComponent("\(month).md") }
 
@@ -49,6 +94,7 @@ enum ClipHistoryFile {
         var linkTitle: String?
         var linkImage: String?
         var rich: Bool?
+        var mod: Double?
     }
 
     private static let open = "<!-- drawer:clip "
@@ -72,7 +118,8 @@ enum ClipHistoryFile {
             if d != day { day = d; out += "\n## \(d)\n" }
             let meta = Meta(id: clip.id, kind: clip.kind, date: clip.date.timeIntervalSince1970, pinned: clip.pinned ? true : nil,
                             app: clip.sourceApp, bundle: clip.sourceBundleID, paths: clip.paths, image: clip.imageFile,
-                            linkTitle: clip.linkTitle, linkImage: clip.linkImageFile, rich: clip.markdown != nil ? true : nil)
+                            linkTitle: clip.linkTitle, linkImage: clip.linkImageFile, rich: clip.markdown != nil ? true : nil,
+                            mod: clip.modified.timeIntervalSince1970)
             let json = (try? String(data: encoder.encode(meta), encoding: .utf8)) ?? "{}"
             // "-->" inside the JSON would end the comment early.
             let safeJSON = json.replacingOccurrences(of: "-->", with: "--\\u003e")
@@ -124,6 +171,7 @@ enum ClipHistoryFile {
         var clip = Clip(kind: m.kind)
         clip.id = m.id
         clip.date = Date(timeIntervalSince1970: m.date)
+        clip.modified = Date(timeIntervalSince1970: m.mod ?? m.date)
         clip.pinned = m.pinned ?? false
         clip.sourceApp = m.app
         clip.sourceBundleID = m.bundle
