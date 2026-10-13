@@ -18,6 +18,12 @@ Drawer takes its layout from [Unclutter](https://unclutterapp.com) and its clipb
 - Scroll direction can be inverted separately for mouse and trackpad.
 - Right-click anywhere on the drawer for pause, panel toggles and settings.
 
+### Keyboard
+- **← →** (cards) or **↑ ↓** (list) move through clipboard items, **Return** pastes, **⌥Return** pastes as plain text.
+- **Space** previews the selected item, **Esc** steps back, then closes.
+- **⌘F** searches, and so does simply starting to type.
+- **⌘1–⌘9** quick paste still works as before.
+
 ### Clipboard history
 - Every item gets a **cover image and a type pill**: text, link, colour, image, GIF, video, audio, PDF, folder or file.
 - Real previews: first frame of videos and GIFs, first page of PDFs, page title and image for links,

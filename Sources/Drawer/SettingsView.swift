@@ -260,6 +260,7 @@ struct FolderRow: View {
 struct SettingsView: View {
     @ObservedObject private var pane = SettingsNav.shared
     @ObservedObject var settings = Settings.shared
+    @ObservedObject var captureLog = CaptureLog.shared
 
     var body: some View {
         HStack(spacing: 0) {
@@ -623,6 +624,27 @@ struct SettingsView: View {
                 }
                 .padding(.horizontal, 16).padding(.vertical, 13)
             }
+        }
+        Section("Capture log") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("What Drawer saw on the clipboard and what it did with it. Useful if something you copied did not show up.")
+                    .font(Look.meta).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                if captureLog.entries.isEmpty {
+                    Text("Nothing copied yet this session.").font(Look.meta).foregroundStyle(.tertiary)
+                } else {
+                    ForEach(captureLog.entries.prefix(12)) { e in
+                        Text(e.line).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+                HStack {
+                    Button("Copy Log") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(captureLog.entries.map(\.line).joined(separator: "\n"), forType: .string)
+                    }
+                    Button("Clear") { captureLog.clear() }
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 13)
         }
         Section("Setup") {
             Row("Welcome screen", subtitle: "Run the first-launch setup again.") {

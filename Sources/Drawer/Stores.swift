@@ -395,6 +395,7 @@ final class AppModel {
     /// Re-read anything that can change outside the app.
     func refresh() {
         clipboard.expanded = nil
+        clipboard.cursor = nil
         clipboard.refreshIfChanged()
         files.reload()
         notes.refreshIfClean()

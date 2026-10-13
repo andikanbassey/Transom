@@ -63,7 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         if let path = ProcessInfo.processInfo.environment["DRAWER_SNAPSHOT_VIEW"] {
             // Debug aid: render a view to a PNG. "settings" or "onboarding".
-            DispatchQueue.main.asyncAfter(deadline: .now() + ((path.hasSuffix("desktop.png") || path.hasSuffix("palette.png")) ? 4 : 1)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + (Double(ProcessInfo.processInfo.environment["DRAWER_SNAPSHOT_DELAY"] ?? "") ?? ((path.hasSuffix("desktop.png") || path.hasSuffix("palette.png")) ? 4 : 1))) {
                 if ProcessInfo.processInfo.environment["DRAWER_EDIT"] != nil { AppModel.shared.notes.showingList = false }
                 if let sec = ProcessInfo.processInfo.environment["DRAWER_SECTION"], let sc = DesktopSection(rawValue: sec) { MainNav.shared.section = sc }
                 let view: NSView = path.hasSuffix("onboarding.png")

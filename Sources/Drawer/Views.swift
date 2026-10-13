@@ -327,6 +327,7 @@ struct ClipboardColumn: View {
     @ObservedObject var store: ClipboardStore
     var showsGear: Bool
     var cards = false
+    @FocusState private var searchFocused: Bool
     @ObservedObject var settings = Settings.shared
 
     var body: some View {
@@ -373,6 +374,8 @@ struct ClipboardColumn: View {
             }
             if store.expanded == nil, store.searching {
                 TextField("Search clipboard", text: $store.query)
+                    .focused($searchFocused)
+                    .onAppear { searchFocused = true }
                     .textFieldStyle(.plain).font(.system(size: fs(12)))
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
@@ -396,6 +399,7 @@ struct ClipboardColumn: View {
                     let cardHeight = max(110, geo.size.height - 16 - (sections ? 22 : 0))
                     // Cards keep one shape and scale with the drawer: laid out at a base size, then scaled as a whole.
                     let scale = min(2.4, max(0.7, cardHeight / ClipCard.baseHeight))
+                    ScrollViewReader { proxy in
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(alignment: .top, spacing: 0) {
                             if sections {
@@ -410,19 +414,28 @@ struct ClipboardColumn: View {
                         .padding(.horizontal, 14).padding(.vertical, 4)
                     }
                     .mask(edgeFade)
+                    .onChange(of: store.cursor) { _, id in
+                        if let id { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id, anchor: .center) } }
+                    }
+                    }
                 }
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 3) {
-                        ForEach(groups, id: \.0) { group, items in
-                            GroupHeader(title: group.title)
-                            ForEach(items) { clip in
-                                let n = index[clip.id] ?? 99
-                                ClipRow(clip: clip, store: store, quickKey: settings.v.quickPaste && n < 9 ? n + 1 : nil)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 3) {
+                            ForEach(groups, id: \.0) { group, items in
+                                GroupHeader(title: group.title)
+                                ForEach(items) { clip in
+                                    let n = index[clip.id] ?? 99
+                                    ClipRow(clip: clip, store: store, quickKey: settings.v.quickPaste && n < 9 ? n + 1 : nil).id(clip.id)
+                                }
                             }
                         }
+                        .padding(.horizontal, 8).padding(.bottom, 10)
                     }
-                    .padding(.horizontal, 8).padding(.bottom, 10)
+                    .onChange(of: store.cursor) { _, id in
+                        if let id { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id, anchor: .center) } }
+                    }
                 }
             }
         }
@@ -441,6 +454,9 @@ extension ClipboardColumn {
                 ForEach(items) { clip in
                     let n = index[clip.id] ?? 99
                     ClipCard(clip: clip, store: store, quickKey: settings.v.quickPaste && n < 9 ? n + 1 : nil)
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.accentColor, lineWidth: store.cursor == clip.id ? 3 : 0))
+                        .id(clip.id)
                         .frame(width: ClipCard.baseWidth, height: ClipCard.baseHeight)
                         .scaleEffect(scale, anchor: .topLeading)
                         .frame(width: ClipCard.baseWidth * scale, height: ClipCard.baseHeight * scale, alignment: .topLeading)
@@ -554,7 +570,8 @@ struct ClipRow: View {
             }
         }
         .padding(.horizontal, 8).padding(.vertical, 6)
-        .background(hovering.value ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(store.cursor == clip.id ? Color.accentColor.opacity(0.22) : (hovering.value ? Color.primary.opacity(0.08) : .clear),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .contentShape(Rectangle())
         .onHover { hovering.value = $0 }
         .onTapGesture {

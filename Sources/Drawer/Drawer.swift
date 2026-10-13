@@ -153,8 +153,41 @@ final class DrawerController {
     // MARK: Keys
 
     /// Quick paste: modifier + 1…9 pastes the nth item in the list.
+    /// Keyboard use of the drawer: arrows move through clipboard items, Return pastes (⌥Return pastes plain text),
+    /// Space previews, Esc steps back, ⌘F searches, and just typing starts a search. Returns true if the key was used.
+    private func navigate(_ event: NSEvent) -> Bool {
+        guard !(panel.firstResponder is NSTextView) || event.keyCode == 53 else { return false }
+        let store = AppModel.shared.clipboard
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let cards = settings.clipboardCards
+        switch event.keyCode {
+        case 123 where cards && flags.isEmpty: store.moveCursor(-1)
+        case 124 where cards && flags.isEmpty: store.moveCursor(1)
+        case 126 where !cards && flags.isEmpty: store.moveCursor(-1)
+        case 125 where !cards && flags.isEmpty: store.moveCursor(1)
+        case 36, 76:
+            guard let clip = store.cursorClip else { return false }
+            AppModel.shared.use(clip, paste: flags.contains(.option) ? true : nil, plain: flags.contains(.option))
+        case 49 where flags.isEmpty:
+            guard let clip = store.cursorClip else { return false }
+            store.expanded = store.expanded == nil ? clip : nil
+        case 53 where store.expanded != nil: store.expanded = nil
+        case 3 where flags == .command: store.searching = true
+        default:
+            // A plain letter or number starts a search, as in Spotlight.
+            guard flags.isEmpty || flags == .shift, store.expanded == nil, let chars = event.characters, !chars.isEmpty,
+                  chars.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) }) else { return false }
+            store.searching = true
+            store.query += chars
+            store.cursor = nil
+        }
+        return true
+    }
+
     private func handleKey(_ event: NSEvent) -> NSEvent? {
-        guard isVisible, settings.quickPaste, panel.isKeyWindow else { return event }
+        guard isVisible, panel.isKeyWindow else { return event }
+        if navigate(event) { return nil }
+        guard settings.quickPaste else { return event }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         guard flags == settings.quickPasteModifier.flag, let ch = event.charactersIgnoringModifiers,
               let n = Int(ch), (1...9).contains(n) else { return event }

@@ -179,6 +179,8 @@ final class ClipboardStore: ObservableObject {
     @Published var filter = Category.Filter.all
     /// Narrow the Library's clipboard page to a window of time.
     @Published var time = TimeFilter.any
+    /// The item the keyboard has selected in the drawer (arrows move it, Return pastes it).
+    @Published var cursor: UUID?
     /// The clip shown in full in place of the list, when clicking is set to expand.
     @Published var expanded: Clip?
 
@@ -264,6 +266,18 @@ final class ClipboardStore: ObservableObject {
         load()
     }
 
+    func moveCursor(_ delta: Int) {
+        let list = visible
+        guard !list.isEmpty else { return }
+        if let current = list.firstIndex(where: { $0.id == cursor }) {
+            cursor = list[min(max(current + delta, 0), list.count - 1)].id
+        } else {
+            cursor = list[delta > 0 ? 0 : list.count - 1].id
+        }
+    }
+
+    var cursorClip: Clip? { visible.first { $0.id == cursor } }
+
     /// The clips the column shows: filtered, pinned first.
     var visible: [Clip] {
         let q = query.trimmingCharacters(in: .whitespaces)
@@ -276,19 +290,24 @@ final class ClipboardStore: ObservableObject {
         return filtered.filter(\.pinned) + filtered.filter { !$0.pinned }
     }
 
+    /// Items bigger than this are not stored: they would bloat the history and slow every launch.
+    static let maxTextBytes = 5_000_000
+    static let maxImageBytes = 60_000_000
+
     private func poll() {
         let pb = NSPasteboard.general
         guard pb.changeCount != lastCount else { return }
         lastCount = pb.changeCount
         let s = settings
-        if s.paused { return }
-        let types = Set((pb.types ?? []).map(\.rawValue))
-        if s.ignoreConfidential, !types.isDisjoint(with: confidentialTypes) { return }
-        if s.ignoreTransient, !types.isDisjoint(with: transientTypes) { return }
-
         let app = NSWorkspace.shared.frontmostApplication
         let isSelf = app?.bundleIdentifier == Bundle.main.bundleIdentifier
-        if !isSelf, !Settings.shared.allows(bundleID: app?.bundleIdentifier) { return }
+        let who = isSelf ? "Drawer" : (app?.localizedName ?? "Unknown app")
+        let log = CaptureLog.shared
+        if s.paused { log.add(app: who, result: "Skipped: capture is paused"); return }
+        let types = Set((pb.types ?? []).map(\.rawValue))
+        if s.ignoreConfidential, !types.isDisjoint(with: confidentialTypes) { log.add(app: who, result: "Skipped: marked confidential"); return }
+        if s.ignoreTransient, !types.isDisjoint(with: transientTypes) { log.add(app: who, result: "Skipped: marked transient"); return }
+        if !isSelf, !Settings.shared.allows(bundleID: app?.bundleIdentifier) { log.add(app: who, result: "Skipped: app is not allowed"); return }
         var base = Clip(kind: .text)
         base.sourceApp = isSelf ? nil : app?.localizedName
         base.sourceBundleID = isSelf ? nil : app?.bundleIdentifier
@@ -299,24 +318,48 @@ final class ClipboardStore: ObservableObject {
             clip.kind = .file
             clip.paths = urls.map(\.path)
             insert(clip, replacing: { $0.paths == clip.paths })
+            log.add(app: who, result: "Stored: \(urls.count == 1 ? "file" : "\(urls.count) files")")
         } else if let str = pb.string(forType: .string), !str.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            guard str.utf8.count <= Self.maxTextBytes else {
+                log.add(app: who, result: "Skipped: text over \(Self.maxTextBytes / 1_000_000) MB")
+                return
+            }
             var clip = base
             clip.text = str
             clip.markdown = Self.richMarkdown(pb)
             insert(clip, replacing: { $0.kind == .text && $0.text == str })
+            log.add(app: who, result: "Stored: text (\(str.count) characters)")
             if s.linkPreviews, clips.first?.category == .link, clips.first?.linkTitle == nil,
                let url = URL(string: str.trimmingCharacters(in: .whitespacesAndNewlines)), let id = clips.first?.id {
                 fetchPreview(id: id, url: url)
             }
-        } else if let tiff = pb.data(forType: .tiff) ?? pb.data(forType: .png),
-                  let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
-            let name = UUID().uuidString + ".png"
-            ClipboardFolder.prepare()
-            try? png.write(to: ClipboardFolder.images.appendingPathComponent(name))
-            var clip = base
-            clip.kind = .image
-            clip.imageFile = name
-            insert(clip, replacing: { _ in false })
+        } else if let data = pb.data(forType: .png) ?? pb.data(forType: .tiff) {
+            guard data.count <= Self.maxImageBytes else {
+                log.add(app: who, result: "Skipped: image over \(Self.maxImageBytes / 1_000_000) MB")
+                return
+            }
+            storeImage(data, alreadyPNG: pb.data(forType: .png) != nil, base: base, who: who)
+        } else {
+            log.add(app: who, result: "Skipped: nothing Drawer can store (\(types.first ?? "empty"))")
+        }
+    }
+
+    /// Encoding a large screenshot takes a moment: do it off the main thread, then add the item.
+    private func storeImage(_ data: Data, alreadyPNG: Bool, base: Clip, who: String) {
+        ClipboardFolder.prepare()
+        let name = UUID().uuidString + ".png"
+        let dest = ClipboardFolder.images.appendingPathComponent(name)
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let png = alreadyPNG ? data : NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:])
+            let saved = png.map { (try? $0.write(to: dest)) != nil } ?? false
+            DispatchQueue.main.async {
+                guard saved else { CaptureLog.shared.add(app: who, result: "Failed: could not save the image"); return }
+                var clip = base
+                clip.kind = .image
+                clip.imageFile = name
+                self?.insert(clip, replacing: { _ in false })
+                CaptureLog.shared.add(app: who, result: "Stored: image")
+            }
         }
     }
 
@@ -549,4 +592,23 @@ enum AppIcons {
         cache[id] = img
         return img
     }
+}
+
+/// The last few things the clipboard watcher saw and what it did with them, for finding out why something was not saved.
+final class CaptureLog: ObservableObject {
+    static let shared = CaptureLog()
+    struct Entry: Identifiable {
+        let id = UUID()
+        let date = Date()
+        let app: String
+        let result: String
+        var line: String { "\(date.formatted(date: .omitted, time: .standard))  \(app): \(result)" }
+    }
+    @Published private(set) var entries: [Entry] = []
+
+    func add(app: String, result: String) {
+        entries.insert(Entry(app: app, result: result), at: 0)
+        if entries.count > 40 { entries.removeLast(entries.count - 40) }
+    }
+    func clear() { entries = [] }
 }
