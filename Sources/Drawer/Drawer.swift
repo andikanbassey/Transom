@@ -52,7 +52,7 @@ final class DrawerController {
         }
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in self?.handleKey(event) ?? event }
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            if self?.isVisible == true { self?.hide() }
+            if self?.isVisible == true { self?.hide(restoreFocus: false) }
         }
         Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in self?.tick() }
     }
@@ -203,7 +203,10 @@ final class DrawerController {
         let h = settings.activeHeight + max(0, inset - 14)
         panel.setFrame(NSRect(x: f.minX, y: f.maxY, width: f.width, height: h), display: false)
         panel.orderFrontRegardless()
-        if focus { panel.makeKey() }
+        // Come to the front as the active app, so shortcuts and mouse mappings tied to the app underneath
+        // (Spotify, for instance) stop applying while the drawer is open.
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKey()
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.24
             ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.25, 1)
@@ -212,7 +215,8 @@ final class DrawerController {
     }
 
     /// Close the drawer. `done` runs once it is out of the way (used to paste into the app underneath).
-    func hide(then done: (() -> Void)? = nil) {
+    /// `restoreFocus` hands the front back to the app that was underneath, unless the pointer went to another app.
+    func hide(then done: (() -> Void)? = nil, restoreFocus: Bool = true) {
         guard isVisible else { done?(); return }
         isVisible = false
         lastHide = Date()
@@ -227,6 +231,12 @@ final class DrawerController {
             panel.animator().setFrame(f, display: true)
         }, completionHandler: { [weak self] in
             if self?.isVisible == false { self?.panel.orderOut(nil) }
+            if done == nil, restoreFocus, let self, self.isVisible == false,
+               NSWorkspace.shared.frontmostApplication == NSRunningApplication.current,
+               let previous = AppModel.shared.previousApp,
+               NSApp.windows.filter({ $0.isVisible && $0 !== self.panel && $0.canBecomeKey }).isEmpty {
+                previous.activate(options: [])
+            }
             done?()
         })
     }

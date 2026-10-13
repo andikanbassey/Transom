@@ -327,6 +327,13 @@ final class NotesStore: ObservableObject {
         showingList = false
     }
 
+    func duplicate(_ note: Note) {
+        let copy = Note(text: note.text, date: Date())
+        notes.insert(copy, at: 0)
+        dirty.insert(copy.id)
+        scheduleFlush()
+    }
+
     func select(_ note: Note) { selectedID = note.id; showingList = false; rememberSelection() }
 
     func delete(_ note: Note) {

@@ -9,6 +9,7 @@ enum Pane: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .storage: "iCloud & Storage"
+        case .files: "Quick Access"
         default: rawValue.capitalized
         }
     }
@@ -398,7 +399,7 @@ struct SettingsView: View {
             }
             if settings.v.filesMode == .folder {
                 RowDivider()
-                FolderRow(title: "Files folder", subtitle: "Dropped files are copied here.", path: settings.v.filesFolder,
+                FolderRow(title: "Quick Access folder", subtitle: "Dropped files are copied here.", path: settings.v.filesFolder,
                           defaultURL: supportDir.appendingPathComponent("Files"), iCloudSub: "Drawer/Files") { settings.v.filesFolder = $0 }
             }
         }
@@ -455,7 +456,7 @@ struct SettingsView: View {
         Section("Show in the drawer") {
             Row("Clipboard", subtitle: "History of everything you copy.") { toggle(\.showClipboard) }
             RowDivider()
-            Row("Files", subtitle: "Pinned files and folders, one click away.") { toggle(\.showFiles) }
+            Row("Quick Access", subtitle: "Pinned files and folders, one click away.") { toggle(\.showFiles) }
             RowDivider()
             Row("Notes", subtitle: "Quick notes for numbers, links and tasks.") { toggle(\.showNotes) }
         }
@@ -553,7 +554,7 @@ struct SettingsView: View {
                 RowDivider()
                 Row("Notes") { cardsOrList(\.notesCards) }
                 RowDivider()
-                Row("Files") { cardsOrList(\.filesCards) }
+                Row("Quick Access") { cardsOrList(\.filesCards) }
             }
         }
         Section("Look") {

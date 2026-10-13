@@ -87,7 +87,7 @@ struct DrawerView: View {
 enum Panel: String, Codable, CaseIterable {
     case clipboard, files, notes
     var title: String {
-        switch self { case .clipboard: "Clipboard"; case .files: "Files"; case .notes: "Notes" }
+        switch self { case .clipboard: "Clipboard"; case .files: "Quick Access"; case .notes: "Notes" }
     }
     var symbol: String {
         switch self { case .clipboard: "doc.on.clipboard"; case .files: "folder"; case .notes: "note.text" }
@@ -175,13 +175,13 @@ struct AppMenuItems: View {
         Divider()
         Menu("Panels") {
             CheckButton("Clipboard", settings.v.showClipboard) { settings.v.showClipboard.toggle() }
-            CheckButton("Files", settings.v.showFiles) { settings.v.showFiles.toggle() }
+            CheckButton("Quick Access", settings.v.showFiles) { settings.v.showFiles.toggle() }
             CheckButton("Notes", settings.v.showNotes) { settings.v.showNotes.toggle() }
         }
         Divider()
         Button("Settings…") { AppModel.shared.openSettings(nil) }
         Button("Clipboard Settings…") { AppModel.shared.openSettings(.clipboard) }
-        Button("Files Settings…") { AppModel.shared.openSettings(.files) }
+        Button("Quick Access Settings…") { AppModel.shared.openSettings(.files) }
         Button("Notes Settings…") { AppModel.shared.openSettings(.notes) }
         Divider()
         Button("Close Drawer") { AppModel.shared.hideDrawer() }
@@ -563,7 +563,7 @@ struct ClipRow: View {
             else { AppModel.shared.use(clip) }
         }
         .onDrag { dragProvider(clip) }
-        .contextMenu { ClipMenu(clip: clip, store: store) }
+        .contextMenu { if inWindow { LibraryClipMenu(clip: clip, store: store) } else { ClipMenu(clip: clip, store: store) } }
     }
 
     /// A square cover that says what the clip is: real artwork for media, a tinted symbol for the rest.
@@ -615,10 +615,10 @@ struct FilesColumn: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ColumnHeader(title: "Files") {
+            ColumnHeader(title: "Quick Access") {
                 HeaderIcon(symbol: "plus", action: addFiles).help(store.mode == .reference ? "Pin files or folders" : "Add files to the folder")
                 HeaderIcon(symbol: "ellipsis", active: optionsOpen.value) { optionsOpen.value.toggle() }
-                    .help("Files options")
+                    .help("Quick Access options")
                     .popover(isPresented: Binding(get: { optionsOpen.value }, set: {
                         optionsOpen.value = $0
                         AppModel.shared.popoverOpen = $0
@@ -806,6 +806,7 @@ struct NotesColumn: View {
 struct NoteRow: View {
     let note: Note
     let store: NotesStore
+    var inWindow = false
     @StateObject private var hovering = Box(false)
 
     var body: some View {
@@ -828,12 +829,8 @@ struct NoteRow: View {
         .onHover { hovering.value = $0 }
         .onTapGesture { store.select(note) }
         .contextMenu {
-            Button("Show in Finder") {
-                if let f = note.fileName { NSWorkspace.shared.activateFileViewerSelecting([store.folder.appendingPathComponent(f)]) }
-            }
-            Button("Delete") { store.delete(note) }
-            Divider()
-            AppMenuItems()
+            NoteMenu(note: note, store: store)
+            if !inWindow { Divider(); AppMenuItems() }
         }
     }
 }
@@ -951,8 +948,8 @@ struct FilesOptionsPopover: View {
             }
             .padding(.horizontal, 12).padding(.vertical, 6)
             OptionDivider()
-            OptionRow("Files Settings…") { close(); AppModel.shared.openSettings(.files) }
-            OptionRow("Hide Files Panel") { close(); settings.v.showFiles = false }
+            OptionRow("Quick Access Settings…") { close(); AppModel.shared.openSettings(.files) }
+            OptionRow("Hide Quick Access Panel") { close(); settings.v.showFiles = false }
         }
         .padding(8)
         .frame(width: 280)
