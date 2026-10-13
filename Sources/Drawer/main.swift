@@ -58,6 +58,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
 
         if drawer.stayOpen { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.drawer.toggle() } }
+        if ProcessInfo.processInfo.environment["DRAWER_COPY_LATEST_IMAGE"] != nil {
+            // Debug aid: copy the newest image item, print the formats now on the clipboard, then quit.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                let store = AppModel.shared.clipboard
+                guard let clip = store.clips.first(where: { $0.kind == .image }) else { print("no image item"); exit(1) }
+                store.copy(clip)
+                let types = NSPasteboard.general.types?.map(\.rawValue) ?? []
+                let size = NSPasteboard.general.data(forType: .png)?.count ?? 0
+                print("types: \(types.joined(separator: ", "))  png bytes: \(size)")
+                if ProcessInfo.processInfo.environment["DRAWER_PASTE"] != nil {
+                    print("accessibility: \(Paster.trusted)")
+                    Paster.pasteNow()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { exit(0) }
+                } else { exit(0) }
+            }
+        }
         if let path = ProcessInfo.processInfo.environment["DRAWER_SNAPSHOT"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.drawer.snapshot(to: path); exit(0) }
         }
