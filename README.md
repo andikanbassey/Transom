@@ -154,23 +154,18 @@ Clipboard content can be read out only with AppleScript, never through a link.
 
 ## Roadmap
 
-**Next**
-- Keyboard navigation inside the drawer (arrows and Return)
-- Rich text and original image formats when pasting (items are plain text today)
-- Notarized release and a DMG
+The full plan, with the reasoning, is in [ROADMAP.md](ROADMAP.md); what is left before a public release is in
+[RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md). In short:
 
-**Planned**
-- CloudKit sync for clipboard history (notes and files already sync through iCloud Drive)
-- Pinboards: named groups of clipboard items
-- Video duration and richer previews
-- Per-app paste rules and plain-text mode
-- Localization
-- Automated tests
+**Now:** make the core trustworthy (capture hardening, speed at any history size, tests, a refactor) and add keyboard
+navigation in the drawer.
 
-**Ideas**
-- Shortcuts and AppleScript actions
-- Snippets and text expansion
-- Clipboard rules (strip tracking parameters, format on paste)
+**Next:** plain-text paste, search by app and date with text recognition in screenshots, pinboards, paste stack, a few
+text transforms, per-app rules, export, and a URL scheme for Shortcuts and Raycast.
+
+**Later:** an iPhone and iPad companion, shared pinboards, notarized release with auto-update.
+
+**Not doing:** accounts, cloud AI, or anything that sends clipboard content off your Mac.
 
 ## Credits
 
