@@ -2,6 +2,16 @@
 
 Each release is written as what you can now do.
 
+## 0.5.1 (2026-10-13)
+
+**Fixed**
+- Pasting an image from the drawer no longer creates a huge uncompressed `.tiff` (a 2 MB screenshot became about 27 MB in
+  Finder). It now pastes the same PNG you copied.
+
+**Good to know**
+- SHA-256 of `Drawer.dmg`: `ad60c19de49b0d23ba89f71a386482d9d89e0f5f21cb92c385a664df0cac71d4`
+- Not notarized yet, so macOS asks you to confirm opening it the first time. See [Install](README.md#install).
+
 ## 0.5 (2026-10-13)
 
 The first public release. Drawer is a clipboard manager that lives at the top of your screen.
