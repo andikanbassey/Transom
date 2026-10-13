@@ -87,10 +87,12 @@ enum SettingsActions {
         if on, let base = Settings.iCloudDrive {
             Settings.shared.v.notesFolder = base.appendingPathComponent("Drawer/Notes").path
             Settings.shared.v.filesFolder = base.appendingPathComponent("Drawer/Files").path
+            Settings.shared.v.clipboardFolder = base.appendingPathComponent("Drawer/Clipboard").path
             Settings.shared.v.filesMode = .folder
         } else {
             Settings.shared.v.notesFolder = nil
             Settings.shared.v.filesFolder = nil
+            Settings.shared.v.clipboardFolder = nil
             Settings.shared.v.filesMode = .reference
         }
     }
@@ -254,77 +256,52 @@ struct FolderRow: View {
 
 // MARK: - Window
 
-final class SettingsWindow {
-    static let shared = SettingsWindow()
-    private var window: NSWindow?
-
-    func show(pane: Pane? = nil) {
-        if let pane { SettingsNav.shared.pane = pane }
-        if window == nil {
-            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 860, height: 620),
-                             styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
-                             backing: .buffered, defer: false)
-            w.titlebarAppearsTransparent = true
-            w.titleVisibility = .hidden
-            w.isReleasedWhenClosed = false
-            w.contentView = NSHostingView(rootView: SettingsView())
-            w.center()
-            window = w
-        }
-        NSApp.activate(ignoringOtherApps: true)
-        window?.makeKeyAndOrderFront(nil)
-    }
-}
-
 struct SettingsView: View {
     @ObservedObject private var pane = SettingsNav.shared
     @ObservedObject var settings = Settings.shared
 
     var body: some View {
         HStack(spacing: 0) {
-            sidebar.frame(width: 230).background(.ultraThinMaterial)
-            Rectangle().fill(Color.primary.opacity(0.07)).frame(width: 1)
+            sidebar.frame(width: Look.sidebarWidth).background(Look.sidebar)
+            Rectangle().fill(Look.hairline).frame(width: 1)
             VStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(pane.pane.title).font(.system(size: 24, weight: .bold))
-                    Text(pane.pane.blurb).font(.system(size: 13)).foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 36).padding(.top, 34).padding(.bottom, 20)
+                PageHeader(title: pane.pane.title, subtitle: pane.pane.blurb) { EmptyView() }
+                    .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, 18)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 30) { content }
-                        .padding(.horizontal, 36).padding(.bottom, 36)
+                    VStack(alignment: .leading, spacing: 26) { content }
+                        .padding(.horizontal, 32).padding(.bottom, 36)
                 }
+                
             }
-            .background(Color(nsColor: .controlBackgroundColor))
+            .background(Look.page)
         }
-        .frame(width: 860, height: 620)
+        .frame(minWidth: 860, minHeight: 620)
     }
 
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 3) {
+            SidebarBrand()
             ForEach(Pane.allCases) { p in
-                HStack(spacing: 11) {
-                    Image(systemName: p.symbol).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
-                        .frame(width: 28, height: 28)
-                        .background(p.color.gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5))
-                    Text(p.title).font(.system(size: 13.5, weight: pane.pane == p ? .semibold : .regular))
-                    Spacer()
-                }
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(pane.pane == p ? Color.primary.opacity(0.1) : .clear, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                .contentShape(Rectangle())
-                .onTapGesture { pane.pane = p }
+                SidebarRow(title: p.title, symbol: p.symbol, color: p.color, selected: pane.pane == p)
+                    .onTapGesture { pane.pane = p }
             }
             Spacer()
-            Text("Drawer 0.4").font(.system(size: 11)).foregroundStyle(.tertiary).padding(.leading, 10)
+            SidebarSwitch(title: "Library", symbol: "square.grid.2x2") { MainNav.shared.tab = .library }
+            Text("Drawer 0.4").font(.system(size: 11)).foregroundStyle(.tertiary).padding(.leading, 10).padding(.top, 6)
         }
-        .padding(.horizontal, 14).padding(.top, 56).padding(.bottom, 16)
+        .padding(.horizontal, 14).padding(.bottom, 16)
     }
 
     private func bind<T>(_ kp: WritableKeyPath<SettingsValues, T>) -> Binding<T> {
         Binding(get: { settings.v[keyPath: kp] }, set: { settings.v[keyPath: kp] = $0 })
+    }
+
+    private func cardsOrList(_ kp: WritableKeyPath<SettingsValues, Bool>) -> some View {
+        Picker("", selection: bind(kp)) {
+            Text("Cards").tag(true)
+            Text("List").tag(false)
+        }
+        .pickerStyle(.segmented).labelsHidden().frame(width: 160)
     }
 
     private func toggle(_ kp: WritableKeyPath<SettingsValues, Bool>) -> some View {
@@ -365,7 +342,7 @@ struct SettingsView: View {
                 }
             }
             RowDivider()
-            Row("Data folder", subtitle: "Settings and clipboard history are stored here.") {
+            Row("Data folder", subtitle: "Settings and app data are stored here.") {
                 Button("Show in Finder") { NSWorkspace.shared.open(supportDir) }
             }
         }
@@ -380,25 +357,23 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
             RowDivider()
-            Row("Most items to keep", subtitle: "A cap on top of the time limit.") {
-                HStack(spacing: 6) {
-                    Text("\(settings.v.historyLimit)").monospacedDigit().foregroundStyle(.secondary)
-                    Stepper("", value: bind(\.historyLimit), in: 50...5000, step: 50).labelsHidden()
-                        .onChange(of: settings.v.historyLimit) { _, _ in AppModel.shared.clipboard.trim() }
-                }
-            }
-            RowDivider()
             Row("Pause capture", subtitle: "Stop recording new clipboard items.") { toggle(\.paused) }
         }
+        Section("Storage") {
+            FolderRow(title: "Clipboard folder", subtitle: "One Markdown file per month. Pictures copied from the screen are kept in an Images folder inside it; copied files stay where they are.",
+                      path: settings.v.clipboardFolder, defaultURL: supportDir.appendingPathComponent("Clipboard"),
+                      iCloudSub: "Drawer/Clipboard") { settings.v.clipboardFolder = $0 }
+        }
         Section("Paste items") {
-            Row("Choosing an item") {
+            Row("Clicking an item") {
                 Picker("", selection: bind(\.pasteMode)) {
                     Text("Pastes into the app").tag(PasteMode.activeApp)
                     Text("Only copies").tag(PasteMode.clipboard)
+                    Text("Opens it in full").tag(PasteMode.expand)
                 }
                 .labelsHidden().frame(width: 190)
             }
-            if settings.v.pasteMode == .activeApp { RowDivider(); AccessibilityRow() }
+            if settings.v.pasteMode != .clipboard { RowDivider(); AccessibilityRow() }
             RowDivider()
             Row("Quick paste", subtitle: "Press the modifier with 1–9 while the drawer is open.") {
                 HStack(spacing: 8) {
@@ -484,6 +459,13 @@ struct SettingsView: View {
             RowDivider()
             Row("Notes", subtitle: "Quick notes for numbers, links and tasks.") { toggle(\.showNotes) }
         }
+        Section("Order") {
+            PanelPad()
+            RowDivider()
+            Row("Sizes", subtitle: "Drag a panel above to move it. Drag a divider in the drawer to resize panels, or its bottom edge to change the height.") {
+                Button("Reset Sizes") { settings.v.panelWeights = SettingsValues().panelWeights; settings.v.drawerHeight = 300 }
+            }
+        }
     }
 
     @ViewBuilder private var privacy: some View {
@@ -550,6 +532,30 @@ struct SettingsView: View {
     }
 
     @ViewBuilder private var appearance: some View {
+        Section("Items") {
+            Row("Show everything as", subtitle: "Cards show a preview; lists are compact. Custom chooses for each. The drawer's files and notes keep their own layout.") {
+                Picker("", selection: Binding(get: { settings.v.itemsMode }, set: { mode in
+                    settings.v.itemsMode = mode
+                    switch mode {
+                    case .cards: settings.v.clipboardCards = true; settings.v.notesCards = true; settings.v.filesCards = true
+                    case .lists: settings.v.clipboardCards = false; settings.v.notesCards = false; settings.v.filesCards = false
+                        settings.v.filesView = .list
+                    case .custom: break
+                    }
+                })) {
+                    ForEach(ItemsStyle.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(width: 230)
+            }
+            if settings.v.itemsMode == .custom {
+                RowDivider()
+                Row("Clipboard") { cardsOrList(\.clipboardCards) }
+                RowDivider()
+                Row("Notes") { cardsOrList(\.notesCards) }
+                RowDivider()
+                Row("Files") { cardsOrList(\.filesCards) }
+            }
+        }
         Section("Look") {
             Row("Theme") {
                 Picker("", selection: bind(\.appearance)) {
@@ -571,8 +577,8 @@ struct SettingsView: View {
             RowDivider()
             Row("Drawer height") {
                 HStack {
-                    Slider(value: bind(\.drawerHeight), in: 220...480).frame(width: 160)
-                    Text("\(Int(settings.v.drawerHeight))").monospacedDigit().foregroundStyle(.secondary).frame(width: 40)
+                    Slider(value: bind(\.activeHeight), in: settings.v.minimumHeight...700).frame(width: 160)
+                    Text("\(Int(settings.v.activeHeight))").monospacedDigit().foregroundStyle(.secondary).frame(width: 40)
                 }
             }
         }
@@ -580,24 +586,18 @@ struct SettingsView: View {
 
     @ViewBuilder private var storage: some View {
         Section("iCloud Drive") {
-            Row("Keep notes and files in iCloud Drive",
-                subtitle: Settings.iCloudDrive == nil ? "iCloud Drive isn't available on this Mac." : "macOS syncs the folders between your Macs. Folders are set in the Files and Notes panes.") {
+            Row("Keep notes, files and clipboard history in iCloud Drive",
+                subtitle: Settings.iCloudDrive == nil ? "iCloud Drive isn't available on this Mac." : "macOS syncs the folders between your Macs. Folders are set in the Clipboard, Files and Notes panes.") {
                 ICloudToggle()
-            }
-        }
-        Section("Clipboard history") {
-            Row("Sync across Macs", subtitle: "History stays on this Mac for now. On the roadmap.") {
-                Text("Coming soon").font(.system(size: 12)).foregroundStyle(.secondary)
-                    .padding(.horizontal, 8).padding(.vertical, 3).background(Color.primary.opacity(0.08), in: Capsule())
             }
         }
     }
 
     @ViewBuilder private var advanced: some View {
         Section("Scroll direction") {
-            Row("Invert for mouse", subtitle: "Turn on if opening the drawer feels backwards with a mouse wheel.") { toggle(\.invertMouseScroll) }
+            Row("Invert for third-party mice", subtitle: "For wheel mice from Logitech, Razer and others. Turn on if scrolling at the top edge feels backwards with a mouse.") { toggle(\.invertMouseScroll) }
             RowDivider()
-            Row("Invert for trackpad", subtitle: "Turn on if it feels backwards on a trackpad or Magic Mouse.") { toggle(\.invertTrackpadScroll) }
+            Row("Invert for Apple trackpad and Magic Mouse", subtitle: "Applies to devices that report touch gestures. Separate from the setting above.") { toggle(\.invertTrackpadScroll) }
         }
         Section("Setup") {
             Row("Welcome screen", subtitle: "Run the first-launch setup again.") {
@@ -616,10 +616,9 @@ struct Section<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary).padding(.leading, 6)
+            Text(title.uppercased()).font(Look.overline).tracking(0.6).foregroundStyle(.secondary).padding(.leading, 6)
             VStack(spacing: 0) { content() }
-                .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.primary.opacity(0.07), lineWidth: 1))
+                .lookCard()
         }
     }
 }
@@ -640,9 +639,9 @@ struct Row<Control: View>: View {
     var body: some View {
         HStack(alignment: .center, spacing: 18) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 13.5))
+                Text(title).font(Look.body)
                 if let subtitle {
-                    Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
+                    Text(subtitle).font(Look.meta).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -693,5 +692,96 @@ struct AppList: View {
         for url in panel.urls {
             if let ref = AppRef(appURL: url), !apps.wrappedValue.contains(ref) { apps.wrappedValue.append(ref) }
         }
+    }
+}
+
+/// A pad with one slot per panel. Pick a panel up, slide it over another slot and the others make way, with a tick
+/// on a trackpad for each slot you cross and a thud when you put it down.
+struct PanelPad: View {
+    @ObservedObject var settings = Settings.shared
+    @StateObject private var dragging = Box<Panel?>(nil)
+    @StateObject private var dragX = Box<CGFloat>(0)
+    @StateObject private var startX = Box<CGFloat>(0)
+    private let pad: CGFloat = 16, gap: CGFloat = 10, tileHeight: CGFloat = 88
+
+    var body: some View {
+        GeometryReader { geo in
+            let order = settings.v.orderedPanels
+            let count = CGFloat(order.count)
+            let slotW = (geo.size.width - pad * 2 - gap * (count - 1)) / count
+            let step = slotW + gap
+            ZStack(alignment: .topLeading) {
+                Canvas { ctx, size in
+                    var y: CGFloat = 8
+                    while y < size.height {
+                        var x: CGFloat = 8
+                        while x < size.width {
+                            ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: 2, height: 2)), with: .color(.primary.opacity(0.09)))
+                            x += 14
+                        }
+                        y += 14
+                    }
+                }
+                ForEach(0..<order.count, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.14), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                        .frame(width: slotW, height: tileHeight)
+                        .offset(x: pad + CGFloat(i) * step, y: pad)
+                }
+                ForEach(order, id: \.self) { p in
+                    let index = order.firstIndex(of: p) ?? 0
+                    let held = dragging.value == p
+                    tile(p, held: held)
+                        .frame(width: slotW, height: tileHeight)
+                        .scaleEffect(held ? 1.07 : 1)
+                        .shadow(color: .black.opacity(held ? 0.4 : 0), radius: held ? 16 : 0, y: held ? 9 : 0)
+                        .offset(x: held ? dragX.value : pad + CGFloat(index) * step, y: pad)
+                        .zIndex(held ? 1 : 0)
+                        .gesture(
+                            DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                                .onChanged { g in
+                                    if dragging.value == nil {
+                                        startX.value = pad + CGFloat(index) * step
+                                        Haptics.pickup()
+                                        withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) { dragging.value = p }
+                                    }
+                                    let x = min(max(startX.value + g.translation.width, pad), pad + (count - 1) * step)
+                                    dragX.value = x
+                                    let target = min(max(Int(((x - pad) / step).rounded()), 0), order.count - 1)
+                                    var current = settings.v.orderedPanels
+                                    if let from = current.firstIndex(of: p), from != target {
+                                        current.remove(at: from)
+                                        current.insert(p, at: target)
+                                        Haptics.tick()
+                                        withAnimation(.spring(response: 0.34, dampingFraction: 0.78)) { settings.v.panelOrder = current }
+                                    }
+                                }
+                                .onEnded { _ in
+                                    Haptics.drop()
+                                    withAnimation(.spring(response: 0.36, dampingFraction: 0.62)) { dragging.value = nil }
+                                }
+                        )
+                }
+            }
+        }
+        .frame(height: tileHeight + pad * 2)
+    }
+
+    private func tile(_ p: Panel, held: Bool) -> some View {
+        let shown = settings.v.isShown(p)
+        return VStack(spacing: 6) {
+            Image(systemName: p.symbol).font(.system(size: 22, weight: .medium)).frame(height: 28)
+            Text(p.title).font(.system(size: 13, weight: .semibold))
+            Text(shown ? " " : "Hidden").font(.system(size: 10.5)).foregroundStyle(.secondary)
+        }
+        .foregroundStyle(shown ? Color.accentColor : Color.secondary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(shown ? Color.accentColor.opacity(held ? 0.28 : 0.16) : Color.primary.opacity(0.07))
+        )
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .strokeBorder(shown ? Color.accentColor.opacity(held ? 0.7 : 0.35) : Color.primary.opacity(0.12), lineWidth: 1))
+        .opacity(shown ? 1 : 0.7)
     }
 }

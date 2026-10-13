@@ -41,13 +41,14 @@ final class DrawerController {
         Settings.shared.$v.sink { [weak self] v in
             self?.panel.appearance = v.appearance.nsAppearance
             self?.panel.sharingType = v.showDuringScreenSharing ? .readOnly : .none
+            self?.applyHeight(v.activeHeight)
         }.store(in: &cancellables)
 
         // Global mouse monitors need no Accessibility permission.
         NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel) { [weak self] in self?.handleGlobalScroll($0) }
         NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
             self?.handleLocalScroll(event)
-            return event
+            return self?.horizontalForWheel(event) ?? event
         }
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in self?.handleKey(event) ?? event }
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
@@ -73,6 +74,17 @@ final class DrawerController {
         return d
     }
 
+    /// Debug aid: if the file `debug-scroll` exists in the support folder, every scroll event is logged to it.
+    private func logScroll(_ source: String, _ event: NSEvent) {
+        let flag = supportDir.appendingPathComponent("debug-scroll")
+        guard FileManager.default.fileExists(atPath: flag.path) else { return }
+        let line = "\(source) visible=\(isVisible) dy=\(event.scrollingDeltaY) phase=\(event.phase.rawValue) momentum=\(event.momentumPhase.rawValue) " +
+            "natural=\(event.isDirectionInvertedFromDevice) inWindow=\(event.window === panel) y=\(event.locationInWindow.y) h=\(panel.frame.height)\n"
+        let log = supportDir.appendingPathComponent("scroll.log")
+        if let h = try? FileHandle(forWritingTo: log) { h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close() }
+        else { try? line.write(to: log, atomically: true, encoding: .utf8) }
+    }
+
     /// Accumulate swipes in one direction; returns true once the threshold is crossed.
     private func accumulate(_ amount: CGFloat) -> Bool {
         if Date().timeIntervalSince(lastScroll) > 0.3 { scrollAccum = 0 }
@@ -82,6 +94,15 @@ final class DrawerController {
     }
 
     private func handleGlobalScroll(_ event: NSEvent) {
+        logScroll("global", event)
+        // While the drawer is still sliding down the pointer is over the menu bar, not the drawer: a quick swipe up
+        // there arrives here, and has to close it too.
+        if isVisible {
+            guard event.momentumPhase.isEmpty, let screen = screenUnderMouse(),
+                  NSEvent.mouseLocation.y >= screen.frame.maxY - (AppModel.shared.layout.topInset + 40) else { return }
+            if accumulate(max(0, -swipeDirection(event))) { hide() }
+            return
+        }
         // Momentum events trail a finished swipe; ignoring them stops the drawer reopening right after it closes.
         guard settings.scrollOpen, !isVisible, event.momentumPhase.isEmpty, Date().timeIntervalSince(lastHide) > 0.8,
               let screen = screenUnderMouse() else { return }
@@ -89,12 +110,44 @@ final class DrawerController {
         if accumulate(max(0, swipeDirection(event))) { show(on: screen) }
     }
 
-    /// Scroll events over the drawer itself: a swipe up on its top strip closes it.
+    /// Scroll events over the drawer itself: a swipe up closes it, but only in the band from the top of the screen
+    /// down to the column titles. Anywhere lower the lists scroll as normal.
     private func handleLocalScroll(_ event: NSEvent) {
+        logScroll("local", event)
         guard isVisible, event.window === panel, event.momentumPhase.isEmpty else { return }
-        let strip = AppModel.shared.layout.topInset + 36
-        guard event.locationInWindow.y >= panel.frame.height - strip else { return }
+        let band = AppModel.shared.layout.topInset + 40
+        guard event.locationInWindow.y >= panel.frame.height - band else { lastScroll = Date(); scrollAccum = 0; return }
         if accumulate(max(0, -swipeDirection(event))) { hide() }
+    }
+
+    /// A plain wheel mouse only scrolls vertically; over a strip that scrolls sideways, turn it into sideways scrolling.
+    private func horizontalForWheel(_ event: NSEvent) -> NSEvent {
+        guard !event.hasPreciseScrollingDeltas, event.scrollingDeltaX == 0, event.scrollingDeltaY != 0,
+              let root = event.window?.contentView?.superview,
+              overSidewaysScroller(root.hitTest(event.locationInWindow)),
+              let cg = event.cgEvent?.copy() else { return event }
+        let fixed = cg.getDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1)
+        let point = cg.getIntegerValueField(.scrollWheelEventPointDeltaAxis1)
+        let delta = cg.getIntegerValueField(.scrollWheelEventDeltaAxis1)
+        cg.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: 0)
+        cg.setIntegerValueField(.scrollWheelEventPointDeltaAxis1, value: 0)
+        cg.setIntegerValueField(.scrollWheelEventDeltaAxis1, value: 0)
+        cg.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2, value: fixed)
+        cg.setIntegerValueField(.scrollWheelEventPointDeltaAxis2, value: point)
+        cg.setIntegerValueField(.scrollWheelEventDeltaAxis2, value: delta)
+        return NSEvent(cgEvent: cg) ?? event
+    }
+
+    /// True when the view is inside a scroll view that only scrolls sideways.
+    private func overSidewaysScroller(_ view: NSView?) -> Bool {
+        var v = view
+        while let current = v {
+            if let sv = current as? NSScrollView, let doc = sv.documentView {
+                return doc.frame.width > sv.contentView.bounds.width + 1 && doc.frame.height <= sv.contentView.bounds.height + 1
+            }
+            v = current.superview
+        }
+        return false
     }
 
     // MARK: Keys
@@ -111,6 +164,17 @@ final class DrawerController {
     }
 
     // MARK: Show and hide
+
+    /// Live height changes (dragging the bottom edge, or the settings slider) keep the top edge pinned.
+    private func applyHeight(_ height: Double) {
+        guard isVisible else { return }
+        let h = height + max(0, AppModel.shared.layout.topInset - 14)
+        var f = panel.frame
+        guard abs(f.height - h) > 0.5 else { return }
+        f.origin.y = f.maxY - h
+        f.size.height = h
+        panel.setFrame(f, display: true)
+    }
 
     func toggle(focus: Bool = false) {
         isVisible ? hide() : show(on: screenUnderMouse() ?? NSScreen.main!, focus: focus)
@@ -136,7 +200,7 @@ final class DrawerController {
         // Notched Macs report a top safe-area inset; push content below it.
         let inset = max(14, screen.safeAreaInsets.top + 6)
         AppModel.shared.layout.topInset = inset
-        let h = settings.drawerHeight + max(0, inset - 14)
+        let h = settings.activeHeight + max(0, inset - 14)
         panel.setFrame(NSRect(x: f.minX, y: f.maxY, width: f.width, height: h), display: false)
         panel.orderFrontRegardless()
         if focus { panel.makeKey() }
@@ -178,7 +242,7 @@ final class DrawerController {
         // Never close while a button is held (dragging a file out) or while the user is typing.
         let typing = panel.firstResponder is NSTextView
         let delay = settings.autoHideSeconds
-        if inside || delay <= 0 || NSEvent.pressedMouseButtons != 0 || typing { outsideSince = nil; return }
+        if inside || AppModel.shared.popoverOpen || delay <= 0 || NSEvent.pressedMouseButtons != 0 || typing { outsideSince = nil; return }
         if outsideSince == nil { outsideSince = Date() }
         if Date().timeIntervalSince(outsideSince!) > delay { hide() }
     }
