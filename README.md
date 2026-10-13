@@ -56,6 +56,55 @@ Drawer takes its layout from [Unclutter](https://unclutterapp.com) and its clipb
 
 Drawer needs **macOS 14 or later**.
 
+### Download
+
+1. Download `Drawer.dmg` from the [Releases](../../releases) page and open it.
+2. Drag **Drawer** into **Applications**, then open it.
+3. **macOS will warn that it can't verify the app.** This is expected, and it is explained below.
+
+#### Why macOS shows a warning
+
+Drawer is **not notarized by Apple yet**. Notarization needs a paid Apple Developer membership, which I don't have
+at the moment. For any app that isn't notarized, macOS shows a standard warning along the lines of
+*"Apple could not verify 'Drawer' is free of malware that may harm your Mac or compromise your privacy."*
+That message is about Apple not having checked the app. It does not mean anything was found in it. Notarization is on
+the list for when it is available.
+
+#### How to open it anyway (once)
+
+- **macOS 15 (Sequoia) and later:** click **Done** on the warning, then open **System Settings › Privacy & Security**,
+  scroll down to **Security**, and click **Open Anyway** next to "Drawer was blocked". Confirm with your password or
+  Touch ID, then click **Open**. You only need to do this the first time.
+- **macOS 14 (Sonoma):** in **Applications**, right-click (or Control-click) **Drawer**, choose **Open**, then **Open**.
+- **Terminal alternative (any version):**
+
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/Drawer.app
+  ```
+
+  then open Drawer normally. This only removes the flag macOS adds to downloaded files.
+
+The wording and the position of buttons change a little between macOS versions.
+
+#### Is it safe?
+
+You don't have to take my word for it:
+
+- **The source is here.** Drawer is open source (MIT) and has no third-party dependencies. Read it, or build it yourself
+  with the two commands below. An app you build yourself opens without any warning.
+- **Check the download.** Each release lists a SHA-256 checksum. Compare it with
+  `shasum -a 256 ~/Downloads/Drawer.dmg`; they should match exactly.
+- **What it can see.** The clipboard (that is the point of the app). **Accessibility** is requested only if you want
+  items to paste straight into the app you were using; without it, items are copied and you paste yourself.
+- **What it sends.** Nothing. Everything is stored on your Mac. The only network use is link previews (a setting you can
+  switch off, which downloads the linked page to get a title and image) and iCloud Drive sync if you turn it on, which
+  macOS itself performs. There is no analytics or tracking. If that ever changes it will be disclosed and switchable.
+- **Where your data lives.** Plain files in `~/Library/Application Support/Drawer/`, or the iCloud Drive folders you pick.
+  See [Data](#data). Delete the app and that folder to remove everything.
+
+Updates are manual for now: download the new release and replace the app. Drawer is signed with a fixed identity, so
+macOS should keep the permissions you granted.
+
 ### Build from source
 
 You need the Swift toolchain. The Xcode Command Line Tools are enough (`xcode-select --install`).
@@ -71,11 +120,11 @@ Other targets:
 ```bash
 ./build.sh             # build only: build/Drawer.app
 ./build.sh run         # build and launch from build/
-./build.sh zip         # build and write build/Drawer.zip for sharing
+./build.sh zip         # build and write build/Drawer.zip and its SHA-256 for sharing
+./build.sh dmg         # build and write build/Drawer.dmg and its SHA-256 for sharing
 ```
 
-The first launch opens a short welcome. Because the app is signed ad-hoc, a copy downloaded from elsewhere needs
-right-click → Open the first time.
+The first launch opens a short welcome.
 
 ### Signing
 

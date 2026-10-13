@@ -3,7 +3,8 @@
 #   ./build.sh          build only
 #   ./build.sh run      build and launch
 #   ./build.sh install  build, copy to /Applications and launch
-#   ./build.sh zip      build and write build/Drawer.zip for sharing
+#   ./build.sh zip      build and write build/Drawer.zip (and its SHA-256) for sharing
+#   ./build.sh dmg      build and write build/Drawer.dmg (and its SHA-256) for sharing
 set -euo pipefail
 cd "$(dirname "$0")"
 swift build -c release
@@ -52,7 +53,17 @@ if [ "${1:-}" = "install" ]; then
 elif [ "${1:-}" = "zip" ]; then
   rm -f build/Drawer.zip
   ditto -c -k --keepParent "$APP" build/Drawer.zip
+  (cd build && shasum -a 256 Drawer.zip | tee Drawer.zip.sha256)
   echo "Wrote build/Drawer.zip"
+elif [ "${1:-}" = "dmg" ]; then
+  rm -rf build/dmg build/Drawer.dmg
+  mkdir -p build/dmg
+  cp -R "$APP" build/dmg/Drawer.app
+  ln -s /Applications build/dmg/Applications
+  hdiutil create -volname "Drawer" -srcfolder build/dmg -ov -format UDZO build/Drawer.dmg >/dev/null
+  rm -rf build/dmg
+  (cd build && shasum -a 256 Drawer.dmg | tee Drawer.dmg.sha256)
+  echo "Wrote build/Drawer.dmg"
 elif [ "${1:-}" = "run" ]; then
   pkill -x Drawer || true
   open "$APP"
