@@ -455,7 +455,9 @@ final class ClipboardStore: ObservableObject {
             }
         case .file: pb.writeObjects(clip.fileURLs as [NSURL])
         case .image:
-            if let url = clip.imageURL, let img = NSImage(contentsOf: url) { pb.writeObjects([img]) }
+            // Put the stored PNG back as it is. Handing macOS an NSImage instead makes it offer uncompressed TIFF,
+            // so Finder pasted a 27 MB .tiff for a 2 MB screenshot.
+            if let url = clip.imageURL, let data = try? Data(contentsOf: url) { pb.setData(data, forType: .png) }
         }
         lastCount = pb.changeCount
         if let i = clips.firstIndex(of: clip) {
