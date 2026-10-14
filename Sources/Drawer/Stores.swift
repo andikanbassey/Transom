@@ -285,6 +285,13 @@ final class NotesStore: ObservableObject {
                                                 options: [.skipsHiddenFiles])) ?? []
         var loaded: [Note] = []
         for u in urls where ["md", "txt"].contains(u.pathExtension.lowercased()) {
+            // A note iCloud has moved off this Mac would block the read until it downloads: ask for it and show it once
+            // it is here (the next refresh picks it up) instead of freezing the app.
+            if let status = try? u.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus,
+               status != .current {
+                try? fm.startDownloadingUbiquitousItem(at: u)
+                continue
+            }
             guard let text = try? String(contentsOf: u, encoding: .utf8) else { continue }
             let date = (try? u.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
             let id = notes.first { $0.fileName == u.lastPathComponent }?.id ?? UUID()
