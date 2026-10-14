@@ -38,7 +38,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = MenuBarIcon.image()
         statusItem.button?.setAccessibilityLabel(Brand.name)
-        if isBeta { statusItem.button?.title = " β"; statusItem.button?.imagePosition = .imageLeft }
         statusItem.button?.appearsDisabled = AppModel.shared.standby
 
         let menu = NSMenu()
