@@ -129,7 +129,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 var text = Clip(kind: .text); text.text = "Meeting notes\nSend the invoice on Friday"
                 var link = Clip(kind: .text); link.text = "https://example.com/pricing"; link.linkTitle = "Example pricing"
                 var image = Clip(kind: .image); image.imageFile = name
-                for c in [text, link, image] { AppModel.shared.notes.addClip(c); AppModel.shared.files.addClip(c) }
+                // A picture file in a temporary folder, as a screenshot tool leaves it.
+                let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("Shots", isDirectory: true)
+                try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+                let shot = tmp.appendingPathComponent("shot 18-35-14.png")
+                try? rep.representation(using: .png, properties: [:])?.write(to: shot)
+                var file = Clip(kind: .file); file.paths = [shot.path]
+                for c in [text, link, image, file] { AppModel.shared.notes.addClip(c); AppModel.shared.files.addClip(c) }
                 print("notes: \(AppModel.shared.notes.notes.map(\.title))  files: \(AppModel.shared.files.paths.map { ($0 as NSString).lastPathComponent })")
             }
         }

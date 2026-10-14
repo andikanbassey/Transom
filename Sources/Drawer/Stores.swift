@@ -111,6 +111,11 @@ final class FilesStore: ObservableObject {
         reload()
     }
 
+    private static func isTemporary(_ url: URL) -> Bool {
+        let p = url.standardizedFileURL.path
+        return p.hasPrefix(NSTemporaryDirectory()) || p.hasPrefix("/var/folders/") || p.hasPrefix("/private/var/folders/") || p.hasPrefix("/tmp/")
+    }
+
     /// Where items made from clipboard text and pictures go when files are only pinned as references.
     private static var itemsFolder: URL {
         let url = supportDir.appendingPathComponent("Quick Access Items", isDirectory: true)
@@ -122,7 +127,6 @@ final class FilesStore: ObservableObject {
     /// text becomes a .txt file and pictures are copied in.
     func addClip(_ clip: Clip) {
         let fm = FileManager.default
-        if clip.kind == .file { clip.fileURLs.forEach(add); return }
         let dir: URL
         if mode == .folder { try? fm.createDirectory(at: Self.folder, withIntermediateDirectories: true); dir = Self.folder } else { dir = Self.itemsFolder }
         func free(_ base: String, _ ext: String) -> URL {
@@ -156,7 +160,18 @@ final class FilesStore: ObservableObject {
                 made = dest
             }
         case .file:
-            break
+            // A file in a temporary folder (a screenshot tool's, say) would vanish later, so it is copied in; others are
+            // pinned or copied as the Quick Access setting says.
+            for url in clip.fileURLs {
+                if Self.isTemporary(url) {
+                    let dest = free(url.deletingPathExtension().lastPathComponent, url.pathExtension.isEmpty ? "dat" : url.pathExtension)
+                    try? fm.copyItem(at: url, to: dest)
+                    if mode == .reference { refs.append(dest.path) }
+                } else {
+                    add(url)
+                }
+            }
+            if mode == .reference { saveRefs() }
         }
         if let made, mode == .reference { refs.append(made.path); saveRefs() }
         reload()
@@ -403,18 +418,23 @@ final class NotesStore: ObservableObject {
                 body = text
             }
         case .image:
-            guard let src = clip.imageURL else { return }
-            let dir = folder.appendingPathComponent(NoteImages.folderName, isDirectory: true)
-            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-            let stamp = NoteImages.stamp()
-            var name = "Image-\(stamp).\(src.pathExtension.isEmpty ? "png" : src.pathExtension)"
-            var n = 2
-            while fm.fileExists(atPath: dir.appendingPathComponent(name).path) { name = "Image-\(stamp)-\(n).\(src.pathExtension.isEmpty ? "png" : src.pathExtension)"; n += 1 }
-            try? fm.copyItem(at: src, to: dir.appendingPathComponent(name))
-            body = "Pasted image\n\n![Image](\(NoteImages.folderName)/\(name))\n"
+            guard let src = clip.imageURL, let rel = NoteImages.attach(src, notesFolder: folder) else { return }
+            body = "Pasted image\n\n![Image](\(rel))\n"
         case .file:
-            let links = clip.fileURLs.map { "[\($0.lastPathComponent)](\($0.absoluteString))" }
-            body = links.joined(separator: "\n")
+            // Pictures are embedded (copied beside the notes, so a temporary screenshot file is not lost); other files are linked.
+            var lines: [String] = []
+            var onlyImages = true
+            for url in clip.fileURLs {
+                if NoteImages.isImageFile(url), let rel = NoteImages.attach(url, notesFolder: folder) {
+                    lines.append("![\(url.lastPathComponent)](\(rel))")
+                } else {
+                    onlyImages = false
+                    lines.append("[\(url.lastPathComponent)](\(url.absoluteString))")
+                }
+            }
+            guard !lines.isEmpty else { return }
+            let title = onlyImages ? "Pasted image" : (clip.fileURLs.first?.lastPathComponent ?? "Files")
+            body = ([title, ""] + lines).joined(separator: "\n") + "\n"
         }
         guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let note = Note(text: body, date: Date())

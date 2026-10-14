@@ -763,6 +763,7 @@ struct NotesColumn: View {
     @StateObject private var query = Box("")
     @StateObject private var searching = Box(false)
     @StateObject private var targeted = Box(false)
+    @StateObject private var noteController = NoteEditorController()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -795,10 +796,9 @@ struct NotesColumn: View {
                         .font(.system(size: settings.v.notesFontSize)).foregroundStyle(.tertiary)
                         .padding(.horizontal, 19).padding(.top, 8)
                 }
-                TextEditor(text: store.binding(for: id))
-                    .font(.system(size: settings.v.notesFontSize))
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 14).padding(.bottom, 10)
+                // The same editor as the Library's, so a note with a picture shows the picture here as well.
+                MarkdownEditor(text: store.binding(for: id), fontSize: settings.v.notesFontSize, controller: noteController)
+                    .padding(.horizontal, 19).padding(.top, 4).padding(.bottom, 10)
                     .id(id)
             }
         }
