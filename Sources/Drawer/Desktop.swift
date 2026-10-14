@@ -242,7 +242,6 @@ struct DesktopView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebar
-            Rectangle().fill(Look.divider).frame(width: 1)
             content.background(Look.page)
         }
         .onAppear {

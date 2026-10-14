@@ -271,7 +271,6 @@ struct SettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebar
-            Rectangle().fill(Look.divider).frame(width: 1)
             VStack(spacing: 0) {
                 PageHeader(title: pane.pane.title, subtitle: pane.pane.blurb) { EmptyView() }
                     .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, Look.headerGap)
