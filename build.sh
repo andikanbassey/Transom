@@ -29,7 +29,7 @@ if [ ! -f "$ICON.icns" ]; then
   swift make-icon.swift "$ICON" $ICON_ARGS && iconutil -c icns "$ICON.iconset" -o "$ICON.icns" && rm -rf "$ICON.iconset"
 fi
 cp "$ICON.icns" "$APP/Contents/Resources/AppIcon.icns"
-cp Drawer.sdef "$APP/Contents/Resources/Drawer.sdef"
+cp Resources/Drawer.sdef "$APP/Contents/Resources/Drawer.sdef"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

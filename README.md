@@ -113,12 +113,16 @@ macOS should keep the permissions you granted.
 
 ### Build from source
 
-You need the Swift toolchain. The Xcode Command Line Tools are enough (`xcode-select --install`).
+You need Xcode, or just the Swift toolchain from the Command Line Tools (`xcode-select --install`).
+
+In Xcode, open `Drawer.xcodeproj` and run the **Drawer** scheme (or **Drawer Beta**, the preview build). From a terminal, either of these works:
 
 ```bash
 git clone <this repository>
 cd <this repository>
 ./build.sh install     # builds, copies to /Applications and launches
+# or, with Xcode:
+xcodebuild -project Drawer.xcodeproj -scheme Drawer -configuration Release -derivedDataPath build/xcode build
 ```
 
 Other targets:
@@ -171,7 +175,9 @@ Sources/Drawer/
   SettingsView.swift  settings window
   Onboarding.swift    first-launch welcome
   Theme.swift         glass helper, button style, menu bar icon
-build.sh              build, bundle, sign, install
+Drawer.xcodeproj      the Xcode project: Drawer and Drawer Beta targets
+Config/ Resources/    Info.plist, asset catalog (icons), AppleScript dictionary
+build.sh              build, bundle, sign, install without Xcode
 make-icon.swift       renders the app icon
 ```
 
