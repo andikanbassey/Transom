@@ -496,6 +496,13 @@ struct SettingsView: View {
         Section("Open the drawer") {
             Row("Scroll down at the top of the screen", subtitle: "Swipe up over the top of the drawer to close it.") { toggle(\.scrollOpen) }
             RowDivider()
+            Row("Where scrolling opens it", subtitle: "With the menu bar showing, scrolling anywhere along it opens the drawer. A hidden menu bar only reacts at the very top edge.") {
+                Picker("", selection: bind(\.scrollZone)) {
+                    ForEach(ScrollZone.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .labelsHidden().frame(width: 200).disabled(!settings.v.scrollOpen)
+            }
+            RowDivider()
             Row("Hold a key at the top of the screen") {
                 HStack(spacing: 8) {
                     Picker("", selection: bind(\.holdModifier)) {

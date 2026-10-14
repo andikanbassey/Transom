@@ -84,6 +84,10 @@ enum Retention: Int, Codable, CaseIterable {
 }
 
 enum PasteMode: String, Codable { case activeApp, clipboard, expand }
+enum ScrollZone: String, Codable, CaseIterable {
+    case menuBar, topEdge
+    var label: String { self == .menuBar ? "Anywhere on the menu bar" : "Only the top edge" }
+}
 enum ItemsStyle: String, Codable, CaseIterable {
     case cards, lists, custom
     var label: String { rawValue.capitalized }
@@ -176,6 +180,8 @@ struct SettingsValues: Codable, Equatable {
 
     // Opening the drawer
     var scrollOpen = true
+    /// Where scrolling down opens the drawer: anywhere along the menu bar, or only the very top edge of the screen.
+    var scrollZone: ScrollZone = .menuBar
     var holdOpen = false
     var holdModifier = Mod.command
     var waitOpen = false

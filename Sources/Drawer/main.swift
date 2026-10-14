@@ -69,6 +69,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
 
         if drawer.stayOpen { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.drawer.toggle() } }
+        if let spec = ProcessInfo.processInfo.environment["DRAWER_SCROLL_TEST"] {
+            // Debug aid: post synthetic downward scrolls at the given heights below the top of the main screen (for
+            // example "1,12,300"), and write whether the drawer opened for each to /tmp/drawer-scroll-test.txt.
+            let ys = spec.split(separator: ",").compactMap { Double($0) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                var report = "trusted: \(Paster.trusted)  bandSetting: \(Settings.shared.v.scrollZone.rawValue)\n"
+                let screen = NSScreen.screens[0]
+                report += "frame.maxY=\(screen.frame.maxY) visible.maxY=\(screen.visibleFrame.maxY)\n"
+                func run(_ i: Int) {
+                    guard i < ys.count else { try? report.write(toFile: "/tmp/drawer-scroll-test.txt", atomically: true, encoding: .utf8); exit(0) }
+                    let x = screen.frame.midX
+                    CGWarpMouseCursorPosition(CGPoint(x: x, y: ys[i]))
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        var seen = 0.0
+                        for sign in [-1, 1] {
+                            for _ in 0..<8 {
+                                guard let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: Int32(sign * 12), wheel2: 0, wheel3: 0),
+                                      let ns = NSEvent(cgEvent: e) else { continue }
+                                seen = ns.scrollingDeltaY
+                                self.drawer.handleGlobalScroll(ns)
+                            }
+                        }
+                        report += "(deltaY seen \(seen)) "
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                            report += "y=\(ys[i]) opened=\(self.drawer.isVisible)\n"
+                            if self.drawer.isVisible { self.drawer.toggle() }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { run(i + 1) }
+                        }
+                    }
+                }
+                run(0)
+            }
+        }
         if ProcessInfo.processInfo.environment["DRAWER_DROP_TEST"] != nil {
             // Debug aid (use with the Beta build): drop a text, a link and a picture item on Notes and Quick Access.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {

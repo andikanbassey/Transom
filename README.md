@@ -12,7 +12,7 @@ Drawer takes its layout from [Unclutter](https://unclutterapp.com) and its clipb
 ## Features
 
 ### Opening and closing
-- **Scroll at the top edge** to open, swipe up over the top of the drawer to close.
+- **Scroll down anywhere along the menu bar** to open (with a hidden menu bar, at the very top edge), swipe up over the top of the drawer to close. Settings › Shortcuts can limit it to the top edge. The shortcut, hold-a-key and wait openers are there too.
 - **Hold a key** or **wait** at the top edge, or press a **global hotkey** (⇧⌘V by default, rebindable).
 - Stays open until you click outside it, or closes by itself after 5, 10 or 15 seconds if you prefer.
 - Scroll direction can be inverted separately for mouse and trackpad.

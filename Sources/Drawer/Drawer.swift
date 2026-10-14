@@ -93,7 +93,16 @@ final class DrawerController {
         return scrollAccum > 12
     }
 
-    private func handleGlobalScroll(_ event: NSEvent) {
+    /// How far below the top of the screen a downward scroll still opens the drawer: the menu bar's full height when it
+    /// is showing (so anywhere along it works), otherwise just the edge, which is where a hidden menu bar appears.
+    private func scrollBand(_ screen: NSScreen) -> CGFloat {
+        let edge: CGFloat = 2
+        guard settings.scrollZone == .menuBar else { return edge }
+        let bar = screen.frame.maxY - screen.visibleFrame.maxY
+        return bar > 4 ? bar : edge
+    }
+
+    func handleGlobalScroll(_ event: NSEvent) {
         if AppModel.shared.standby { return }
         logScroll("global", event)
         // While the drawer is still sliding down the pointer is over the menu bar, not the drawer: a quick swipe up
@@ -107,7 +116,7 @@ final class DrawerController {
         // Momentum events trail a finished swipe; ignoring them stops the drawer reopening right after it closes.
         guard settings.scrollOpen, !isVisible, event.momentumPhase.isEmpty, Date().timeIntervalSince(lastHide) > 0.8,
               let screen = screenUnderMouse() else { return }
-        guard NSEvent.mouseLocation.y >= screen.frame.maxY - 2 else { scrollAccum = 0; return }
+        guard NSEvent.mouseLocation.y >= screen.frame.maxY - scrollBand(screen) else { scrollAccum = 0; return }
         if accumulate(max(0, swipeDirection(event))) { show(on: screen) }
     }
 
