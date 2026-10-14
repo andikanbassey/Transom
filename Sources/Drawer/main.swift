@@ -69,6 +69,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
 
         if drawer.stayOpen { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.drawer.toggle() } }
+        if ProcessInfo.processInfo.environment["DRAWER_THEME_TEST"] != nil {
+            // Debug aid: open the window, flip Theme to Light, then Dark, then System, and report the window's appearance.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                SettingsWindow.shared.show(tab: .settings)
+                var out = ""
+                let steps: [(Appearance, Double)] = [(.light, 0.5), (.dark, 1.0), (.system, 1.5)]
+                for (a, t) in steps {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + t) {
+                        Settings.shared.v.appearance = a
+                        out += "\(a.rawValue) -> \(SettingsWindow.shared.appearanceName)\n"
+                    }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { try? out.write(toFile: "/tmp/drawer-theme-test.txt", atomically: true, encoding: .utf8); exit(0) }
+            }
+        }
         if let spec = ProcessInfo.processInfo.environment["DRAWER_SCROLL_TEST"] {
             // Debug aid: post synthetic downward scrolls at the given heights below the top of the main screen (for
             // example "1,12,300"), and write whether the drawer opened for each to /tmp/drawer-scroll-test.txt.

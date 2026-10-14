@@ -43,6 +43,9 @@ enum Look {
     static let card = dynamic(light: .white, dark: NSColor(white: 0.168, alpha: 1))
     static let sidebar = dynamic(light: NSColor(white: 0.955, alpha: 1), dark: NSColor(white: 0.135, alpha: 1))
     static let hairline = Color.primary.opacity(0.08)
+    /// The line between sidebar and page. Opaque on purpose: a translucent line over the window's own backdrop shows
+    /// as a bright bar in dark mode.
+    static let divider = dynamic(light: NSColor(white: 0.88, alpha: 1), dark: NSColor(white: 0.21, alpha: 1))
     static let selection = Color.primary.opacity(0.075)
 
     static let pageTitle = Font.system(size: 26, weight: .semibold)

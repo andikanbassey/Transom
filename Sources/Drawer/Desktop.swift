@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 
 // MARK: - Window
 
@@ -49,6 +50,9 @@ final class MainNav: ObservableObject {
 final class SettingsWindow {
     static let shared = SettingsWindow()
     private var window: NSWindow?
+    private var themeWatcher: AnyCancellable?
+    /// For the DRAWER_THEME_TEST debug aid.
+    var appearanceName: String { window?.appearance?.name.rawValue ?? "system" }
 
     func show(pane: Pane? = nil, tab: MainTab = .settings) {
         if let pane { SettingsNav.shared.pane = pane }
@@ -68,6 +72,10 @@ final class SettingsWindow {
                 NSApp.setActivationPolicy(.accessory)
             }
             window = w
+            // The window's own appearance follows the Theme setting live, not just when the window opens.
+            themeWatcher = Settings.shared.$v.map(\.appearance).removeDuplicates().sink { [weak self] a in
+                self?.window?.appearance = a.nsAppearance
+            }
         }
         window?.appearance = Settings.shared.v.appearance.nsAppearance
         NSApp.setActivationPolicy(.regular)
@@ -78,6 +86,7 @@ final class SettingsWindow {
 
 struct MainWindowView: View {
     @ObservedObject var nav = MainNav.shared
+    @ObservedObject var settings = Settings.shared
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -101,6 +110,8 @@ struct MainWindowView: View {
             .ignoresSafeArea()
         }
         .animation(.easeOut(duration: 0.14), value: nav.paletteOpen)
+        // Theme applies to the whole window, Library and Settings alike, and follows the setting as it changes.
+        .preferredColorScheme(settings.v.appearance == .system ? nil : (settings.v.appearance == .dark ? .dark : .light))
         .frame(minWidth: 900, minHeight: 620)
     }
 }
@@ -231,10 +242,9 @@ struct DesktopView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebar
-            Rectangle().fill(Look.hairline).frame(width: 1)
+            Rectangle().fill(Look.divider).frame(width: 1)
             content.background(Look.page)
         }
-        .preferredColorScheme(settings.v.appearance == .system ? nil : (settings.v.appearance == .dark ? .dark : .light))
         .onAppear {
             clipboard.expanded = nil
             if ProcessInfo.processInfo.environment["DRAWER_SELECT"] != nil {
