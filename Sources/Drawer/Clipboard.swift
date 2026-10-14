@@ -485,6 +485,21 @@ final class ClipboardStore: ObservableObject {
         save()
     }
 
+    /// Delete many at once (Library selection): one save for the lot.
+    func delete(ids: Set<UUID>) {
+        for i in clips.indices.reversed() where ids.contains(clips[i].id) { remove(at: i, tombstone: true) }
+        save()
+    }
+
+    func setPinned(_ pinned: Bool, ids: Set<UUID>) {
+        for i in clips.indices where ids.contains(clips[i].id) && clips[i].pinned != pinned {
+            clips[i].pinned = pinned
+            clips[i].modified = Date()
+            dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
+        }
+        save()
+    }
+
     func clearUnpinned() {
         for i in clips.indices.reversed() where !clips[i].pinned { remove(at: i, tombstone: true) }
         save()

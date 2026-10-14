@@ -170,6 +170,8 @@ struct DesktopView: View {
     @ObservedObject private var nav = MainNav.shared
     @StateObject private var collapsed = Box(Set<String>())
     @StateObject private var editor = NoteEditorController()
+    @StateObject private var selecting = Box(false)
+    @StateObject private var picked = Box(Set<String>())
 
     private let grid = [GridItem(.adaptive(minimum: 250, maximum: 340), spacing: 18, alignment: .top)]
     private let cardHeight: CGFloat = 250
@@ -181,7 +183,14 @@ struct DesktopView: View {
             content.background(Look.page)
         }
         .preferredColorScheme(settings.v.appearance == .system ? nil : (settings.v.appearance == .dark ? .dark : .light))
-        .onAppear { clipboard.expanded = nil }
+        .onAppear {
+            clipboard.expanded = nil
+            if ProcessInfo.processInfo.environment["DRAWER_SELECT"] != nil {
+                selecting.value = true
+                picked.value = Set(visibleIDs().prefix(2))
+            }
+        }
+        .onChange(of: nav.section) { _, _ in endSelecting() }
     }
 
     // MARK: Sidebar
@@ -243,8 +252,15 @@ struct DesktopView: View {
     /// Title with a round "+" where adding makes sense, and the filter chips on the clipboard page.
     private var header: some View {
         VStack(alignment: .leading, spacing: 14) {
-            PageHeader(title: nav.section.title, plus: plusAction) { EmptyView() }
-            if nav.section == .clipboard || nav.section == .pinned {
+            PageHeader(title: nav.section.title, plus: plusAction) {
+                if !selecting.value && !visibleIDs().isEmpty {
+                    Button { selecting.value = true } label: { Label("Select", systemImage: "checkmark.circle") }
+                        .buttonStyle(.borderless).foregroundStyle(.secondary)
+                }
+            }
+            if selecting.value {
+                selectionBar
+            } else if nav.section == .clipboard || nav.section == .pinned {
                 HStack(spacing: 8) {
                     FilterPills(store: clipboard, window: true)
                     TimeChip(store: clipboard)
@@ -277,19 +293,19 @@ struct DesktopView: View {
 
     @ViewBuilder private func clipboardItems(_ list: [Clip]) -> some View {
         if settings.v.clipboardCards {
-            LazyVGrid(columns: grid, spacing: 18) { ForEach(list) { clipCard($0) } }
+            LazyVGrid(columns: grid, spacing: 18) { ForEach(list) { c in selectable(c.id.uuidString, clipCard(c)) } }
         } else {
-            listBox { ForEach(list) { c in ClipRow(clip: c, store: clipboard, quickKey: nil, inWindow: true) } }
+            listBox { ForEach(list) { c in selectable(c.id.uuidString, radius: 8, ClipRow(clip: c, store: clipboard, quickKey: nil, inWindow: true)) } }
         }
     }
 
     @ViewBuilder private func notesItems(_ list: [Note]) -> some View {
         if settings.v.notesCards {
-            LazyVGrid(columns: grid, spacing: 18) { ForEach(list) { noteCard($0) } }
+            LazyVGrid(columns: grid, spacing: 18) { ForEach(list) { n in selectable(n.id.uuidString, noteCard(n)) } }
         } else {
             listBox {
                 ForEach(list) { n in
-                    NoteRow(note: n, store: notes, inWindow: true).simultaneousGesture(TapGesture().onEnded { nav.section = .notes })
+                    selectable(n.id.uuidString, radius: 8, NoteRow(note: n, store: notes, inWindow: true).simultaneousGesture(TapGesture().onEnded { if !selecting.value { nav.section = .notes } }))
                 }
             }
         }
@@ -297,14 +313,128 @@ struct DesktopView: View {
 
     @ViewBuilder private func filesItems(_ list: [String]) -> some View {
         if settings.v.filesCards {
-            LazyVGrid(columns: grid, spacing: 18) { ForEach(list, id: \.self) { fileCard($0) } }
+            LazyVGrid(columns: grid, spacing: 18) { ForEach(list, id: \.self) { p in selectable(p, fileCard(p)) } }
         } else {
-            listBox { ForEach(list, id: \.self) { FileListRow(path: $0, store: files) } }
+            listBox { ForEach(list, id: \.self) { p in selectable(p, radius: 8, FileListRow(path: p, store: files)) } }
         }
     }
 
     private func listBox<C: View>(@ViewBuilder _ rows: () -> C) -> some View {
         LazyVStack(spacing: 2) { rows() }.padding(8).lookCard()
+    }
+
+    // MARK: Select and batch actions
+
+    /// Everything the current page shows right now, as selection ids.
+    private func visibleIDs() -> [String] {
+        switch nav.section {
+        case .clipboard: clips().map { $0.id.uuidString }
+        case .pinned: clips().filter(\.pinned).map { $0.id.uuidString }
+        case .notes: notes.notes.map { $0.id.uuidString }
+        case .files: files.paths
+        case .all: []
+        }
+    }
+
+    private func endSelecting() { selecting.value = false; picked.value = [] }
+
+    private func toggle(_ id: String) {
+        if picked.value.contains(id) { picked.value.remove(id) } else { picked.value.insert(id) }
+    }
+
+    /// Wraps an item so a click picks it while selecting; nothing changes otherwise.
+    @ViewBuilder private func selectable<V: View>(_ id: String, radius: CGFloat = 18, _ view: V) -> some View {
+        if selecting.value && nav.section != .all {
+            let on = picked.value.contains(id)
+            view
+                .overlay {
+                    Color.clear.contentShape(Rectangle()).onTapGesture { toggle(id) }
+                        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                            .strokeBorder(on ? Color.accentColor : .clear, lineWidth: 2.5).allowsHitTesting(false))
+                        .background(on ? Color.accentColor.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+                }
+                .overlay(alignment: .topLeading) {
+                    Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(on ? Color.accentColor : Color.secondary.opacity(0.7), .white)
+                        .background(Circle().fill(.white.opacity(on ? 1 : 0.6)).padding(2))
+                        .offset(x: -7, y: -7).allowsHitTesting(false)
+                }
+        } else {
+            view
+        }
+    }
+
+    private var selectionBar: some View {
+        let n = picked.value.count
+        let ids = visibleIDs()
+        return HStack(spacing: 10) {
+            Text(n == 0 ? "Select items" : "\(n) selected").font(.system(size: 13, weight: .semibold)).frame(minWidth: 84, alignment: .leading)
+            Menu {
+                Button("All \(ids.count) shown") { picked.value = Set(ids) }.keyboardShortcut("a", modifiers: .command)
+                if nav.section == .clipboard || nav.section == .pinned {
+                    Divider()
+                    Button("Last 5 minutes") { pickRecent(300) }
+                    Button("Last hour") { pickRecent(3600) }
+                    Button("Today") { pickRecent(Date().timeIntervalSince(Calendar.current.startOfDay(for: Date()))) }
+                }
+                Divider()
+                Button("None") { picked.value = [] }
+            } label: { Label("Select", systemImage: "checklist") }
+                .menuStyle(.borderlessButton).fixedSize()
+            Spacer()
+            if (nav.section == .clipboard || nav.section == .pinned), n > 0 {
+                let allPinned = picked.value.allSatisfy { id in clipboard.clips.first { $0.id.uuidString == id }?.pinned ?? false }
+                Button(allPinned ? "Unpin" : "Pin") {
+                    clipboard.setPinned(!allPinned, ids: Set(picked.value.compactMap(UUID.init(uuidString:))))
+                    picked.value = []
+                }.buttonStyle(.borderless)
+            }
+            Button(role: .destructive) { deleteSelection() } label: { Label("Delete", systemImage: "trash") }
+                .buttonStyle(.borderless).foregroundStyle(n == 0 ? Color.secondary : Color.red).disabled(n == 0)
+            Button("Done") { endSelecting() }.keyboardShortcut(.cancelAction).buttonStyle(.borderless).fontWeight(.semibold)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    /// Adds the shown clipboard items copied in the last `seconds` to the selection.
+    private func pickRecent(_ seconds: TimeInterval) {
+        let cutoff = Date().addingTimeInterval(-seconds)
+        let list = nav.section == .pinned ? clips().filter(\.pinned) : clips()
+        picked.value.formUnion(list.filter { $0.date >= cutoff }.map { $0.id.uuidString })
+    }
+
+    private func deleteSelection() {
+        let ids = picked.value
+        guard !ids.isEmpty else { return }
+        let alert = NSAlert()
+        let count = ids.count
+        let noun: String
+        switch nav.section {
+        case .notes:
+            noun = count == 1 ? "note" : "notes"
+            alert.informativeText = "They move to the Trash."
+        case .files:
+            noun = count == 1 ? "item" : "items"
+            alert.informativeText = files.mode == .folder ? "They move to the Trash." : "They are only removed from Quick Access. The files stay where they are."
+        default:
+            noun = count == 1 ? "clipboard item" : "clipboard items"
+            let pinned = clipboard.clips.filter { ids.contains($0.id.uuidString) && $0.pinned }.count
+            alert.informativeText = "This can't be undone." + (pinned > 0 ? " \(pinned) of them \(pinned == 1 ? "is" : "are") pinned." : "")
+        }
+        alert.messageText = "Delete \(count) \(noun)?"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Delete").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        switch nav.section {
+        case .notes: notes.notes.filter { ids.contains($0.id.uuidString) }.forEach(notes.delete)
+        case .files: ids.forEach(files.remove)
+        default: clipboard.delete(ids: Set(ids.compactMap(UUID.init(uuidString:))))
+        }
+        endSelecting()
     }
 
     // MARK: All: a section per kind of thing
