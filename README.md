@@ -113,16 +113,12 @@ macOS should keep the permissions you granted.
 
 ### Build from source
 
-You need Xcode, or just the Swift toolchain from the Command Line Tools (`xcode-select --install`).
-
-In Xcode, open `Drawer.xcodeproj` and run the **Drawer** scheme (or **Drawer Beta**, the preview build). From a terminal, either of these works:
+You need the Swift toolchain. The Xcode Command Line Tools are enough (`xcode-select --install`).
 
 ```bash
 git clone <this repository>
 cd <this repository>
 ./build.sh install     # builds, copies to /Applications and launches
-# or, with Xcode:
-xcodebuild -project Drawer.xcodeproj -scheme Drawer -configuration Release -derivedDataPath build/xcode build
 ```
 
 Other targets:
@@ -130,6 +126,7 @@ Other targets:
 ```bash
 ./build.sh             # build only: build/Drawer.app
 ./build.sh run         # build and launch from build/
+./build.sh dev         # fast debug build and launch, for trying changes
 ./build.sh zip         # build and write build/Drawer.zip and its SHA-256 for sharing
 ./build.sh dmg         # build and write build/Drawer.dmg and its SHA-256 for sharing
 ```
@@ -175,9 +172,9 @@ Sources/Drawer/
   SettingsView.swift  settings window
   Onboarding.swift    first-launch welcome
   Theme.swift         glass helper, button style, menu bar icon
-Drawer.xcodeproj      the Xcode project: Drawer and Drawer Beta targets
-Config/ Resources/    Info.plist, Icon Composer icons, AppleScript dictionary
-build.sh              build, bundle, sign, install without Xcode
+build.sh              build, bundle, sign, install
+make-icon.swift       draws the app icon
+Drawer.sdef           the AppleScript dictionary
 ```
 
 Debug aids: `Drawer --show` keeps the drawer open, and `DRAWER_SNAPSHOT=/path.png` renders it to an image.

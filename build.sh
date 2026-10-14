@@ -5,11 +5,15 @@
 #   ./build.sh install  build, copy to /Applications and launch
 #   ./build.sh zip      build and write build/Drawer.zip (and its SHA-256) for sharing
 #   ./build.sh dmg      build and write build/Drawer.dmg (and its SHA-256) for sharing
+#   ./build.sh dev      fast debug build (a few seconds after the first), then launch; for trying changes. It is
+#                       unoptimised, so judge smoothness with a normal build, and never release a dev build.
 # Preview channel: DRAWER_CHANNEL=beta ./build.sh [run|install] builds "Drawer Beta" (own bundle id, data folder and
 # drawer-beta:// scheme), so changes can be tried out beside the real app. Only the real app is ever released.
 set -euo pipefail
 cd "$(dirname "$0")"
-swift build -c release
+CONFIG=release
+[ "${1:-}" = "dev" ] && CONFIG=debug
+swift build -c "$CONFIG"
 if [ "${DRAWER_CHANNEL:-}" = "beta" ]; then
   NAME="Drawer Beta"; BUNDLE_ID="com.studioab.drawer.beta"; SCHEME="drawer-beta"
 else
@@ -18,25 +22,26 @@ fi
 APP="build/$NAME.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
-cp .build/release/Drawer "$APP/Contents/MacOS/$NAME"
+cp ".build/$CONFIG/Drawer" "$APP/Contents/MacOS/$NAME"
 # SwiftPM records the deployment target (14.0) as the SDK version, which makes macOS draw the old control
 # styles (round gray switch knobs). Stamp the real SDK so the current system look is used. Still runs on 14+.
 SDK_VERSION="$(xcrun --show-sdk-version 2>/dev/null || echo 26.0)"
 vtool -set-build-version macos 14.0 "$SDK_VERSION" -replace -output "$APP/Contents/MacOS/$NAME" "$APP/Contents/MacOS/$NAME"
 mkdir -p "$APP/Contents/Resources"
-# The icon is an Icon Composer file (Resources/AppIcon.icon, AppIconBeta.icon); actool compiles it, as Xcode does.
-if [ "${DRAWER_CHANNEL:-}" = "beta" ]; then ICON=AppIconBeta; else ICON=AppIcon; fi
-xcrun actool "Resources/$ICON.icon" --compile "$APP/Contents/Resources" --platform macosx --minimum-deployment-target 14.0 \
-  --app-icon "$ICON" --output-partial-info-plist build/icon-info.plist >/dev/null
-cp Resources/Drawer.sdef "$APP/Contents/Resources/Drawer.sdef"
+# The icon is drawn by make-icon.swift (Command Line Tools only) the first time and kept as an .icns.
+if [ "${DRAWER_CHANNEL:-}" = "beta" ]; then ICON=AppIcon-beta; ICON_ARGS="beta"; else ICON=AppIcon; ICON_ARGS=""; fi
+if [ ! -f "$ICON.icns" ]; then
+  swift make-icon.swift "$ICON" $ICON_ARGS && iconutil -c icns "$ICON.iconset" -o "$ICON.icns" && rm -rf "$ICON.iconset"
+fi
+cp "$ICON.icns" "$APP/Contents/Resources/AppIcon.icns"
+cp Drawer.sdef "$APP/Contents/Resources/Drawer.sdef"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>CFBundleName</key><string>$NAME</string>
   <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
-  <key>CFBundleIconFile</key><string>$ICON</string>
-  <key>CFBundleIconName</key><string>$ICON</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleExecutable</key><string>$NAME</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.5.1</string>
@@ -81,7 +86,7 @@ elif [ "${1:-}" = "dmg" ]; then
   rm -rf build/dmg
   (cd build && shasum -a 256 Drawer.dmg | tee Drawer.dmg.sha256)
   echo "Wrote build/Drawer.dmg"
-elif [ "${1:-}" = "run" ]; then
+elif [ "${1:-}" = "run" ] || [ "${1:-}" = "dev" ]; then
   pkill -x "$NAME" || true
   open "$APP"
 fi
