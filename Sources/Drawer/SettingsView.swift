@@ -474,7 +474,11 @@ struct SettingsView: View {
             PanelPad()
             RowDivider()
             Row("Sizes", subtitle: "Drag a panel above to move it. Drag a divider in the drawer to resize panels, or its bottom edge to change the height.") {
-                Button("Reset Sizes") { settings.v.panelWeights = SettingsValues().panelWeights; settings.v.drawerHeight = 300 }
+                Button("Reset Sizes") {
+                    settings.v.panelWeights = SettingsValues().panelWeights
+                    settings.v.panelWeightsList = SettingsValues().panelWeightsList
+                    settings.v.drawerHeight = 300
+                }
             }
         }
     }

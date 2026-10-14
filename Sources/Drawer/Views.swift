@@ -71,7 +71,8 @@ struct DrawerView: View {
         guard pair > minW * 2 else { return }
         var l = min(max(start.0 + Double(dx) * perPoint, minW), pair - minW)
         // The default split is a detent: pull towards it and give a tap of haptic feedback on arrival.
-        let d = SettingsValues()
+        var d = SettingsValues()
+        d.clipboardCards = settings.v.clipboardCards
         let equal = min(max(pair * d.weight(left) / (d.weight(left) + d.weight(right)), minW), pair - minW)
         let near = abs(l - equal) < 8 * perPoint
         if near {
@@ -79,8 +80,8 @@ struct DrawerView: View {
             if !snapped.value { Haptics.detent() }
         }
         snapped.value = near
-        settings.v.panelWeights[left.rawValue] = l
-        settings.v.panelWeights[right.rawValue] = pair - l
+        settings.v.setWeight(left, l)
+        settings.v.setWeight(right, pair - l)
     }
 }
 
