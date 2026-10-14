@@ -262,36 +262,45 @@ struct SettingsView: View {
     @ObservedObject var settings = Settings.shared
     @ObservedObject var captureLog = CaptureLog.shared
 
+    private static let groups: [(String, [Pane])] = [
+        ("Drawer", [.general, .panels, .shortcuts, .appearance]),
+        ("Content", [.clipboard, .files, .notes]),
+        ("Data", [.privacy, .storage, .advanced]),
+    ]
+
     var body: some View {
         HStack(spacing: 0) {
-            sidebar.frame(width: Look.sidebarWidth).background(Look.sidebar)
-            Rectangle().fill(Look.hairline).frame(width: 1)
+            sidebar
             VStack(spacing: 0) {
                 PageHeader(title: pane.pane.title, subtitle: pane.pane.blurb) { EmptyView() }
-                    .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, 18)
+                    .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, Look.headerGap)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 26) { content }
                         .padding(.horizontal, 32).padding(.bottom, 36)
                 }
-                
             }
             .background(Look.page)
         }
         .frame(minWidth: 860, minHeight: 620)
     }
 
+    /// The same sidebar as the Library's: brand, quiet group headers, rows, and the Library/Settings switch at the bottom.
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 2) {
             SidebarBrand()
-            ForEach(Pane.allCases) { p in
-                SidebarRow(title: p.title, symbol: p.symbol, color: p.color, selected: pane.pane == p)
-                    .onTapGesture { pane.pane = p }
+            ForEach(Self.groups, id: \.0) { group in
+                SidebarHeader(title: group.0)
+                ForEach(group.1) { p in
+                    SidebarRow(title: p.title, symbol: p.symbol, color: p.color, selected: pane.pane == p)
+                        .onTapGesture { pane.pane = p }
+                }
             }
             Spacer()
-            SidebarSwitch(title: "Library", symbol: "square.grid.2x2") { MainNav.shared.tab = .library }
-            Text("Drawer 0.5.1").font(.system(size: 11)).foregroundStyle(.tertiary).padding(.leading, 10).padding(.top, 6)
+            ModeSwitch()
         }
         .padding(.horizontal, 14).padding(.bottom, 16)
+        .frame(width: Look.sidebarWidth)
+        .background(Look.sidebar)
     }
 
     private func bind<T>(_ kp: WritableKeyPath<SettingsValues, T>) -> Binding<T> {
@@ -465,7 +474,11 @@ struct SettingsView: View {
             PanelPad()
             RowDivider()
             Row("Sizes", subtitle: "Drag a panel above to move it. Drag a divider in the drawer to resize panels, or its bottom edge to change the height.") {
-                Button("Reset Sizes") { settings.v.panelWeights = SettingsValues().panelWeights; settings.v.drawerHeight = 300 }
+                Button("Reset Sizes") {
+                    settings.v.panelWeights = SettingsValues().panelWeights
+                    settings.v.panelWeightsList = SettingsValues().panelWeightsList
+                    settings.v.drawerHeight = 300
+                }
             }
         }
     }
@@ -495,6 +508,13 @@ struct SettingsView: View {
     @ViewBuilder private var shortcuts: some View {
         Section("Open the drawer") {
             Row("Scroll down at the top of the screen", subtitle: "Swipe up over the top of the drawer to close it.") { toggle(\.scrollOpen) }
+            RowDivider()
+            Row("Where scrolling opens it", subtitle: "With the menu bar showing, scrolling anywhere along it opens the drawer. A hidden menu bar only reacts at the very top edge.") {
+                Picker("", selection: bind(\.scrollZone)) {
+                    ForEach(ScrollZone.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .labelsHidden().frame(width: 200).disabled(!settings.v.scrollOpen)
+            }
             RowDivider()
             Row("Hold a key at the top of the screen") {
                 HStack(spacing: 8) {
@@ -623,6 +643,17 @@ struct SettingsView: View {
                         .font(Look.meta).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 13)
+            }
+        }
+        Section("About this build") {
+            Row("\(Brand.name) \(Brand.version)", subtitle: isBeta
+                ? "The preview build. It has its own history, notes and settings, separate from the Drawer you release."
+                : "The release build.") {
+                HStack(spacing: 8) { if isBeta { BetaPill() } else { Text(Brand.channel).foregroundStyle(.secondary) } }
+            }
+            RowDivider()
+            Row("Data folder", subtitle: supportDir.path) {
+                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([supportDir]) }
             }
         }
         Section("Capture log") {

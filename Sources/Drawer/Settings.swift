@@ -84,6 +84,10 @@ enum Retention: Int, Codable, CaseIterable {
 }
 
 enum PasteMode: String, Codable { case activeApp, clipboard, expand }
+enum ScrollZone: String, Codable, CaseIterable {
+    case menuBar, topEdge
+    var label: String { self == .menuBar ? "Anywhere on the menu bar" : "Only the top edge" }
+}
 enum ItemsStyle: String, Codable, CaseIterable {
     case cards, lists, custom
     var label: String { rawValue.capitalized }
@@ -172,10 +176,17 @@ struct SettingsValues: Codable, Equatable {
     func isShown(_ p: Panel) -> Bool {
         switch p { case .clipboard: showClipboard; case .files: showFiles; case .notes: showNotes }
     }
-    func weight(_ p: Panel) -> Double { max(0.2, panelWeights[p.rawValue] ?? 1) }
+    /// Panel widths. Cards want a wide clipboard (3 : 1 : 1); with the clipboard as a list the three panels are equal
+    /// (1 : 1 : 1). Each layout keeps its own sizes, so dragging a divider in one does not disturb the other.
+    func weight(_ p: Panel) -> Double { max(0.2, (clipboardCards ? panelWeights : panelWeightsList)[p.rawValue] ?? 1) }
+    mutating func setWeight(_ p: Panel, _ w: Double) {
+        if clipboardCards { panelWeights[p.rawValue] = w } else { panelWeightsList[p.rawValue] = w }
+    }
 
     // Opening the drawer
     var scrollOpen = true
+    /// Where scrolling down opens the drawer: anywhere along the menu bar, or only the very top edge of the screen.
+    var scrollZone: ScrollZone = .menuBar
     var holdOpen = false
     var holdModifier = Mod.command
     var waitOpen = false
@@ -196,6 +207,7 @@ struct SettingsValues: Codable, Equatable {
     var panelOrder: [Panel] = [.files, .clipboard, .notes]
     /// Clipboard takes three fifths of the width, files and notes one fifth each.
     var panelWeights: [String: Double] = ["clipboard": 3, "files": 1, "notes": 1]
+    var panelWeightsList: [String: Double] = ["clipboard": 1, "files": 1, "notes": 1]
     /// Set once the layout defaults above have been applied to settings saved by older builds.
     var layoutV2 = false
     /// Clipboard items as a strip of cards (true) or a list of rows (false).

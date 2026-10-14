@@ -2,12 +2,97 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+// MARK: - Pictures in notes
+
+/// A picture is a Markdown line, `![Image](Attachments/Image-….png)`, with the file beside the notes. The editor shows
+/// the picture itself above that line, so a dropped screenshot reads as a picture and the note stays plain Markdown.
+enum NoteImages {
+    static let folderName = "Attachments"
+    static let pattern = #"^!\[([^\]\n]*)\]\(([^)\n]+)\)[ \t]*$"#
+    static let key = NSAttributedString.Key("drawer.noteImage")
+    private static let cache = NSCache<NSString, NSImage>()
+    private static let formatter: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "yyyyMMdd-HHmmss"; f.locale = Locale(identifier: "en_US_POSIX"); return f
+    }()
+
+    static func stamp() -> String { formatter.string(from: Date()) }
+
+    /// Relative paths are inside the notes folder; absolute paths and file:// links are taken as they are.
+    static func url(_ path: String) -> URL {
+        let clean = path.removingPercentEncoding ?? path
+        if clean.hasPrefix("file://"), let u = URL(string: clean) { return u }
+        if clean.hasPrefix("/") { return URL(fileURLWithPath: clean) }
+        return AppModel.shared.notes.folder.appendingPathComponent(clean)
+    }
+
+    static func image(_ path: String) -> NSImage? {
+        let u = url(path)
+        if let hit = cache.object(forKey: u.path as NSString) { return hit }
+        guard let img = NSImage(contentsOf: u) else { return nil }
+        cache.setObject(img, forKey: u.path as NSString)
+        return img
+    }
+
+    /// The widest a picture may be here: the text container's width, so a note in the narrow drawer panel and one in the
+    /// Library window each fit their space.
+    static func available(_ container: NSTextContainer?) -> CGFloat {
+        let w = (container?.size.width ?? 460) - 2 * (container?.lineFragmentPadding ?? 5) - 6
+        return max(120, min(460, w))
+    }
+
+    static func isImageFile(_ url: URL) -> Bool {
+        (UTType(filenameExtension: url.pathExtension.lowercased())?.conforms(to: .image)) ?? false
+    }
+
+    /// Copies a picture into the notes' Attachments folder and returns the path to write in the note ("Attachments/…").
+    static func attach(_ src: URL, notesFolder: URL) -> String? {
+        let fm = FileManager.default
+        let dir = notesFolder.appendingPathComponent(folderName, isDirectory: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let ext = src.pathExtension.isEmpty ? "png" : src.pathExtension
+        let stamp = stamp()
+        var name = "Image-\(stamp).\(ext)"
+        var n = 2
+        while fm.fileExists(atPath: dir.appendingPathComponent(name).path) { name = "Image-\(stamp)-\(n).\(ext)"; n += 1 }
+        do { try fm.copyItem(at: src, to: dir.appendingPathComponent(name)) } catch { return nil }
+        return "\(folderName)/\(name)"
+    }
+
+    static func displaySize(_ img: NSImage, maxWidth: CGFloat = 460, maxHeight: CGFloat = 340) -> NSSize {
+        let s = img.size
+        guard s.width > 0, s.height > 0 else { return NSSize(width: 120, height: 80) }
+        let k = min(1, maxWidth / s.width, maxHeight / s.height)
+        return NSSize(width: (s.width * k).rounded(), height: (s.height * k).rounded())
+    }
+}
+
+/// Draws the pictures of image lines. The styler gives such a line enough height; the picture sits in the top of it
+/// and the Markdown text, small and dimmed, in the bottom.
+final class NoteLayoutManager: NSLayoutManager {
+    override func drawGlyphs(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
+        super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin)
+        guard let storage = textStorage else { return }
+        let chars = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
+        storage.enumerateAttribute(NoteImages.key, in: chars) { value, range, _ in
+            guard let path = value as? String, let img = NoteImages.image(path) else { return }
+            let glyph = glyphRange(forCharacterRange: NSRange(location: range.location, length: 1), actualCharacterRange: nil)
+            let frag = lineFragmentRect(forGlyphAt: glyph.location, effectiveRange: nil)
+            let size = NoteImages.displaySize(img, maxWidth: NoteImages.available(textContainers.first))
+            let rect = NSRect(x: origin.x + frag.minX + 5, y: origin.y + frag.minY + 4, width: size.width, height: size.height)
+            NSGraphicsContext.saveGraphicsState()
+            NSBezierPath(roundedRect: rect, xRadius: 8, yRadius: 8).addClip()
+            img.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+            NSGraphicsContext.restoreGraphicsState()
+        }
+    }
+}
+
 // MARK: - Live Markdown styling
 
 /// Styles Markdown as you type: headings, bold, italic, strikethrough, code, links, lists, quotes. The syntax stays in
 /// the text (notes are plain Markdown files) but is dimmed, so the page reads as formatted.
 enum MarkdownStyler {
-    static func apply(to storage: NSTextStorage, size: CGFloat) {
+    static func apply(to storage: NSTextStorage, size: CGFloat, imageWidth: CGFloat = 460) {
         let full = NSRange(location: 0, length: storage.length)
         guard full.length > 0 else { return }
         let base = NSFont.systemFont(ofSize: size)
@@ -65,6 +150,19 @@ enum MarkdownStyler {
             addTrait(.italicFontMask, m.range)
         }
         each(#"^-{3,}$"#, [.anchorsMatchLines]) { m in storage.addAttribute(.foregroundColor, value: dim, range: m.range) }
+        each(NoteImages.pattern, [.anchorsMatchLines]) { m in
+            let path = (storage.string as NSString).substring(with: m.range(at: 2))
+            storage.removeAttribute(.underlineStyle, range: m.range)
+            storage.addAttribute(.foregroundColor, value: dim, range: m.range)
+            guard let img = NoteImages.image(path) else { return }
+            let caption = NSFont.systemFont(ofSize: size * 0.72)
+            let p = NSMutableParagraphStyle()
+            p.lineSpacing = 4
+            let height = NoteImages.displaySize(img, maxWidth: imageWidth).height + 12 + ceil(caption.ascender - caption.descender + caption.leading)
+            p.minimumLineHeight = height
+            p.maximumLineHeight = height
+            storage.addAttributes([.font: caption, .paragraphStyle: p, NoteImages.key: path], range: m.range)
+        }
         storage.endEditing()
     }
 }
@@ -185,6 +283,7 @@ struct MarkdownEditor: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let scroll = NSTextView.scrollableTextView()
         guard let tv = scroll.documentView as? NSTextView else { return scroll }
+        tv.textContainer?.replaceLayoutManager(NoteLayoutManager())
         tv.delegate = context.coordinator
         tv.isRichText = false
         tv.allowsUndo = true
@@ -199,6 +298,14 @@ struct MarkdownEditor: NSViewRepresentable {
         controller.textView = tv
         tv.string = text
         restyle(tv)
+        // Pictures are sized to the width, so style again when the width changes (the drawer panel is resized, a window opens).
+        tv.postsFrameChangedNotifications = true
+        let coordinator = context.coordinator
+        NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: tv, queue: .main) { [weak tv, weak coordinator] _ in
+            guard let tv, let coordinator, abs(tv.frame.width - coordinator.lastWidth) > 1 else { return }
+            coordinator.lastWidth = tv.frame.width
+            coordinator.parent.restyle(tv)
+        }
         return scroll
     }
 
@@ -218,12 +325,13 @@ struct MarkdownEditor: NSViewRepresentable {
 
     fileprivate func restyle(_ tv: NSTextView) {
         guard let storage = tv.textStorage else { return }
-        MarkdownStyler.apply(to: storage, size: fontSize)
+        MarkdownStyler.apply(to: storage, size: fontSize, imageWidth: NoteImages.available(tv.textContainer))
         tv.typingAttributes = [.font: NSFont.systemFont(ofSize: fontSize), .foregroundColor: NSColor.labelColor]
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: MarkdownEditor
+        var lastWidth: CGFloat = 0
         init(_ parent: MarkdownEditor) { self.parent = parent }
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }

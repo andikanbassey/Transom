@@ -12,7 +12,7 @@ Drawer takes its layout from [Unclutter](https://unclutterapp.com) and its clipb
 ## Features
 
 ### Opening and closing
-- **Scroll at the top edge** to open, swipe up over the top of the drawer to close.
+- **Scroll down anywhere along the menu bar** to open (with a hidden menu bar, at the very top edge), swipe up over the top of the drawer to close. Settings › Shortcuts can limit it to the top edge. The shortcut, hold-a-key and wait openers are there too.
 - **Hold a key** or **wait** at the top edge, or press a **global hotkey** (⇧⌘V by default, rebindable).
 - Stays open until you click outside it, or closes by itself after 5, 10 or 15 seconds if you prefer.
 - Scroll direction can be inverted separately for mouse and trackpad.
@@ -126,6 +126,7 @@ Other targets:
 ```bash
 ./build.sh             # build only: build/Drawer.app
 ./build.sh run         # build and launch from build/
+./build.sh dev         # fast debug build and launch, for trying changes
 ./build.sh zip         # build and write build/Drawer.zip and its SHA-256 for sharing
 ./build.sh dmg         # build and write build/Drawer.dmg and its SHA-256 for sharing
 ```
@@ -172,7 +173,8 @@ Sources/Drawer/
   Onboarding.swift    first-launch welcome
   Theme.swift         glass helper, button style, menu bar icon
 build.sh              build, bundle, sign, install
-make-icon.swift       renders the app icon
+make-icon.swift       draws the app icon
+Drawer.sdef           the AppleScript dictionary
 ```
 
 Debug aids: `Drawer --show` keeps the drawer open, and `DRAWER_SNAPSHOT=/path.png` renders it to an image.

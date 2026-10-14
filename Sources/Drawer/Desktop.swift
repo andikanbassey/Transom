@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 
 // MARK: - Window
 
@@ -49,6 +50,9 @@ final class MainNav: ObservableObject {
 final class SettingsWindow {
     static let shared = SettingsWindow()
     private var window: NSWindow?
+    private var themeWatcher: AnyCancellable?
+    /// For the DRAWER_THEME_TEST debug aid.
+    var appearanceName: String { window?.appearance?.name.rawValue ?? "system" }
 
     func show(pane: Pane? = nil, tab: MainTab = .settings) {
         if let pane { SettingsNav.shared.pane = pane }
@@ -68,6 +72,10 @@ final class SettingsWindow {
                 NSApp.setActivationPolicy(.accessory)
             }
             window = w
+            // The window's own appearance follows the Theme setting live, not just when the window opens.
+            themeWatcher = Settings.shared.$v.map(\.appearance).removeDuplicates().sink { [weak self] a in
+                self?.window?.appearance = a.nsAppearance
+            }
         }
         window?.appearance = Settings.shared.v.appearance.nsAppearance
         NSApp.setActivationPolicy(.regular)
@@ -78,6 +86,7 @@ final class SettingsWindow {
 
 struct MainWindowView: View {
     @ObservedObject var nav = MainNav.shared
+    @ObservedObject var settings = Settings.shared
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -101,14 +110,17 @@ struct MainWindowView: View {
             .ignoresSafeArea()
         }
         .animation(.easeOut(duration: 0.14), value: nav.paletteOpen)
+        // Theme applies to the whole window, Library and Settings alike, and follows the setting as it changes.
+        .preferredColorScheme(settings.v.appearance == .system ? nil : (settings.v.appearance == .dark ? .dark : .light))
         .frame(minWidth: 900, minHeight: 620)
     }
 }
 
-/// The bottom-left button that flips the window between Library and Settings.
-struct SidebarSwitch: View {
+/// A plain row at the bottom of the sidebar ("Settings"), with an optional shortcut hint.
+struct SidebarAction: View {
     let title: String
     let symbol: String
+    var hint: String?
     let action: () -> Void
     @StateObject private var hovering = Box(false)
 
@@ -117,13 +129,44 @@ struct SidebarSwitch: View {
             Image(systemName: symbol).font(.system(size: 13, weight: .medium)).frame(width: 26)
             Text(title).font(.system(size: 14))
             Spacer()
+            if let hint { Text(hint).font(Look.meta).foregroundStyle(.tertiary) }
         }
         .foregroundStyle(hovering.value ? Color.primary : Color.secondary)
         .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(hovering.value ? Look.selection : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(hovering.value ? Look.selection.opacity(0.55) : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .contentShape(Rectangle())
         .onHover { hovering.value = $0 }
         .onTapGesture(perform: action)
+    }
+}
+
+/// The two-sided switch at the bottom of both sidebars. The side you are on shows its icon and is bold and coloured;
+/// the other is plain grey text of the same size. Both halves are equal, so nothing shifts when you switch.
+struct ModeSwitch: View {
+    @ObservedObject private var nav = MainNav.shared
+
+    var body: some View {
+        HStack(spacing: 2) {
+            side("Library", "square.grid.2x2.fill", .library)
+            side("Settings", "gearshape.fill", .settings)
+        }
+        .padding(3)
+        .background(Color.primary.opacity(0.06), in: Capsule())
+        .animation(.easeOut(duration: 0.16), value: nav.tab)
+    }
+
+    private func side(_ title: String, _ symbol: String, _ tab: MainTab) -> some View {
+        let on = nav.tab == tab
+        return HStack(spacing: 6) {
+            if on { Image(systemName: symbol).font(.system(size: 12, weight: .semibold)) }
+            Text(title).font(.system(size: 13, weight: on ? .semibold : .regular))
+        }
+        .foregroundStyle(on ? Color.accentColor : Color.secondary)
+        .frame(maxWidth: .infinity).frame(height: 30)
+        .background(on ? Look.card : .clear, in: Capsule())
+        .shadow(color: .black.opacity(on ? 0.12 : 0), radius: 2, y: 1)
+        .contentShape(Capsule())
+        .onTapGesture { nav.tab = tab }
     }
 }
 
@@ -160,6 +203,26 @@ enum DesktopSection: String, CaseIterable {
     }
 }
 
+/// Dropping a clipboard card on "Notes" or "Quick Access" in the sidebar keeps it there.
+struct SidebarDrop: ViewModifier {
+    let section: DesktopSection
+    let notes: NotesStore
+    let files: FilesStore
+    @StateObject private var targeted = Box(false)
+
+    func body(content: Content) -> some View {
+        if section == .notes || section == .files {
+            content
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.accentColor.opacity(targeted.value ? 0.9 : 0), lineWidth: 2))
+                .clipDrop(targeted: $targeted.value) { clip in
+                    if section == .notes { notes.addClip(clip) } else { files.addClip(clip) }
+                }
+        } else {
+            content
+        }
+    }
+}
+
 // MARK: - Library
 
 struct DesktopView: View {
@@ -170,6 +233,8 @@ struct DesktopView: View {
     @ObservedObject private var nav = MainNav.shared
     @StateObject private var collapsed = Box(Set<String>())
     @StateObject private var editor = NoteEditorController()
+    @StateObject private var selecting = Box(false)
+    @StateObject private var picked = Box(Set<String>())
 
     private let grid = [GridItem(.adaptive(minimum: 250, maximum: 340), spacing: 18, alignment: .top)]
     private let cardHeight: CGFloat = 250
@@ -177,29 +242,46 @@ struct DesktopView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebar
-            Rectangle().fill(Look.hairline).frame(width: 1)
             content.background(Look.page)
         }
-        .preferredColorScheme(settings.v.appearance == .system ? nil : (settings.v.appearance == .dark ? .dark : .light))
-        .onAppear { clipboard.expanded = nil }
+        .onAppear {
+            clipboard.expanded = nil
+            if ProcessInfo.processInfo.environment["DRAWER_SELECT"] != nil {
+                selecting.value = true
+                picked.value = Set(visibleIDs().prefix(2))
+            }
+        }
+        .onChange(of: nav.section) { _, _ in endSelecting() }
     }
 
     // MARK: Sidebar
 
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 2) {
             SidebarBrand()
-            ForEach(DesktopSection.allCases, id: \.self) { s in
-                SidebarRow(title: s.title, symbol: s.symbol, color: s.color, selected: nav.section == s,
-                           trailing: count(s).map { "\($0)" })
-                    .onTapGesture { go(s) }
+            SidebarAction(title: "New Note", symbol: "square.and.pencil") {
+                nav.section = .notes; notes.add(); notes.showingList = false
             }
+            .padding(.bottom, 4)
+            sidebarRow(.all)
+            SidebarHeader(title: "Clipboard")
+            sidebarRow(.clipboard)
+            sidebarRow(.pinned)
+            SidebarHeader(title: "Saved")
+            sidebarRow(.notes)
+            sidebarRow(.files)
             Spacer()
-            SidebarSwitch(title: "Settings", symbol: "gearshape") { MainNav.shared.tab = .settings }
+            ModeSwitch()
         }
         .padding(.horizontal, 14).padding(.bottom, 16)
         .frame(width: Look.sidebarWidth)
         .background(Look.sidebar)
+    }
+
+    private func sidebarRow(_ s: DesktopSection) -> some View {
+        SidebarRow(title: s.title, symbol: s.symbol, color: s.color, selected: nav.section == s, trailing: count(s).map { "\($0)" })
+            .onTapGesture { go(s) }
+            .modifier(SidebarDrop(section: s, notes: notes, files: files))
     }
 
     private func go(_ s: DesktopSection) {
@@ -243,15 +325,22 @@ struct DesktopView: View {
     /// Title with a round "+" where adding makes sense, and the filter chips on the clipboard page.
     private var header: some View {
         VStack(alignment: .leading, spacing: 14) {
-            PageHeader(title: nav.section.title, plus: plusAction) { EmptyView() }
-            if nav.section == .clipboard || nav.section == .pinned {
+            PageHeader(title: nav.section.title, plus: plusAction) {
+                if !selecting.value && !visibleIDs().isEmpty {
+                    Button { selecting.value = true } label: { Label("Select", systemImage: "checkmark.circle") }
+                        .buttonStyle(.borderless).foregroundStyle(.secondary)
+                }
+            }
+            if selecting.value {
+                selectionBar
+            } else if nav.section == .clipboard || nav.section == .pinned {
                 HStack(spacing: 8) {
                     FilterPills(store: clipboard, window: true)
                     TimeChip(store: clipboard)
                 }
             }
         }
-        .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, 14)
+        .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, Look.headerGap - 6)
         .zIndex(10)
     }
 
@@ -277,19 +366,19 @@ struct DesktopView: View {
 
     @ViewBuilder private func clipboardItems(_ list: [Clip]) -> some View {
         if settings.v.clipboardCards {
-            LazyVGrid(columns: grid, spacing: 18) { ForEach(list) { clipCard($0) } }
+            LazyVGrid(columns: grid, spacing: 18) { ForEach(list) { c in selectable(c.id.uuidString, clipCard(c)) } }
         } else {
-            listBox { ForEach(list) { c in ClipRow(clip: c, store: clipboard, quickKey: nil, inWindow: true) } }
+            listBox { ForEach(list) { c in selectable(c.id.uuidString, radius: 8, ClipRow(clip: c, store: clipboard, quickKey: nil, inWindow: true)) } }
         }
     }
 
     @ViewBuilder private func notesItems(_ list: [Note]) -> some View {
         if settings.v.notesCards {
-            LazyVGrid(columns: grid, spacing: 18) { ForEach(list) { noteCard($0) } }
+            LazyVGrid(columns: grid, spacing: 18) { ForEach(list) { n in selectable(n.id.uuidString, noteCard(n)) } }
         } else {
             listBox {
                 ForEach(list) { n in
-                    NoteRow(note: n, store: notes, inWindow: true).simultaneousGesture(TapGesture().onEnded { nav.section = .notes })
+                    selectable(n.id.uuidString, radius: 8, NoteRow(note: n, store: notes, inWindow: true).simultaneousGesture(TapGesture().onEnded { if !selecting.value { nav.section = .notes } }))
                 }
             }
         }
@@ -297,14 +386,125 @@ struct DesktopView: View {
 
     @ViewBuilder private func filesItems(_ list: [String]) -> some View {
         if settings.v.filesCards {
-            LazyVGrid(columns: grid, spacing: 18) { ForEach(list, id: \.self) { fileCard($0) } }
+            LazyVGrid(columns: grid, spacing: 18) { ForEach(list, id: \.self) { p in selectable(p, fileCard(p)) } }
         } else {
-            listBox { ForEach(list, id: \.self) { FileListRow(path: $0, store: files) } }
+            listBox { ForEach(list, id: \.self) { p in selectable(p, radius: 8, FileListRow(path: p, store: files)) } }
         }
     }
 
     private func listBox<C: View>(@ViewBuilder _ rows: () -> C) -> some View {
         LazyVStack(spacing: 2) { rows() }.padding(8).lookCard()
+    }
+
+    // MARK: Select and batch actions
+
+    /// Everything the current page shows right now, as selection ids.
+    private func visibleIDs() -> [String] {
+        switch nav.section {
+        case .clipboard: clips().map { $0.id.uuidString }
+        case .pinned: clips().filter(\.pinned).map { $0.id.uuidString }
+        case .notes: notes.notes.map { $0.id.uuidString }
+        case .files: files.paths
+        case .all: []
+        }
+    }
+
+    private func endSelecting() { selecting.value = false; picked.value = [] }
+
+    private func toggle(_ id: String) {
+        if picked.value.contains(id) { picked.value.remove(id) } else { picked.value.insert(id) }
+    }
+
+    /// Wraps an item so a click picks it while selecting; nothing changes otherwise.
+    @ViewBuilder private func selectable<V: View>(_ id: String, radius: CGFloat = 18, _ view: V) -> some View {
+        if selecting.value && nav.section != .all {
+            view.overlay { SelectChrome(on: picked.value.contains(id), radius: radius) { toggle(id) } }
+        } else {
+            view
+        }
+    }
+
+    /// The bar that replaces the filters while selecting: count on the left, then buttons that all share one shape,
+    /// weight and spacing (after Perplexity's and Higgsfield's bulk-action bars). Done is the one filled button.
+    private var selectionBar: some View {
+        let n = picked.value.count
+        let ids = visibleIDs()
+        let isClips = nav.section == .clipboard || nav.section == .pinned
+        return HStack(spacing: 8) {
+            Button { picked.value = [] } label: {
+                Image(systemName: "xmark").font(.system(size: 10.5, weight: .bold)).foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28).background(Color.primary.opacity(0.07), in: Circle())
+            }
+            .buttonStyle(.plain).help("Clear selection").opacity(n == 0 ? 0.4 : 1).disabled(n == 0)
+            Text(n == 0 ? "Select items" : "\(n) selected").font(.system(size: 13, weight: .medium)).padding(.leading, 2)
+            Menu {
+                Button("All \(ids.count) shown") { picked.value = Set(ids) }.keyboardShortcut("a", modifiers: .command)
+                if isClips {
+                    Divider()
+                    Button("Last 5 minutes") { pickRecent(300) }
+                    Button("Last hour") { pickRecent(3600) }
+                    Button("Today") { pickRecent(Date().timeIntervalSince(Calendar.current.startOfDay(for: Date()))) }
+                }
+                Divider()
+                Button("None") { picked.value = [] }
+            } label: { SelectBarLabel(title: "Select", symbol: "checklist", chevron: true) }
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+            Spacer()
+            if isClips {
+                let allPinned = n > 0 && picked.value.allSatisfy { id in clipboard.clips.first { $0.id.uuidString == id }?.pinned ?? false }
+                Button {
+                    clipboard.setPinned(!allPinned, ids: Set(picked.value.compactMap(UUID.init(uuidString:))))
+                    picked.value = []
+                } label: { SelectBarLabel(title: allPinned ? "Unpin" : "Pin", symbol: allPinned ? "pin.slash" : "pin") }
+                    .buttonStyle(.plain).disabled(n == 0).opacity(n == 0 ? 0.4 : 1)
+            }
+            Button { deleteSelection() } label: { SelectBarLabel(title: "Delete", symbol: "trash", tint: .red) }
+                .buttonStyle(.plain).disabled(n == 0).opacity(n == 0 ? 0.4 : 1)
+            Button { endSelecting() } label: { SelectBarLabel(title: "Done", symbol: nil, filled: true) }
+                .buttonStyle(.plain).keyboardShortcut(.cancelAction)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(Look.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Look.hairline, lineWidth: 1))
+    }
+
+    /// Adds the shown clipboard items copied in the last `seconds` to the selection.
+    private func pickRecent(_ seconds: TimeInterval) {
+        let cutoff = Date().addingTimeInterval(-seconds)
+        let list = nav.section == .pinned ? clips().filter(\.pinned) : clips()
+        picked.value.formUnion(list.filter { $0.date >= cutoff }.map { $0.id.uuidString })
+    }
+
+    private func deleteSelection() {
+        let ids = picked.value
+        guard !ids.isEmpty else { return }
+        let alert = NSAlert()
+        let count = ids.count
+        let noun: String
+        switch nav.section {
+        case .notes:
+            noun = count == 1 ? "note" : "notes"
+            alert.informativeText = "They move to the Trash."
+        case .files:
+            noun = count == 1 ? "item" : "items"
+            alert.informativeText = files.mode == .folder ? "They move to the Trash." : "They are only removed from Quick Access. The files stay where they are."
+        default:
+            noun = count == 1 ? "clipboard item" : "clipboard items"
+            let pinned = clipboard.clips.filter { ids.contains($0.id.uuidString) && $0.pinned }.count
+            alert.informativeText = "This can't be undone." + (pinned > 0 ? " \(pinned) of them \(pinned == 1 ? "is" : "are") pinned." : "")
+        }
+        alert.messageText = "Delete \(count) \(noun)?"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Delete").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        switch nav.section {
+        case .notes: notes.notes.filter { ids.contains($0.id.uuidString) }.forEach(notes.delete)
+        case .files: ids.forEach(files.remove)
+        default: clipboard.delete(ids: Set(ids.compactMap(UUID.init(uuidString:))))
+        }
+        endSelecting()
     }
 
     // MARK: All: a section per kind of thing
@@ -322,7 +522,7 @@ struct DesktopView: View {
         let recent = all.filter { !$0.pinned }
         return VStack(alignment: .leading, spacing: 0) {
             PageHeader(title: greeting, subtitle: Date().formatted(.dateTime.weekday(.wide).day().month(.wide))) { EmptyView() }
-                .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, 18)
+                .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, Look.headerGap)
             ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
                     if !pinned.isEmpty {
@@ -461,6 +661,65 @@ struct DesktopView: View {
     }
 }
 
+// MARK: - Selection
+
+/// The same pill for every action in the selection bar: 30 pt tall, 13 pt medium, icon and text 6 pt apart.
+struct SelectBarLabel: View {
+    let title: String
+    var symbol: String?
+    var tint: Color?
+    var chevron = false
+    var filled = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let symbol { Image(systemName: symbol).font(.system(size: 12, weight: .semibold)) }
+            Text(title).font(.system(size: 13, weight: .medium))
+            if chevron { Image(systemName: "chevron.down").font(.system(size: 8.5, weight: .bold)).opacity(0.7) }
+        }
+        .foregroundStyle(filled ? Look.card : (tint ?? Color.primary))
+        .padding(.horizontal, 12).frame(height: 30)
+        .background(filled ? Color.primary : Color.primary.opacity(0.07), in: Capsule())
+        .contentShape(Capsule())
+    }
+}
+
+/// Selection chrome on a card or row: flat until the pointer is over it, then a soft ring and an empty circle inside
+/// the card's lower left; picked items keep the full ring and a filled check.
+struct SelectChrome: View {
+    let on: Bool
+    let radius: CGFloat
+    let toggle: () -> Void
+    @StateObject private var hovering = Box(false)
+
+    var body: some View {
+        let show = on || hovering.value
+        // Cards: lower left, inside. Rows are short, so there it sits at the leading edge, centred.
+        let compact = radius <= 10
+        ZStack(alignment: compact ? .leading : .bottomLeading) {
+            Color.clear.contentShape(Rectangle())
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .strokeBorder(Color.accentColor.opacity(on ? 1 : (hovering.value ? 0.5 : 0)), lineWidth: 2.5)
+                .shadow(color: Color.accentColor.opacity(on ? 0.45 : (hovering.value ? 0.25 : 0)), radius: 8)
+                .allowsHitTesting(false)
+            ZStack {
+                Circle().fill(on ? Color.accentColor : Color.black.opacity(0.35))
+                Circle().strokeBorder(.white.opacity(on ? 0 : 0.9), lineWidth: 1.5)
+                if on { Image(systemName: "checkmark").font(.system(size: 10.5, weight: .bold)).foregroundStyle(.white) }
+            }
+            .frame(width: 22, height: 22)
+            .padding(compact ? 6 : 12)
+            .opacity(show ? 1 : 0)
+            .scaleEffect(show ? 1 : 0.85)
+            .allowsHitTesting(false)
+        }
+        .onHover { hovering.value = $0 }
+        .onTapGesture(perform: toggle)
+        .animation(.easeOut(duration: 0.14), value: show)
+        .animation(.easeOut(duration: 0.14), value: on)
+    }
+}
+
 // MARK: - Cards
 
 /// A Craft-style card: a coloured frame that fades toward the bottom, around a soft white card. On hover the white
@@ -482,10 +741,13 @@ struct LibraryCard<Preview: View>: View {
         ZStack {
             RoundedRectangle(cornerRadius: outerRadius, style: .continuous)
                 .fill(LinearGradient(colors: [frame.opacity(0.9), frame.opacity(0.5), frame.opacity(0.08)], startPoint: .top, endPoint: .bottom))
+            // The content is laid out once, at the card's full size, and only the clip shape changes with hover.
+            // Nothing inside reflows or moves, so the text stays still while the card grows over the stroke.
             inner
-                // Concentric with the frame, so the corners stay true as the stroke shrinks.
-                .clipShape(RoundedRectangle(cornerRadius: outerRadius - inset, style: .continuous))
-                .padding(inset)
+                .mask(
+                    RoundedRectangle(cornerRadius: outerRadius - inset, style: .continuous)
+                        .padding(inset)
+                )
         }
         .shadow(color: .black.opacity(hovering.value ? 0.13 : 0.07), radius: hovering.value ? 12 : 8, y: hovering.value ? 5 : 3)
         .contentShape(Rectangle())
@@ -589,39 +851,50 @@ struct LibraryClipMenu: View {
     var body: some View {
         let cat = clip.category
         let file = clip.imageURL ?? clip.fileURLs.first
-        Button(cat == .image || cat == .gif ? "Copy Image" : "Copy") {
+        // Grouped the way Craft groups its menus: use it, open it, send it somewhere, then pin and delete last.
+        Button {
             store.copy(clip)
             if Settings.shared.v.sounds { NSSound(named: "Pop")?.play() }
-        }
-        Button("Open in Full") { store.expanded = clip }
+        } label: { Label(cat == .image || cat == .gif ? "Copy Image" : "Copy", systemImage: "doc.on.doc") }
+        Button { store.expanded = clip } label: { Label("Open in Full", systemImage: "arrow.up.left.and.arrow.down.right") }
         Divider()
         switch cat {
         case .image, .gif:
             if let url = file {
-                Button("Open in Preview") { Self.open(url, withBundleID: "com.apple.Preview") }
-                Button("Save Image As…") { Self.save(url) }
+                Button { Self.open(url, withBundleID: "com.apple.Preview") } label: { Label("Open in Preview", systemImage: "eye") }
+                Button { Self.save(url) } label: { Label("Save Image As…", systemImage: "square.and.arrow.down") }
             }
         case .video, .audio:
-            if let url = file { Button(cat == .video ? "Play" : "Play Audio") { NSWorkspace.shared.open(url) } }
+            if let url = file { Button { NSWorkspace.shared.open(url) } label: { Label(cat == .video ? "Play" : "Play Audio", systemImage: "play") } }
         case .pdf:
-            if let url = file { Button("Open in Preview") { Self.open(url, withBundleID: "com.apple.Preview") } }
+            if let url = file { Button { Self.open(url, withBundleID: "com.apple.Preview") } label: { Label("Open in Preview", systemImage: "eye") } }
         case .folder:
-            if let url = file { Button("Open Folder") { NSWorkspace.shared.open(url) } }
+            if let url = file { Button { NSWorkspace.shared.open(url) } label: { Label("Open Folder", systemImage: "folder") } }
         case .file:
-            if let url = file { Button("Open") { NSWorkspace.shared.open(url) } }
+            if let url = file { Button { NSWorkspace.shared.open(url) } label: { Label("Open", systemImage: "arrow.up.forward.app") } }
         case .link:
             if let t = clip.text?.trimmingCharacters(in: .whitespacesAndNewlines), let url = URL(string: t) {
-                Button("Open Link") { NSWorkspace.shared.open(url) }
+                Button { NSWorkspace.shared.open(url) } label: { Label("Open Link", systemImage: "safari") }
             }
         case .text, .color:
             EmptyView()
         }
         if let url = clip.fileURLs.first ?? clip.imageURL {
-            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+            Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: { Label("Reveal in Finder", systemImage: "magnifyingglass") }
+        }
+        Menu {
+            Button { AppModel.shared.notes.addClip(clip) } label: { Label("Notes", systemImage: "note.text") }
+            Button { AppModel.shared.files.addClip(clip) } label: { Label("Quick Access", systemImage: "folder") }
+        } label: { Label("Save To", systemImage: "tray.and.arrow.down") }
+        if let url = clip.imageURL ?? clip.fileURLs.first {
+            ShareLink(item: url) { Label("Share…", systemImage: "square.and.arrow.up") }
+        } else if let text = clip.text, !text.isEmpty {
+            ShareLink(item: text) { Label("Share…", systemImage: "square.and.arrow.up") }
         }
         Divider()
-        Button(clip.pinned ? "Unpin" : "Pin") { store.togglePin(clip) }
-        Button("Delete") { store.delete(clip) }
+        Button { store.togglePin(clip) } label: { Label(clip.pinned ? "Unpin" : "Pin", systemImage: clip.pinned ? "pin.slash" : "pin") }
+        Divider()
+        Button(role: .destructive) { store.delete(clip) } label: { Label("Delete", systemImage: "trash") }
     }
 
     private static func open(_ url: URL, withBundleID id: String) {

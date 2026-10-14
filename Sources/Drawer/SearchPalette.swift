@@ -147,7 +147,7 @@ struct SearchPalette: View {
         actions.append(PaletteItem(id: "clear", section: "Actions", symbol: "trash", title: "Clear Unpinned Clipboard") {
             clipboard.clearUnpinned() })
         let panes: [PaletteItem] = Pane.allCases.map { p in
-            PaletteItem(id: "pane-\(p.rawValue)", section: "Settings", symbol: "gearshape", title: p.title,
+            PaletteItem(id: "pane-\(p.rawValue)", section: "Settings", symbol: p.symbol, tint: p.color, title: p.title,
                         subtitle: p.blurb) { SettingsNav.shared.pane = p; nav.tab = .settings }
         }
 

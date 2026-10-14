@@ -71,7 +71,8 @@ struct DrawerView: View {
         guard pair > minW * 2 else { return }
         var l = min(max(start.0 + Double(dx) * perPoint, minW), pair - minW)
         // The default split is a detent: pull towards it and give a tap of haptic feedback on arrival.
-        let d = SettingsValues()
+        var d = SettingsValues()
+        d.clipboardCards = settings.v.clipboardCards
         let equal = min(max(pair * d.weight(left) / (d.weight(left) + d.weight(right)), minW), pair - minW)
         let near = abs(l - equal) < 8 * perPoint
         if near {
@@ -79,8 +80,8 @@ struct DrawerView: View {
             if !snapped.value { Haptics.detent() }
         }
         snapped.value = near
-        settings.v.panelWeights[left.rawValue] = l
-        settings.v.panelWeights[right.rawValue] = pair - l
+        settings.v.setWeight(left, l)
+        settings.v.setWeight(right, pair - l)
     }
 }
 
@@ -669,8 +670,9 @@ struct FilesColumn: View {
             }
         }
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.accentColor.opacity(targeted.value ? 0.8 : 0), lineWidth: 2).padding(6))
-        .onDrop(of: [.fileURL], isTargeted: $targeted.value) { providers in
-            for p in providers {
+        .onDrop(of: [.item], isTargeted: $targeted.value) { providers in
+            if let clip = AppModel.shared.takeDragged() { store.addClip(clip); Haptics.drop(); return true }
+            for p in providers where p.hasItemConformingToTypeIdentifier("public.file-url") {
                 p.loadItem(forTypeIdentifier: "public.file-url") { item, _ in
                     guard let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
                     DispatchQueue.main.async { store.add(url) }
@@ -760,6 +762,8 @@ struct NotesColumn: View {
     @ObservedObject var settings = Settings.shared
     @StateObject private var query = Box("")
     @StateObject private var searching = Box(false)
+    @StateObject private var targeted = Box(false)
+    @StateObject private var noteController = NoteEditorController()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -780,6 +784,8 @@ struct NotesColumn: View {
             }
             if store.showingList { list } else { editor }
         }
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.accentColor.opacity(targeted.value ? 0.8 : 0), lineWidth: 2).padding(6))
+        .clipDrop(targeted: $targeted.value) { clip in store.addClip(clip); store.showingList = true }
     }
 
     @ViewBuilder private var editor: some View {
@@ -790,10 +796,9 @@ struct NotesColumn: View {
                         .font(.system(size: settings.v.notesFontSize)).foregroundStyle(.tertiary)
                         .padding(.horizontal, 19).padding(.top, 8)
                 }
-                TextEditor(text: store.binding(for: id))
-                    .font(.system(size: settings.v.notesFontSize))
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 14).padding(.bottom, 10)
+                // The same editor as the Library's, so a note with a picture shows the picture here as well.
+                MarkdownEditor(text: store.binding(for: id), fontSize: settings.v.notesFontSize, controller: noteController)
+                    .padding(.horizontal, 19).padding(.top, 4).padding(.bottom, 10)
                     .id(id)
             }
         }
@@ -1209,7 +1214,20 @@ struct ClipCard: View {
 }
 
 /// What gets dragged out of a card or row into another app: the text, the image, or the file itself.
+extension View {
+    /// Takes in a clipboard item dragged from Drawer's own cards or rows; anything else is ignored.
+    func clipDrop(targeted: Binding<Bool>, perform: @escaping (Clip) -> Void) -> some View {
+        onDrop(of: [.item], isTargeted: targeted) { _ in
+            guard let clip = AppModel.shared.takeDragged() else { return false }
+            perform(clip)
+            Haptics.drop()
+            return true
+        }
+    }
+}
+
 func dragProvider(_ clip: Clip) -> NSItemProvider {
+    AppModel.shared.beginDrag(clip)
     switch clip.kind {
     case .text:
         return NSItemProvider(object: (clip.text ?? "") as NSString)

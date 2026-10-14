@@ -43,6 +43,9 @@ enum Look {
     static let card = dynamic(light: .white, dark: NSColor(white: 0.168, alpha: 1))
     static let sidebar = dynamic(light: NSColor(white: 0.955, alpha: 1), dark: NSColor(white: 0.135, alpha: 1))
     static let hairline = Color.primary.opacity(0.08)
+    /// The line between sidebar and page. Opaque on purpose: a translucent line over the window's own backdrop shows
+    /// as a bright bar in dark mode.
+    static let divider = dynamic(light: NSColor(white: 0.88, alpha: 1), dark: NSColor(white: 0.21, alpha: 1))
     static let selection = Color.primary.opacity(0.075)
 
     static let pageTitle = Font.system(size: 26, weight: .semibold)
@@ -53,6 +56,8 @@ enum Look {
     static let overline = Font.system(size: 11, weight: .semibold)
 
     static let cardRadius: CGFloat = 16
+    /// Space between a page heading (title, subtitle, chips) and the content under it, the same on every page.
+    static let headerGap: CGFloat = 26
     static let sidebarWidth: CGFloat = 230
 }
 
@@ -95,6 +100,7 @@ struct SidebarRow: View {
     let color: Color
     let selected: Bool
     var trailing: String?
+    @StateObject private var hovering = Box(false)
 
     var body: some View {
         HStack(spacing: 11) {
@@ -106,8 +112,19 @@ struct SidebarRow: View {
             if let trailing { Text(trailing).font(Look.meta).foregroundStyle(.secondary) }
         }
         .padding(.horizontal, 10).padding(.vertical, 5)
-        .background(selected ? Look.selection : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(selected ? Look.selection : (hovering.value ? Look.selection.opacity(0.55) : .clear),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .contentShape(Rectangle())
+        .onHover { hovering.value = $0 }
+    }
+}
+
+/// A small group title in a sidebar ("Clipboard", "Saved"), quiet so the rows carry the weight.
+struct SidebarHeader: View {
+    let title: String
+    var body: some View {
+        Text(title).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(.tertiary)
+            .padding(.horizontal, 10).padding(.top, 14).padding(.bottom, 4)
     }
 }
 
@@ -116,6 +133,7 @@ struct SidebarBrand: View {
         HStack(spacing: 9) {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 28, height: 28)
             Text("Drawer").font(.system(size: 16, weight: .semibold))
+            BetaPill()
         }
         .padding(.horizontal, 10).padding(.top, 40).padding(.bottom, 16)
     }

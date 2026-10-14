@@ -8,6 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem!
     var cancellable: AnyCancellable?
     let pauseItem = NSMenuItem(title: "Pause Clipboard Capture", action: #selector(togglePause), keyEquivalent: "")
+    let headerItem = NSMenuItem()
+    let activateItem = NSMenuItem(title: "", action: #selector(makeActive), keyEquivalent: "")
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         // drawer:// links. Registered this early so a link that launches Drawer is not lost.
@@ -22,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppModel.shared.standby = !InstanceGuard.resolveAtLaunch()
         drawer = DrawerController()
         AppModel.shared.showDrawer = { [weak self] in self?.drawer.openIfClosed() }
         AppModel.shared.openSettings = { pane in
@@ -34,10 +37,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = MenuBarIcon.image()
-        statusItem.button?.setAccessibilityLabel("Drawer")
+        statusItem.button?.setAccessibilityLabel(Brand.name)
+        statusItem.button?.appearsDisabled = AppModel.shared.standby
 
         let menu = NSMenu()
         menu.delegate = self
+        // Always says which build this is and where its data lives; in standby it also says why nothing is captured.
+        headerItem.isEnabled = false
+        menu.addItem(headerItem)
+        activateItem.target = self
+        menu.addItem(activateItem)
+        menu.addItem(.separator())
         func add(_ title: String, _ symbol: String, _ action: Selector, key: String = "") {
             let item = menu.addItem(withTitle: title, action: action, keyEquivalent: key)
             item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
@@ -53,11 +63,82 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         add("Settings…", "gearshape", #selector(showSettings), key: ",")
         menu.addItem(.separator())
-        let quit = menu.addItem(withTitle: "Quit Drawer", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = menu.addItem(withTitle: "Quit \(Brand.name)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.image = NSImage(systemSymbolName: "power", accessibilityDescription: nil)
         statusItem.menu = menu
 
         if drawer.stayOpen { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.drawer.toggle() } }
+        if ProcessInfo.processInfo.environment["DRAWER_THEME_TEST"] != nil {
+            // Debug aid: open the window, flip Theme to Light, then Dark, then System, and report the window's appearance.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                SettingsWindow.shared.show(tab: .settings)
+                var out = ""
+                let steps: [(Appearance, Double)] = [(.light, 0.5), (.dark, 1.0), (.system, 1.5)]
+                for (a, t) in steps {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + t) {
+                        Settings.shared.v.appearance = a
+                        out += "\(a.rawValue) -> \(SettingsWindow.shared.appearanceName)\n"
+                    }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { try? out.write(toFile: "/tmp/drawer-theme-test.txt", atomically: true, encoding: .utf8); exit(0) }
+            }
+        }
+        if let spec = ProcessInfo.processInfo.environment["DRAWER_SCROLL_TEST"] {
+            // Debug aid: post synthetic downward scrolls at the given heights below the top of the main screen (for
+            // example "1,12,300"), and write whether the drawer opened for each to /tmp/drawer-scroll-test.txt.
+            let ys = spec.split(separator: ",").compactMap { Double($0) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                var report = "trusted: \(Paster.trusted)  bandSetting: \(Settings.shared.v.scrollZone.rawValue)\n"
+                let screen = NSScreen.screens[0]
+                report += "frame.maxY=\(screen.frame.maxY) visible.maxY=\(screen.visibleFrame.maxY)\n"
+                func run(_ i: Int) {
+                    guard i < ys.count else { try? report.write(toFile: "/tmp/drawer-scroll-test.txt", atomically: true, encoding: .utf8); exit(0) }
+                    let x = screen.frame.midX
+                    CGWarpMouseCursorPosition(CGPoint(x: x, y: ys[i]))
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        var seen = 0.0
+                        for sign in [-1, 1] {
+                            for _ in 0..<8 {
+                                guard let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: Int32(sign * 12), wheel2: 0, wheel3: 0),
+                                      let ns = NSEvent(cgEvent: e) else { continue }
+                                seen = ns.scrollingDeltaY
+                                self.drawer.handleGlobalScroll(ns)
+                            }
+                        }
+                        report += "(deltaY seen \(seen)) "
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                            report += "y=\(ys[i]) opened=\(self.drawer.isVisible)\n"
+                            if self.drawer.isVisible { self.drawer.toggle() }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { run(i + 1) }
+                        }
+                    }
+                }
+                run(0)
+            }
+        }
+        if ProcessInfo.processInfo.environment["DRAWER_DROP_TEST"] != nil {
+            // Debug aid (use with the Beta build): drop a text, a link and a picture item on Notes and Quick Access.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                ClipboardFolder.prepare()
+                let png = NSImage(size: NSSize(width: 600, height: 380), flipped: false) { r in
+                    NSGradient(colors: [.systemPink, .systemOrange, .systemYellow])?.draw(in: r, angle: 35); return true
+                }
+                let rep = NSBitmapImageRep(data: png.tiffRepresentation!)!
+                let name = "droptest.png"
+                try? rep.representation(using: .png, properties: [:])?.write(to: ClipboardFolder.images.appendingPathComponent(name))
+                var text = Clip(kind: .text); text.text = "Meeting notes\nSend the invoice on Friday"
+                var link = Clip(kind: .text); link.text = "https://example.com/pricing"; link.linkTitle = "Example pricing"
+                var image = Clip(kind: .image); image.imageFile = name
+                // A picture file in a temporary folder, as a screenshot tool leaves it.
+                let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("Shots", isDirectory: true)
+                try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+                let shot = tmp.appendingPathComponent("shot 18-35-14.png")
+                try? rep.representation(using: .png, properties: [:])?.write(to: shot)
+                var file = Clip(kind: .file); file.paths = [shot.path]
+                for c in [text, link, image, file] { AppModel.shared.notes.addClip(c); AppModel.shared.files.addClip(c) }
+                print("notes: \(AppModel.shared.notes.notes.map(\.title))  files: \(AppModel.shared.files.paths.map { ($0 as NSString).lastPathComponent })")
+            }
+        }
         if ProcessInfo.processInfo.environment["DRAWER_COPY_LATEST_IMAGE"] != nil {
             // Debug aid: copy the newest image item, print the formats now on the clipboard, then quit.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
@@ -86,6 +167,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     ? NSHostingView(rootView: OnboardingView(finish: {}))
                     : (path.hasSuffix("palette.png")
                         ? { MainNav.shared.paletteOpen = true; return NSHostingView(rootView: MainWindowView().frame(width: 1120, height: 740)) }()
+                    : path.hasSuffix("sheet.png")
+                        ? { MainNav.shared.tab = .settings; return NSHostingView(rootView: MainWindowView().frame(width: 1120, height: 740)) }()
                     : path.hasSuffix("desktop.png")
                         ? NSHostingView(rootView: DesktopView().frame(width: 1120, height: 740))
                     : path.hasSuffix("files-options.png")
@@ -102,7 +185,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         cancellable = Settings.shared.$v.sink { [weak self] v in
             self?.statusItem.isVisible = v.showMenuBarIcon
-            HotKeyCenter.shared.register(v.hotkeyEnabled ? v.hotkey : nil)
+            HotKeyCenter.shared.register(v.hotkeyEnabled && !AppModel.shared.standby ? v.hotkey : nil)
+        }
+        // A waiting Drawer takes over by itself once the other one quits.
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
+            if AppModel.shared.standby, InstanceGuard.others().isEmpty { self?.becomeActive() }
         }
 
         if !Settings.shared.v.onboarded, !drawer.stayOpen, ProcessInfo.processInfo.environment["DRAWER_SNAPSHOT"] == nil {
@@ -141,6 +228,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         pauseItem.state = Settings.shared.v.paused ? .on : .off
+        let standby = AppModel.shared.standby
+        let version = Brand.version.isEmpty ? "" : " \(Brand.version)"
+        headerItem.title = standby ? "\(Brand.name)\(version) · waiting, not capturing" : "\(Brand.name)\(version) · \(Brand.channel)"
+        headerItem.toolTip = "Data: \(supportDir.path)"
+        activateItem.title = "Make \(Brand.name) the Active Drawer"
+        activateItem.isHidden = !standby
+        pauseItem.isEnabled = !standby
+    }
+
+    @objc func makeActive() {
+        InstanceGuard.quit(InstanceGuard.others())
+        becomeActive()
+    }
+
+    private func becomeActive() {
+        AppModel.shared.standby = false
+        statusItem.button?.appearsDisabled = false
+        let v = Settings.shared.v
+        HotKeyCenter.shared.register(v.hotkeyEnabled ? v.hotkey : nil)
     }
 
     // Opening the app again from Finder/Applications brings up settings, the way back if the icon is hidden.
