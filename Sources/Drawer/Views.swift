@@ -669,8 +669,9 @@ struct FilesColumn: View {
             }
         }
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.accentColor.opacity(targeted.value ? 0.8 : 0), lineWidth: 2).padding(6))
-        .onDrop(of: [.fileURL], isTargeted: $targeted.value) { providers in
-            for p in providers {
+        .onDrop(of: [.item], isTargeted: $targeted.value) { providers in
+            if let clip = AppModel.shared.takeDragged() { store.addClip(clip); Haptics.drop(); return true }
+            for p in providers where p.hasItemConformingToTypeIdentifier("public.file-url") {
                 p.loadItem(forTypeIdentifier: "public.file-url") { item, _ in
                     guard let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
                     DispatchQueue.main.async { store.add(url) }
@@ -760,6 +761,7 @@ struct NotesColumn: View {
     @ObservedObject var settings = Settings.shared
     @StateObject private var query = Box("")
     @StateObject private var searching = Box(false)
+    @StateObject private var targeted = Box(false)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -780,6 +782,8 @@ struct NotesColumn: View {
             }
             if store.showingList { list } else { editor }
         }
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.accentColor.opacity(targeted.value ? 0.8 : 0), lineWidth: 2).padding(6))
+        .clipDrop(targeted: $targeted.value) { clip in store.addClip(clip); store.showingList = true }
     }
 
     @ViewBuilder private var editor: some View {
@@ -1209,7 +1213,20 @@ struct ClipCard: View {
 }
 
 /// What gets dragged out of a card or row into another app: the text, the image, or the file itself.
+extension View {
+    /// Takes in a clipboard item dragged from Drawer's own cards or rows; anything else is ignored.
+    func clipDrop(targeted: Binding<Bool>, perform: @escaping (Clip) -> Void) -> some View {
+        onDrop(of: [.item], isTargeted: targeted) { _ in
+            guard let clip = AppModel.shared.takeDragged() else { return false }
+            perform(clip)
+            Haptics.drop()
+            return true
+        }
+    }
+}
+
 func dragProvider(_ clip: Clip) -> NSItemProvider {
+    AppModel.shared.beginDrag(clip)
     switch clip.kind {
     case .text:
         return NSItemProvider(object: (clip.text ?? "") as NSString)

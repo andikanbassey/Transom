@@ -111,6 +111,57 @@ final class FilesStore: ObservableObject {
         reload()
     }
 
+    /// Where items made from clipboard text and pictures go when files are only pinned as references.
+    private static var itemsFolder: URL {
+        let url = supportDir.appendingPathComponent("Quick Access Items", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    /// A clipboard item dropped on Quick Access stays there: files are added as they are, links become .webloc files,
+    /// text becomes a .txt file and pictures are copied in.
+    func addClip(_ clip: Clip) {
+        let fm = FileManager.default
+        if clip.kind == .file { clip.fileURLs.forEach(add); return }
+        let dir: URL
+        if mode == .folder { try? fm.createDirectory(at: Self.folder, withIntermediateDirectories: true); dir = Self.folder } else { dir = Self.itemsFolder }
+        func free(_ base: String, _ ext: String) -> URL {
+            var dest = dir.appendingPathComponent("\(base).\(ext)")
+            var n = 2
+            while fm.fileExists(atPath: dest.path) { dest = dir.appendingPathComponent("\(base) \(n).\(ext)"); n += 1 }
+            return dest
+        }
+        var made: URL?
+        switch clip.kind {
+        case .image:
+            guard let src = clip.imageURL else { return }
+            let dest = free("Image \(NoteImages.stamp())", src.pathExtension.isEmpty ? "png" : src.pathExtension)
+            try? fm.copyItem(at: src, to: dest)
+            made = dest
+        case .text:
+            let text = (clip.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return }
+            if clip.category == .link, let url = URL(string: text), url.scheme != nil {
+                let name = NotesStore.safeName(clip.linkTitle ?? url.host ?? "Link")
+                let dest = free(name.isEmpty ? "Link" : name, "webloc")
+                if let data = try? PropertyListSerialization.data(fromPropertyList: ["URL": url.absoluteString], format: .xml, options: 0) {
+                    try? data.write(to: dest)
+                    made = dest
+                }
+            } else {
+                let first = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? "Text"
+                let name = NotesStore.safeName(first)
+                let dest = free(name.isEmpty ? "Text" : name, "txt")
+                try? text.write(to: dest, atomically: true, encoding: .utf8)
+                made = dest
+            }
+        case .file:
+            break
+        }
+        if let made, mode == .reference { refs.append(made.path); saveRefs() }
+        reload()
+    }
+
     /// "New Folder" in the Files options: only meaningful when files live in a folder.
     func newFolder() {
         guard mode == .folder else { return }
@@ -311,7 +362,7 @@ final class NotesStore: ObservableObject {
         rememberSelection()
     }
 
-    private static func safeName(_ title: String) -> String {
+    static func safeName(_ title: String) -> String {
         let bad = CharacterSet(charactersIn: "/\\:*?\"<>|")
         let cleaned = title.components(separatedBy: bad).joined(separator: "-").trimmingCharacters(in: .whitespaces)
         return String(cleaned.prefix(48)).trimmingCharacters(in: .whitespaces)
@@ -335,6 +386,40 @@ final class NotesStore: ObservableObject {
         let copy = Note(text: note.text, date: Date())
         notes.insert(copy, at: 0)
         dirty.insert(copy.id)
+        scheduleFlush()
+    }
+
+    /// A clipboard item dropped on Notes becomes a note of its own. Pictures are copied into an Attachments folder
+    /// beside the notes and shown inside the note.
+    func addClip(_ clip: Clip) {
+        let fm = FileManager.default
+        var body = ""
+        switch clip.kind {
+        case .text:
+            let text = clip.markdown ?? clip.text ?? ""
+            if clip.category == .link, let title = clip.linkTitle {
+                body = "\(title)\n\n\(text.trimmingCharacters(in: .whitespacesAndNewlines))"
+            } else {
+                body = text
+            }
+        case .image:
+            guard let src = clip.imageURL else { return }
+            let dir = folder.appendingPathComponent(NoteImages.folderName, isDirectory: true)
+            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            let stamp = NoteImages.stamp()
+            var name = "Image-\(stamp).\(src.pathExtension.isEmpty ? "png" : src.pathExtension)"
+            var n = 2
+            while fm.fileExists(atPath: dir.appendingPathComponent(name).path) { name = "Image-\(stamp)-\(n).\(src.pathExtension.isEmpty ? "png" : src.pathExtension)"; n += 1 }
+            try? fm.copyItem(at: src, to: dir.appendingPathComponent(name))
+            body = "Pasted image\n\n![Image](\(NoteImages.folderName)/\(name))\n"
+        case .file:
+            let links = clip.fileURLs.map { "[\($0.lastPathComponent)](\($0.absoluteString))" }
+            body = links.joined(separator: "\n")
+        }
+        guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let note = Note(text: body, date: Date())
+        notes.insert(note, at: 0)
+        dirty.insert(note.id)
         scheduleFlush()
     }
 
@@ -375,6 +460,15 @@ final class AppModel {
     var openSettings: (Pane?) -> Void = { _ in }
     var showOnboarding: () -> Void = {}
     var showDrawer: () -> Void = {}
+    /// The clipboard item being dragged from one of our own cards or rows, so Quick Access and Notes can take it in
+    /// as what it is (text, link, picture or file) instead of whatever another app would get from the drag.
+    private var dragged: (clip: Clip, at: Date)?
+    func beginDrag(_ clip: Clip) { dragged = (clip, Date()) }
+    func takeDragged() -> Clip? {
+        defer { dragged = nil }
+        guard let d = dragged, Date().timeIntervalSince(d.at) < 120 else { return nil }
+        return d.clip
+    }
     /// True while an options popover is open, so the auto-close timer does not run under it.
     var popoverOpen = false
     /// The app that was frontmost when the drawer opened; pasted text goes there.

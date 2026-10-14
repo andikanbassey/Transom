@@ -59,6 +59,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
 
         if drawer.stayOpen { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.drawer.toggle() } }
+        if ProcessInfo.processInfo.environment["DRAWER_DROP_TEST"] != nil {
+            // Debug aid (use with the Beta build): drop a text, a link and a picture item on Notes and Quick Access.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                ClipboardFolder.prepare()
+                let png = NSImage(size: NSSize(width: 600, height: 380), flipped: false) { r in
+                    NSGradient(colors: [.systemPink, .systemOrange, .systemYellow])?.draw(in: r, angle: 35); return true
+                }
+                let rep = NSBitmapImageRep(data: png.tiffRepresentation!)!
+                let name = "droptest.png"
+                try? rep.representation(using: .png, properties: [:])?.write(to: ClipboardFolder.images.appendingPathComponent(name))
+                var text = Clip(kind: .text); text.text = "Meeting notes\nSend the invoice on Friday"
+                var link = Clip(kind: .text); link.text = "https://example.com/pricing"; link.linkTitle = "Example pricing"
+                var image = Clip(kind: .image); image.imageFile = name
+                for c in [text, link, image] { AppModel.shared.notes.addClip(c); AppModel.shared.files.addClip(c) }
+                print("notes: \(AppModel.shared.notes.notes.map(\.title))  files: \(AppModel.shared.files.paths.map { ($0 as NSString).lastPathComponent })")
+            }
+        }
         if ProcessInfo.processInfo.environment["DRAWER_COPY_LATEST_IMAGE"] != nil {
             // Debug aid: copy the newest image item, print the formats now on the clipboard, then quit.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {

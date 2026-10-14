@@ -160,6 +160,26 @@ enum DesktopSection: String, CaseIterable {
     }
 }
 
+/// Dropping a clipboard card on "Notes" or "Quick Access" in the sidebar keeps it there.
+struct SidebarDrop: ViewModifier {
+    let section: DesktopSection
+    let notes: NotesStore
+    let files: FilesStore
+    @StateObject private var targeted = Box(false)
+
+    func body(content: Content) -> some View {
+        if section == .notes || section == .files {
+            content
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.accentColor.opacity(targeted.value ? 0.9 : 0), lineWidth: 2))
+                .clipDrop(targeted: $targeted.value) { clip in
+                    if section == .notes { notes.addClip(clip) } else { files.addClip(clip) }
+                }
+        } else {
+            content
+        }
+    }
+}
+
 // MARK: - Library
 
 struct DesktopView: View {
@@ -202,6 +222,7 @@ struct DesktopView: View {
                 SidebarRow(title: s.title, symbol: s.symbol, color: s.color, selected: nav.section == s,
                            trailing: count(s).map { "\($0)" })
                     .onTapGesture { go(s) }
+                    .modifier(SidebarDrop(section: s, notes: notes, files: files))
             }
             Spacer()
             SidebarSwitch(title: "Settings", symbol: "gearshape") { MainNav.shared.tab = .settings }
