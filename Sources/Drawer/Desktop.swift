@@ -403,34 +403,28 @@ struct DesktopView: View {
     /// Wraps an item so a click picks it while selecting; nothing changes otherwise.
     @ViewBuilder private func selectable<V: View>(_ id: String, radius: CGFloat = 18, _ view: V) -> some View {
         if selecting.value && nav.section != .all {
-            let on = picked.value.contains(id)
-            view
-                .overlay {
-                    Color.clear.contentShape(Rectangle()).onTapGesture { toggle(id) }
-                        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
-                            .strokeBorder(on ? Color.accentColor : .clear, lineWidth: 2.5).allowsHitTesting(false))
-                        .background(on ? Color.accentColor.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-                }
-                .overlay(alignment: .topLeading) {
-                    Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(on ? Color.accentColor : Color.secondary.opacity(0.7), .white)
-                        .background(Circle().fill(.white.opacity(on ? 1 : 0.6)).padding(2))
-                        .offset(x: -7, y: -7).allowsHitTesting(false)
-                }
+            view.overlay { SelectChrome(on: picked.value.contains(id), radius: radius) { toggle(id) } }
         } else {
             view
         }
     }
 
+    /// The bar that replaces the filters while selecting: count on the left, then buttons that all share one shape,
+    /// weight and spacing (after Perplexity's and Higgsfield's bulk-action bars). Done is the one filled button.
     private var selectionBar: some View {
         let n = picked.value.count
         let ids = visibleIDs()
-        return HStack(spacing: 10) {
-            Text(n == 0 ? "Select items" : "\(n) selected").font(.system(size: 13, weight: .semibold)).frame(minWidth: 84, alignment: .leading)
+        let isClips = nav.section == .clipboard || nav.section == .pinned
+        return HStack(spacing: 8) {
+            Button { picked.value = [] } label: {
+                Image(systemName: "xmark").font(.system(size: 10.5, weight: .bold)).foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28).background(Color.primary.opacity(0.07), in: Circle())
+            }
+            .buttonStyle(.plain).help("Clear selection").opacity(n == 0 ? 0.4 : 1).disabled(n == 0)
+            Text(n == 0 ? "Select items" : "\(n) selected").font(.system(size: 13, weight: .medium)).padding(.leading, 2)
             Menu {
                 Button("All \(ids.count) shown") { picked.value = Set(ids) }.keyboardShortcut("a", modifiers: .command)
-                if nav.section == .clipboard || nav.section == .pinned {
+                if isClips {
                     Divider()
                     Button("Last 5 minutes") { pickRecent(300) }
                     Button("Last hour") { pickRecent(3600) }
@@ -438,22 +432,25 @@ struct DesktopView: View {
                 }
                 Divider()
                 Button("None") { picked.value = [] }
-            } label: { Label("Select", systemImage: "checklist") }
-                .menuStyle(.borderlessButton).fixedSize()
+            } label: { SelectBarLabel(title: "Select", symbol: "checklist", chevron: true) }
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
             Spacer()
-            if (nav.section == .clipboard || nav.section == .pinned), n > 0 {
-                let allPinned = picked.value.allSatisfy { id in clipboard.clips.first { $0.id.uuidString == id }?.pinned ?? false }
-                Button(allPinned ? "Unpin" : "Pin") {
+            if isClips {
+                let allPinned = n > 0 && picked.value.allSatisfy { id in clipboard.clips.first { $0.id.uuidString == id }?.pinned ?? false }
+                Button {
                     clipboard.setPinned(!allPinned, ids: Set(picked.value.compactMap(UUID.init(uuidString:))))
                     picked.value = []
-                }.buttonStyle(.borderless)
+                } label: { SelectBarLabel(title: allPinned ? "Unpin" : "Pin", symbol: allPinned ? "pin.slash" : "pin") }
+                    .buttonStyle(.plain).disabled(n == 0).opacity(n == 0 ? 0.4 : 1)
             }
-            Button(role: .destructive) { deleteSelection() } label: { Label("Delete", systemImage: "trash") }
-                .buttonStyle(.borderless).foregroundStyle(n == 0 ? Color.secondary : Color.red).disabled(n == 0)
-            Button("Done") { endSelecting() }.keyboardShortcut(.cancelAction).buttonStyle(.borderless).fontWeight(.semibold)
+            Button { deleteSelection() } label: { SelectBarLabel(title: "Delete", symbol: "trash", tint: .red) }
+                .buttonStyle(.plain).disabled(n == 0).opacity(n == 0 ? 0.4 : 1)
+            Button { endSelecting() } label: { SelectBarLabel(title: "Done", symbol: nil, filled: true) }
+                .buttonStyle(.plain).keyboardShortcut(.cancelAction)
         }
-        .padding(.horizontal, 14).padding(.vertical, 8)
-        .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(Look.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Look.hairline, lineWidth: 1))
     }
 
     /// Adds the shown clipboard items copied in the last `seconds` to the selection.
@@ -646,6 +643,65 @@ struct DesktopView: View {
         panel.canChooseDirectories = true
         panel.prompt = files.mode == .reference ? "Pin" : "Add"
         if panel.runModal() == .OK { panel.urls.forEach(files.add) }
+    }
+}
+
+// MARK: - Selection
+
+/// The same pill for every action in the selection bar: 30 pt tall, 13 pt medium, icon and text 6 pt apart.
+struct SelectBarLabel: View {
+    let title: String
+    var symbol: String?
+    var tint: Color?
+    var chevron = false
+    var filled = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let symbol { Image(systemName: symbol).font(.system(size: 12, weight: .semibold)) }
+            Text(title).font(.system(size: 13, weight: .medium))
+            if chevron { Image(systemName: "chevron.down").font(.system(size: 8.5, weight: .bold)).opacity(0.7) }
+        }
+        .foregroundStyle(filled ? Look.card : (tint ?? Color.primary))
+        .padding(.horizontal, 12).frame(height: 30)
+        .background(filled ? Color.primary : Color.primary.opacity(0.07), in: Capsule())
+        .contentShape(Capsule())
+    }
+}
+
+/// Selection chrome on a card or row: flat until the pointer is over it, then a soft ring and an empty circle inside
+/// the card's lower left; picked items keep the full ring and a filled check.
+struct SelectChrome: View {
+    let on: Bool
+    let radius: CGFloat
+    let toggle: () -> Void
+    @StateObject private var hovering = Box(false)
+
+    var body: some View {
+        let show = on || hovering.value
+        // Cards: lower left, inside. Rows are short, so there it sits at the leading edge, centred.
+        let compact = radius <= 10
+        ZStack(alignment: compact ? .leading : .bottomLeading) {
+            Color.clear.contentShape(Rectangle())
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .strokeBorder(Color.accentColor.opacity(on ? 1 : (hovering.value ? 0.5 : 0)), lineWidth: 2.5)
+                .shadow(color: Color.accentColor.opacity(on ? 0.45 : (hovering.value ? 0.25 : 0)), radius: 8)
+                .allowsHitTesting(false)
+            ZStack {
+                Circle().fill(on ? Color.accentColor : Color.black.opacity(0.35))
+                Circle().strokeBorder(.white.opacity(on ? 0 : 0.9), lineWidth: 1.5)
+                if on { Image(systemName: "checkmark").font(.system(size: 10.5, weight: .bold)).foregroundStyle(.white) }
+            }
+            .frame(width: 22, height: 22)
+            .padding(compact ? 6 : 12)
+            .opacity(show ? 1 : 0)
+            .scaleEffect(show ? 1 : 0.85)
+            .allowsHitTesting(false)
+        }
+        .onHover { hovering.value = $0 }
+        .onTapGesture(perform: toggle)
+        .animation(.easeOut(duration: 0.14), value: show)
+        .animation(.easeOut(duration: 0.14), value: on)
     }
 }
 
