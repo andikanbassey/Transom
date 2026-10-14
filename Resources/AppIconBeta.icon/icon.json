@@ -1,0 +1,60 @@
+{
+  "fill": {
+    "linear-gradient": [
+      "srgb:1.00000,0.72157,0.20000,1.00000",
+      "srgb:0.94118,0.41961,0.10196,1.00000"
+    ]
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "front.png",
+          "name": "front",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.35
+      }
+    },
+    {
+      "layers": [
+        {
+          "image-name": "link.png",
+          "name": "link",
+          "glass": true
+        },
+        {
+          "image-name": "photo.png",
+          "name": "photo",
+          "glass": true
+        },
+        {
+          "image-name": "page.png",
+          "name": "page",
+          "glass": true
+        },
+        {
+          "image-name": "interior.png",
+          "name": "interior"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.4
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}

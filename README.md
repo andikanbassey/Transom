@@ -176,9 +176,9 @@ Sources/Drawer/
   Onboarding.swift    first-launch welcome
   Theme.swift         glass helper, button style, menu bar icon
 Drawer.xcodeproj      the Xcode project: Drawer and Drawer Beta targets
-Config/ Resources/    Info.plist, asset catalog (icons), AppleScript dictionary
+Config/ Resources/    Info.plist, Icon Composer icons, AppleScript dictionary
 build.sh              build, bundle, sign, install without Xcode
-make-icon.swift       renders the app icon
+make-icon-layers.swift  draws the layer art for the Icon Composer icons
 ```
 
 Debug aids: `Drawer --show` keeps the drawer open, and `DRAWER_SNAPSHOT=/path.png` renders it to an image.

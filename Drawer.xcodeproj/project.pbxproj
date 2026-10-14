@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D4A70000000000000000000C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D4A70000000000000000000B /* Assets.xcassets */; };
+		D4A700000000000000000103 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = D4A700000000000000000101 /* AppIcon.icon */; };
 		D4A70000000000000000000D /* Drawer.sdef in Resources */ = {isa = PBXBuildFile; fileRef = D4A70000000000000000000A /* Drawer.sdef */; };
-		D4A70000000000000000000E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D4A70000000000000000000B /* Assets.xcassets */; };
+		D4A700000000000000000104 /* AppIconBeta.icon in Resources */ = {isa = PBXBuildFile; fileRef = D4A700000000000000000102 /* AppIconBeta.icon */; };
 		D4A70000000000000000000F /* Drawer.sdef in Resources */ = {isa = PBXBuildFile; fileRef = D4A70000000000000000000A /* Drawer.sdef */; };
 /* End PBXBuildFile section */
 
@@ -18,7 +18,8 @@
 		D4A700000000000000000008 /* Drawer Beta.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Drawer Beta.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D4A700000000000000000009 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		D4A70000000000000000000A /* Drawer.sdef */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = Drawer.sdef; sourceTree = "<group>"; };
-		D4A70000000000000000000B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		D4A700000000000000000101 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
+		D4A700000000000000000102 /* AppIconBeta.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIconBeta.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -77,7 +78,8 @@
 		D4A700000000000000000005 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				D4A70000000000000000000B /* Assets.xcassets */,
+				D4A700000000000000000101 /* AppIcon.icon */,
+				D4A700000000000000000102 /* AppIconBeta.icon */,
 				D4A70000000000000000000A /* Drawer.sdef */,
 			);
 			path = Resources;
@@ -171,7 +173,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D4A70000000000000000000C /* Assets.xcassets in Resources */,
+				D4A700000000000000000103 /* AppIcon.icon in Resources */,
 				D4A70000000000000000000D /* Drawer.sdef in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -180,7 +182,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D4A70000000000000000000E /* Assets.xcassets in Resources */,
+				D4A700000000000000000104 /* AppIconBeta.icon in Resources */,
 				D4A70000000000000000000F /* Drawer.sdef in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

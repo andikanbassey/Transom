@@ -24,11 +24,10 @@ cp .build/release/Drawer "$APP/Contents/MacOS/$NAME"
 SDK_VERSION="$(xcrun --show-sdk-version 2>/dev/null || echo 26.0)"
 vtool -set-build-version macos 14.0 "$SDK_VERSION" -replace -output "$APP/Contents/MacOS/$NAME" "$APP/Contents/MacOS/$NAME"
 mkdir -p "$APP/Contents/Resources"
-if [ "${DRAWER_CHANNEL:-}" = "beta" ]; then ICON=AppIcon-beta; ICON_ARGS="beta"; else ICON=AppIcon; ICON_ARGS=""; fi
-if [ ! -f "$ICON.icns" ]; then
-  swift make-icon.swift "$ICON" $ICON_ARGS && iconutil -c icns "$ICON.iconset" -o "$ICON.icns" && rm -rf "$ICON.iconset"
-fi
-cp "$ICON.icns" "$APP/Contents/Resources/AppIcon.icns"
+# The icon is an Icon Composer file (Resources/AppIcon.icon, AppIconBeta.icon); actool compiles it, as Xcode does.
+if [ "${DRAWER_CHANNEL:-}" = "beta" ]; then ICON=AppIconBeta; else ICON=AppIcon; fi
+xcrun actool "Resources/$ICON.icon" --compile "$APP/Contents/Resources" --platform macosx --minimum-deployment-target 14.0 \
+  --app-icon "$ICON" --output-partial-info-plist build/icon-info.plist >/dev/null
 cp Resources/Drawer.sdef "$APP/Contents/Resources/Drawer.sdef"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -36,7 +35,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0"><dict>
   <key>CFBundleName</key><string>$NAME</string>
   <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
-  <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundleIconFile</key><string>$ICON</string>
+  <key>CFBundleIconName</key><string>$ICON</string>
   <key>CFBundleExecutable</key><string>$NAME</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.5.1</string>
