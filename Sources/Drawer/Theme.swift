@@ -95,6 +95,7 @@ struct SidebarRow: View {
     let color: Color
     let selected: Bool
     var trailing: String?
+    @StateObject private var hovering = Box(false)
 
     var body: some View {
         HStack(spacing: 11) {
@@ -106,8 +107,19 @@ struct SidebarRow: View {
             if let trailing { Text(trailing).font(Look.meta).foregroundStyle(.secondary) }
         }
         .padding(.horizontal, 10).padding(.vertical, 5)
-        .background(selected ? Look.selection : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(selected ? Look.selection : (hovering.value ? Look.selection.opacity(0.55) : .clear),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .contentShape(Rectangle())
+        .onHover { hovering.value = $0 }
+    }
+}
+
+/// A small group title in a sidebar ("Clipboard", "Saved"), quiet so the rows carry the weight.
+struct SidebarHeader: View {
+    let title: String
+    var body: some View {
+        Text(title).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(.tertiary)
+            .padding(.horizontal, 10).padding(.top, 14).padding(.bottom, 4)
     }
 }
 

@@ -81,10 +81,34 @@ struct MainWindowView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Group {
-                if nav.tab == .library { DesktopView() } else { SettingsView() }
-            }
+            DesktopView()
         }
+        // Settings opens as a sheet over the Library, with the Library still showing behind it.
+        .overlay {
+            GeometryReader { geo in
+                if nav.tab == .settings {
+                    ZStack {
+                        Color.black.opacity(0.32).contentShape(Rectangle()).onTapGesture { nav.tab = .library }
+                        SettingsView()
+                            .frame(width: min(940, geo.size.width - 90), height: min(660, geo.size.height - 80))
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Look.hairline, lineWidth: 1))
+                            .overlay(alignment: .topTrailing) {
+                                Button { nav.tab = .library } label: {
+                                    Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.secondary)
+                                        .frame(width: 26, height: 26).background(Color.primary.opacity(0.08), in: Circle())
+                                }
+                                .buttonStyle(.plain).keyboardShortcut(.cancelAction).padding(16)
+                            }
+                            .shadow(color: .black.opacity(0.35), radius: 40, y: 16)
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .transition(.opacity)
+                }
+            }
+            .ignoresSafeArea()
+        }
+        .animation(.easeOut(duration: 0.16), value: nav.tab)
         // The open search is drawn here, above a scrim over the whole window, but starting at the header field.
         .overlayPreferenceValue(SearchAnchorKey.self) { anchor in
             GeometryReader { geo in
@@ -105,10 +129,11 @@ struct MainWindowView: View {
     }
 }
 
-/// The bottom-left button that flips the window between Library and Settings.
-struct SidebarSwitch: View {
+/// A plain row at the bottom of the sidebar ("Settings"), with an optional shortcut hint.
+struct SidebarAction: View {
     let title: String
     let symbol: String
+    var hint: String?
     let action: () -> Void
     @StateObject private var hovering = Box(false)
 
@@ -117,10 +142,11 @@ struct SidebarSwitch: View {
             Image(systemName: symbol).font(.system(size: 13, weight: .medium)).frame(width: 26)
             Text(title).font(.system(size: 14))
             Spacer()
+            if let hint { Text(hint).font(Look.meta).foregroundStyle(.tertiary) }
         }
         .foregroundStyle(hovering.value ? Color.primary : Color.secondary)
         .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(hovering.value ? Look.selection : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(hovering.value ? Look.selection.opacity(0.55) : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .contentShape(Rectangle())
         .onHover { hovering.value = $0 }
         .onTapGesture(perform: action)
@@ -216,20 +242,31 @@ struct DesktopView: View {
     // MARK: Sidebar
 
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 2) {
             SidebarBrand()
-            ForEach(DesktopSection.allCases, id: \.self) { s in
-                SidebarRow(title: s.title, symbol: s.symbol, color: s.color, selected: nav.section == s,
-                           trailing: count(s).map { "\($0)" })
-                    .onTapGesture { go(s) }
-                    .modifier(SidebarDrop(section: s, notes: notes, files: files))
+            SidebarAction(title: "New Note", symbol: "square.and.pencil") {
+                nav.section = .notes; notes.add(); notes.showingList = false
             }
+            .padding(.bottom, 4)
+            sidebarRow(.all)
+            SidebarHeader(title: "Clipboard")
+            sidebarRow(.clipboard)
+            sidebarRow(.pinned)
+            SidebarHeader(title: "Saved")
+            sidebarRow(.notes)
+            sidebarRow(.files)
             Spacer()
-            SidebarSwitch(title: "Settings", symbol: "gearshape") { MainNav.shared.tab = .settings }
+            SidebarAction(title: "Settings", symbol: "gearshape", hint: "⌘,") { MainNav.shared.tab = .settings }
         }
         .padding(.horizontal, 14).padding(.bottom, 16)
         .frame(width: Look.sidebarWidth)
         .background(Look.sidebar)
+    }
+
+    private func sidebarRow(_ s: DesktopSection) -> some View {
+        SidebarRow(title: s.title, symbol: s.symbol, color: s.color, selected: nav.section == s, trailing: count(s).map { "\($0)" })
+            .onTapGesture { go(s) }
+            .modifier(SidebarDrop(section: s, notes: notes, files: files))
     }
 
     private func go(_ s: DesktopSection) {
@@ -633,10 +670,13 @@ struct LibraryCard<Preview: View>: View {
         ZStack {
             RoundedRectangle(cornerRadius: outerRadius, style: .continuous)
                 .fill(LinearGradient(colors: [frame.opacity(0.9), frame.opacity(0.5), frame.opacity(0.08)], startPoint: .top, endPoint: .bottom))
+            // The content is laid out once, at the card's full size, and only the clip shape changes with hover.
+            // Nothing inside reflows or moves, so the text stays still while the card grows over the stroke.
             inner
-                // Concentric with the frame, so the corners stay true as the stroke shrinks.
-                .clipShape(RoundedRectangle(cornerRadius: outerRadius - inset, style: .continuous))
-                .padding(inset)
+                .mask(
+                    RoundedRectangle(cornerRadius: outerRadius - inset, style: .continuous)
+                        .padding(inset)
+                )
         }
         .shadow(color: .black.opacity(hovering.value ? 0.13 : 0.07), radius: hovering.value ? 12 : 8, y: hovering.value ? 5 : 3)
         .contentShape(Rectangle())
@@ -740,39 +780,50 @@ struct LibraryClipMenu: View {
     var body: some View {
         let cat = clip.category
         let file = clip.imageURL ?? clip.fileURLs.first
-        Button(cat == .image || cat == .gif ? "Copy Image" : "Copy") {
+        // Grouped the way Craft groups its menus: use it, open it, send it somewhere, then pin and delete last.
+        Button {
             store.copy(clip)
             if Settings.shared.v.sounds { NSSound(named: "Pop")?.play() }
-        }
-        Button("Open in Full") { store.expanded = clip }
+        } label: { Label(cat == .image || cat == .gif ? "Copy Image" : "Copy", systemImage: "doc.on.doc") }
+        Button { store.expanded = clip } label: { Label("Open in Full", systemImage: "arrow.up.left.and.arrow.down.right") }
         Divider()
         switch cat {
         case .image, .gif:
             if let url = file {
-                Button("Open in Preview") { Self.open(url, withBundleID: "com.apple.Preview") }
-                Button("Save Image As…") { Self.save(url) }
+                Button { Self.open(url, withBundleID: "com.apple.Preview") } label: { Label("Open in Preview", systemImage: "eye") }
+                Button { Self.save(url) } label: { Label("Save Image As…", systemImage: "square.and.arrow.down") }
             }
         case .video, .audio:
-            if let url = file { Button(cat == .video ? "Play" : "Play Audio") { NSWorkspace.shared.open(url) } }
+            if let url = file { Button { NSWorkspace.shared.open(url) } label: { Label(cat == .video ? "Play" : "Play Audio", systemImage: "play") } }
         case .pdf:
-            if let url = file { Button("Open in Preview") { Self.open(url, withBundleID: "com.apple.Preview") } }
+            if let url = file { Button { Self.open(url, withBundleID: "com.apple.Preview") } label: { Label("Open in Preview", systemImage: "eye") } }
         case .folder:
-            if let url = file { Button("Open Folder") { NSWorkspace.shared.open(url) } }
+            if let url = file { Button { NSWorkspace.shared.open(url) } label: { Label("Open Folder", systemImage: "folder") } }
         case .file:
-            if let url = file { Button("Open") { NSWorkspace.shared.open(url) } }
+            if let url = file { Button { NSWorkspace.shared.open(url) } label: { Label("Open", systemImage: "arrow.up.forward.app") } }
         case .link:
             if let t = clip.text?.trimmingCharacters(in: .whitespacesAndNewlines), let url = URL(string: t) {
-                Button("Open Link") { NSWorkspace.shared.open(url) }
+                Button { NSWorkspace.shared.open(url) } label: { Label("Open Link", systemImage: "safari") }
             }
         case .text, .color:
             EmptyView()
         }
         if let url = clip.fileURLs.first ?? clip.imageURL {
-            Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+            Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: { Label("Reveal in Finder", systemImage: "magnifyingglass") }
+        }
+        Menu {
+            Button { AppModel.shared.notes.addClip(clip) } label: { Label("Notes", systemImage: "note.text") }
+            Button { AppModel.shared.files.addClip(clip) } label: { Label("Quick Access", systemImage: "folder") }
+        } label: { Label("Save To", systemImage: "tray.and.arrow.down") }
+        if let url = clip.imageURL ?? clip.fileURLs.first {
+            ShareLink(item: url) { Label("Share…", systemImage: "square.and.arrow.up") }
+        } else if let text = clip.text, !text.isEmpty {
+            ShareLink(item: text) { Label("Share…", systemImage: "square.and.arrow.up") }
         }
         Divider()
-        Button(clip.pinned ? "Unpin" : "Pin") { store.togglePin(clip) }
-        Button("Delete") { store.delete(clip) }
+        Button { store.togglePin(clip) } label: { Label(clip.pinned ? "Unpin" : "Pin", systemImage: clip.pinned ? "pin.slash" : "pin") }
+        Divider()
+        Button(role: .destructive) { store.delete(clip) } label: { Label("Delete", systemImage: "trash") }
     }
 
     private static func open(_ url: URL, withBundleID id: String) {

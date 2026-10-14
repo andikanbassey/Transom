@@ -147,6 +147,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     ? NSHostingView(rootView: OnboardingView(finish: {}))
                     : (path.hasSuffix("palette.png")
                         ? { MainNav.shared.paletteOpen = true; return NSHostingView(rootView: MainWindowView().frame(width: 1120, height: 740)) }()
+                    : path.hasSuffix("sheet.png")
+                        ? { MainNav.shared.tab = .settings; return NSHostingView(rootView: MainWindowView().frame(width: 1120, height: 740)) }()
                     : path.hasSuffix("desktop.png")
                         ? NSHostingView(rootView: DesktopView().frame(width: 1120, height: 740))
                     : path.hasSuffix("files-options.png")
