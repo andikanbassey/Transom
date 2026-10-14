@@ -178,7 +178,6 @@ Sources/Drawer/
 Drawer.xcodeproj      the Xcode project: Drawer and Drawer Beta targets
 Config/ Resources/    Info.plist, Icon Composer icons, AppleScript dictionary
 build.sh              build, bundle, sign, install without Xcode
-make-icon-layers.swift  draws the layer art for the Icon Composer icons
 ```
 
 Debug aids: `Drawer --show` keeps the drawer open, and `DRAWER_SNAPSHOT=/path.png` renders it to an image.

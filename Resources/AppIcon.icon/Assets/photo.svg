@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#73C7FF"/>
+      <stop offset="1" stop-color="#FFD19E"/>
+    </linearGradient>
+    <clipPath id="card"><rect x="392" y="168" width="270" height="262" rx="26"/></clipPath>
+  </defs>
+  <g id="photo" transform="rotate(4 527 299)">
+    <g clip-path="url(#card)">
+      <rect x="392" y="168" width="270" height="262" fill="url(#sky)"/>
+      <circle cx="600" cy="228" r="28" fill="#FFFFFF"/>
+      <path d="M 392 430 L 392 350 C 430 330 480 300 520 322 C 570 345 620 340 662 372 L 662 430 Z" fill="#338C66"/>
+    </g>
+  </g>
+</svg>

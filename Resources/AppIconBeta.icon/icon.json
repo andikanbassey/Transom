@@ -9,7 +9,7 @@
     {
       "layers": [
         {
-          "image-name": "front.png",
+          "image-name": "front.svg",
           "name": "front",
           "glass": true
         }
@@ -26,22 +26,22 @@
     {
       "layers": [
         {
-          "image-name": "link.png",
+          "image-name": "link.svg",
           "name": "link",
           "glass": true
         },
         {
-          "image-name": "photo.png",
+          "image-name": "photo.svg",
           "name": "photo",
           "glass": true
         },
         {
-          "image-name": "page.png",
+          "image-name": "page.svg",
           "name": "page",
           "glass": true
         },
         {
-          "image-name": "interior.png",
+          "image-name": "interior.svg",
           "name": "interior"
         }
       ],
