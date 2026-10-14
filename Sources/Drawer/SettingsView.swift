@@ -268,41 +268,40 @@ struct SettingsView: View {
         ("Data", [.privacy, .storage, .advanced]),
     ]
 
-    /// Settings sits over the Library as a sheet, as in Craft: the app stays behind it, so it is one app and not two.
     var body: some View {
         HStack(spacing: 0) {
-            nav.frame(width: 214).background(Look.sidebar)
+            sidebar
             Rectangle().fill(Look.hairline).frame(width: 1)
             VStack(spacing: 0) {
                 PageHeader(title: pane.pane.title, subtitle: pane.pane.blurb) { EmptyView() }
-                    .padding(.leading, 30).padding(.trailing, 64).padding(.top, 26).padding(.bottom, 14)
+                    .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, Look.headerGap)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 26) { content }
-                        .padding(.horizontal, 30).padding(.bottom, 32)
+                        .padding(.horizontal, 32).padding(.bottom, 36)
                 }
             }
             .background(Look.page)
         }
+        .frame(minWidth: 860, minHeight: 620)
     }
 
-    private var nav: some View {
+    /// The same sidebar as the Library's: brand, quiet group headers, rows, and the Library/Settings switch at the bottom.
+    private var sidebar: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Settings").font(Look.sectionTitle).padding(.horizontal, 10).padding(.top, 26).padding(.bottom, 8)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(Self.groups, id: \.0) { group in
-                        SidebarHeader(title: group.0)
-                        ForEach(group.1) { p in
-                            SidebarRow(title: p.title, symbol: p.symbol, color: p.color, selected: pane.pane == p)
-                                .onTapGesture { pane.pane = p }
-                        }
-                    }
+            SidebarBrand()
+            ForEach(Self.groups, id: \.0) { group in
+                SidebarHeader(title: group.0)
+                ForEach(group.1) { p in
+                    SidebarRow(title: p.title, symbol: p.symbol, color: p.color, selected: pane.pane == p)
+                        .onTapGesture { pane.pane = p }
                 }
             }
-            Spacer(minLength: 0)
-            Text("\(Brand.name) \(Brand.version)").font(.system(size: 11)).foregroundStyle(.tertiary).padding(.leading, 10).padding(.top, 6)
+            Spacer()
+            ModeSwitch()
         }
-        .padding(.horizontal, 12).padding(.bottom, 14)
+        .padding(.horizontal, 14).padding(.bottom, 16)
+        .frame(width: Look.sidebarWidth)
+        .background(Look.sidebar)
     }
 
     private func bind<T>(_ kp: WritableKeyPath<SettingsValues, T>) -> Binding<T> {

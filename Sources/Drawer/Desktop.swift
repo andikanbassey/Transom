@@ -81,34 +81,10 @@ struct MainWindowView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            DesktopView()
-        }
-        // Settings opens as a sheet over the Library, with the Library still showing behind it.
-        .overlay {
-            GeometryReader { geo in
-                if nav.tab == .settings {
-                    ZStack {
-                        Color.black.opacity(0.32).contentShape(Rectangle()).onTapGesture { nav.tab = .library }
-                        SettingsView()
-                            .frame(width: min(940, geo.size.width - 90), height: min(660, geo.size.height - 80))
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Look.hairline, lineWidth: 1))
-                            .overlay(alignment: .topTrailing) {
-                                Button { nav.tab = .library } label: {
-                                    Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.secondary)
-                                        .frame(width: 26, height: 26).background(Color.primary.opacity(0.08), in: Circle())
-                                }
-                                .buttonStyle(.plain).keyboardShortcut(.cancelAction).padding(16)
-                            }
-                            .shadow(color: .black.opacity(0.35), radius: 40, y: 16)
-                    }
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .transition(.opacity)
-                }
+            Group {
+                if nav.tab == .library { DesktopView() } else { SettingsView() }
             }
-            .ignoresSafeArea()
         }
-        .animation(.easeOut(duration: 0.16), value: nav.tab)
         // The open search is drawn here, above a scrim over the whole window, but starting at the header field.
         .overlayPreferenceValue(SearchAnchorKey.self) { anchor in
             GeometryReader { geo in
@@ -150,6 +126,36 @@ struct SidebarAction: View {
         .contentShape(Rectangle())
         .onHover { hovering.value = $0 }
         .onTapGesture(perform: action)
+    }
+}
+
+/// The two-sided switch at the bottom of both sidebars. The side you are on shows its icon and is bold and coloured;
+/// the other is plain grey text of the same size. Both halves are equal, so nothing shifts when you switch.
+struct ModeSwitch: View {
+    @ObservedObject private var nav = MainNav.shared
+
+    var body: some View {
+        HStack(spacing: 2) {
+            side("Library", "square.grid.2x2.fill", .library)
+            side("Settings", "gearshape.fill", .settings)
+        }
+        .padding(3)
+        .background(Color.primary.opacity(0.06), in: Capsule())
+        .animation(.easeOut(duration: 0.16), value: nav.tab)
+    }
+
+    private func side(_ title: String, _ symbol: String, _ tab: MainTab) -> some View {
+        let on = nav.tab == tab
+        return HStack(spacing: 6) {
+            if on { Image(systemName: symbol).font(.system(size: 12, weight: .semibold)) }
+            Text(title).font(.system(size: 13, weight: on ? .semibold : .regular))
+        }
+        .foregroundStyle(on ? Color.accentColor : Color.secondary)
+        .frame(maxWidth: .infinity).frame(height: 30)
+        .background(on ? Look.card : .clear, in: Capsule())
+        .shadow(color: .black.opacity(on ? 0.12 : 0), radius: 2, y: 1)
+        .contentShape(Capsule())
+        .onTapGesture { nav.tab = tab }
     }
 }
 
@@ -256,7 +262,7 @@ struct DesktopView: View {
             sidebarRow(.notes)
             sidebarRow(.files)
             Spacer()
-            SidebarAction(title: "Settings", symbol: "gearshape", hint: "⌘,") { MainNav.shared.tab = .settings }
+            ModeSwitch()
         }
         .padding(.horizontal, 14).padding(.bottom, 16)
         .frame(width: Look.sidebarWidth)
@@ -325,7 +331,7 @@ struct DesktopView: View {
                 }
             }
         }
-        .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, 14)
+        .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, Look.headerGap - 6)
         .zIndex(10)
     }
 
@@ -507,7 +513,7 @@ struct DesktopView: View {
         let recent = all.filter { !$0.pinned }
         return VStack(alignment: .leading, spacing: 0) {
             PageHeader(title: greeting, subtitle: Date().formatted(.dateTime.weekday(.wide).day().month(.wide))) { EmptyView() }
-                .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, 18)
+                .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, Look.headerGap)
             ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
                     if !pinned.isEmpty {

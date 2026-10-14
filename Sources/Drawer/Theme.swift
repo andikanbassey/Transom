@@ -53,6 +53,8 @@ enum Look {
     static let overline = Font.system(size: 11, weight: .semibold)
 
     static let cardRadius: CGFloat = 16
+    /// Space between a page heading (title, subtitle, chips) and the content under it, the same on every page.
+    static let headerGap: CGFloat = 26
     static let sidebarWidth: CGFloat = 230
 }
 
