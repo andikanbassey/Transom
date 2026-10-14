@@ -56,6 +56,8 @@ enum Look {
     static let overline = Font.system(size: 11, weight: .semibold)
 
     static let cardRadius: CGFloat = 16
+    /// One height for every control in a page header (search, Select, chips), so they line up.
+    static let controlHeight: CGFloat = 34
     /// Space between a page heading (title, subtitle, chips) and the content under it, the same on every page.
     static let headerGap: CGFloat = 26
     static let sidebarWidth: CGFloat = 230
@@ -84,7 +86,7 @@ struct Chip: View {
             Text(title).font(.system(size: 13, weight: .medium))
         }
         .foregroundStyle(selected ? Color.accentColor : Color.secondary)
-        .padding(.horizontal, 12).padding(.vertical, 7)
+        .padding(.horizontal, 14).frame(height: Look.controlHeight)
         .background(selected ? Color.accentColor.opacity(0.14) : Color.primary.opacity(hovering.value ? 0.09 : 0.055),
                     in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .contentShape(Rectangle())
@@ -111,7 +113,7 @@ struct SidebarRow: View {
             Spacer()
             if let trailing { Text(trailing).font(Look.meta).foregroundStyle(.secondary) }
         }
-        .padding(.horizontal, 10).padding(.vertical, 5)
+        .padding(.horizontal, 10).padding(.vertical, 6)
         .background(selected ? Look.selection : (hovering.value ? Look.selection.opacity(0.55) : .clear),
                     in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .contentShape(Rectangle())
@@ -124,7 +126,7 @@ struct SidebarHeader: View {
     let title: String
     var body: some View {
         Text(title).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(.tertiary)
-            .padding(.horizontal, 10).padding(.top, 14).padding(.bottom, 4)
+            .padding(.horizontal, 10).padding(.top, 22).padding(.bottom, 6)
     }
 }
 
@@ -162,8 +164,10 @@ struct PageHeader<Trailing: View>: View {
                 if let subtitle { Text(subtitle).font(Look.body).foregroundStyle(.secondary) }
             }
             Spacer()
-            trailing()
-            SearchBarButton()
+            HStack(spacing: 10) {
+                trailing()
+                SearchBarButton()
+            }
         }
         .zIndex(10)
     }

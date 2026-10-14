@@ -862,10 +862,7 @@ struct NoteRow: View {
         .background(hovering.value || note.id == store.selectedID ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .contentShape(Rectangle())
         .animation(.easeOut(duration: 0.15), value: confirming.value)
-        .onHover { inside in
-            hovering.value = inside
-            if !inside { confirming.value = false }
-        }
+        .onHover { hovering.value = $0 }
         .onTapGesture { store.select(note) }
         .contextMenu {
             NoteMenu(note: note, store: store)

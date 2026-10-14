@@ -261,6 +261,7 @@ struct SettingsView: View {
     @ObservedObject private var pane = SettingsNav.shared
     @ObservedObject var settings = Settings.shared
     @ObservedObject var captureLog = CaptureLog.shared
+    @StateObject private var showLicense = Box(false)
 
     private static let groups: [(String, [Pane])] = [
         ("Drawer", [.general, .panels, .shortcuts, .appearance]),
@@ -280,13 +281,16 @@ struct SettingsView: View {
                 }
             }
             .background(Look.page)
+            .sheet(isPresented: Binding(get: { showLicense.value }, set: { showLicense.value = $0 })) {
+                LicenseSheet { showLicense.value = false }
+            }
         }
         .frame(minWidth: 860, minHeight: 620)
     }
 
     /// The same sidebar as the Library's: brand, quiet group headers, rows, and the Library/Settings switch at the bottom.
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             SidebarBrand()
             ForEach(Self.groups, id: \.0) { group in
                 SidebarHeader(title: group.0)
@@ -353,9 +357,33 @@ struct SettingsView: View {
                 }
             }
             RowDivider()
-            Row("Data folder", subtitle: "Settings and app data are stored here.") {
+            Row("Data folder", subtitle: supportDir.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")) {
                 Button("Show in Finder") { NSWorkspace.shared.open(supportDir) }
             }
+        }
+        Section("About \(Brand.name)") {
+            Row("\(Brand.name) \(Brand.version)", subtitle: "A clipboard history, quick notes and pinned files in a drawer that opens at the top of your screen. Everything stays on your Mac."
+                + (isBeta ? " This is the preview build, with its own history, notes and settings, separate from the release app." : "")) {
+                if isBeta { BetaPill() } else { Text(Brand.channel).foregroundStyle(.secondary) }
+            }
+            RowDivider()
+            Row("Source code", subtitle: "github.com/andikanbassey/Drawer") {
+                Button("Open on GitHub") { NSWorkspace.shared.open(Brand.repoURL) }
+            }
+            RowDivider()
+            Row("Report a problem or suggest a feature", subtitle: "Bugs and ideas are tracked on GitHub.") {
+                Button("Open Issues") { NSWorkspace.shared.open(Brand.issuesURL) }
+            }
+            RowDivider()
+            Row("Privacy", subtitle: "No accounts and no analytics. What you copy never leaves your Mac, except in the iCloud Drive folders you choose to sync.") { EmptyView() }
+            RowDivider()
+            Row("License", subtitle: "MIT License. Free to use, copy and modify.") {
+                Button("View License…") { showLicense.value = true }
+            }
+            RowDivider()
+            Row("Third-party software", subtitle: "None. Drawer is built only with Apple's frameworks (AppKit and SwiftUI).") { EmptyView() }
+            RowDivider()
+            Row("Made by Andikan Bassey", subtitle: Brand.copyright) { EmptyView() }
         }
     }
 
@@ -645,17 +673,6 @@ struct SettingsView: View {
                 .padding(.horizontal, 16).padding(.vertical, 13)
             }
         }
-        Section("About this build") {
-            Row("\(Brand.name) \(Brand.version)", subtitle: isBeta
-                ? "The preview build. It has its own history, notes and settings, separate from the Drawer you release."
-                : "The release build.") {
-                HStack(spacing: 8) { if isBeta { BetaPill() } else { Text(Brand.channel).foregroundStyle(.secondary) } }
-            }
-            RowDivider()
-            Row("Data folder", subtitle: supportDir.path) {
-                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([supportDir]) }
-            }
-        }
         Section("Capture log") {
             VStack(alignment: .leading, spacing: 8) {
                 Text("What Drawer saw on the clipboard and what it did with it. Useful if something you copied did not show up.")
@@ -861,5 +878,32 @@ struct PanelPad: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
             .strokeBorder(shown ? Color.accentColor.opacity(held ? 0.7 : 0.35) : Color.primary.opacity(0.12), lineWidth: 1))
         .opacity(shown ? 1 : 0.7)
+    }
+}
+
+
+/// The licence text shown from Settings › General › About. It reads the LICENSE file copied into the app.
+struct LicenseSheet: View {
+    let close: () -> Void
+    private var text: String {
+        if let url = Bundle.main.url(forResource: "LICENSE", withExtension: nil), let t = try? String(contentsOf: url, encoding: .utf8) { return t }
+        return "MIT License. The full text is at \(Brand.repoURL.appendingPathComponent("blob/main/LICENSE").absoluteString)"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("License").font(Look.sectionTitle)
+                Spacer()
+                Button("Done", action: close).keyboardShortcut(.defaultAction)
+            }
+            ScrollView {
+                Text(text).font(.system(size: 12.5, design: .monospaced)).textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(14)
+            }
+            .background(Look.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Look.hairline, lineWidth: 1))
+        }
+        .padding(22).frame(width: 560, height: 420).background(Look.page)
     }
 }

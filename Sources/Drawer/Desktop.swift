@@ -257,7 +257,7 @@ struct DesktopView: View {
     // MARK: Sidebar
 
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             SidebarBrand()
             SidebarAction(title: "New Note", symbol: "square.and.pencil") {
                 nav.section = .notes; notes.add(); notes.showingList = false
@@ -324,18 +324,19 @@ struct DesktopView: View {
 
     /// Title with a round "+" where adding makes sense, and the filter chips on the clipboard page.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 18) {
             PageHeader(title: nav.section.title, plus: plusAction) {
                 if !selecting.value && !visibleIDs().isEmpty {
-                    Button { selecting.value = true } label: { Label("Select", systemImage: "checkmark.circle") }
-                        .buttonStyle(.borderless).foregroundStyle(.secondary)
+                    Button { selecting.value = true } label: { HeaderButtonLabel(title: "Select", symbol: "checkmark.circle") }
+                        .buttonStyle(.plain)
                 }
             }
             if selecting.value {
                 selectionBar
             } else if nav.section == .clipboard || nav.section == .pinned {
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     FilterPills(store: clipboard, window: true)
+                    Rectangle().fill(Color.primary.opacity(0.12)).frame(width: 1, height: 18).padding(.horizontal, 2)
                     TimeChip(store: clipboard)
                 }
             }
@@ -663,6 +664,26 @@ struct DesktopView: View {
 
 // MARK: - Selection
 
+/// A button in a page header, the same height and outline as the search field beside it.
+struct HeaderButtonLabel: View {
+    let title: String
+    let symbol: String
+    @StateObject private var hovering = Box(false)
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: symbol).font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+            Text(title).font(.system(size: 13.5, weight: .medium)).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+        }
+        .padding(.horizontal, 14)
+        .frame(height: Look.controlHeight)
+        .background(Look.card.opacity(hovering.value ? 1 : 0.85), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.09), lineWidth: 1))
+        .contentShape(Rectangle())
+        .onHover { hovering.value = $0 }
+    }
+}
+
 /// The same pill for every action in the selection bar: 30 pt tall, 13 pt medium, icon and text 6 pt apart.
 struct SelectBarLabel: View {
     let title: String
@@ -833,11 +854,12 @@ struct TimeChip: View {
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
             }
             .foregroundStyle(store.time == .any ? Color.secondary : Color.accentColor)
-            .padding(.horizontal, 12).padding(.vertical, 7)
+            .padding(.horizontal, 14).frame(height: Look.controlHeight)
             .background(store.time == .any ? Color.primary.opacity(0.055) : Color.accentColor.opacity(0.14),
                         in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
-        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
     }
 }
 
