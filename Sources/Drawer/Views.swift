@@ -830,6 +830,7 @@ struct NoteRow: View {
     let store: NotesStore
     var inWindow = false
     @StateObject private var hovering = Box(false)
+    @StateObject private var confirming = Box(false)
 
     var body: some View {
         HStack {
@@ -839,16 +840,32 @@ struct NoteRow: View {
                     .font(.system(size: fs(12))).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
-            if hovering.value {
+            if confirming.value {
+                // The first click on the x only asks; this red button is the one that deletes.
+                Text("Delete").font(.system(size: fs(11), weight: .semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 9).frame(height: 22)
+                    .background(Color.red, in: Capsule())
+                    .contentShape(Capsule())
+                    .onTapGesture { store.delete(note) }
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            } else if hovering.value {
                 Image(systemName: "xmark").font(.system(size: fs(10), weight: .semibold)).foregroundStyle(.secondary)
                     .frame(width: 22, height: 22).contentShape(Rectangle())
-                    .onTapGesture { store.delete(note) }
+                    .onTapGesture {
+                        confirming.value = true
+                        // Not confirmed in a few seconds: back to the x.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { confirming.value = false }
+                    }
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .background(hovering.value || note.id == store.selectedID ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .contentShape(Rectangle())
-        .onHover { hovering.value = $0 }
+        .animation(.easeOut(duration: 0.15), value: confirming.value)
+        .onHover { inside in
+            hovering.value = inside
+            if !inside { confirming.value = false }
+        }
         .onTapGesture { store.select(note) }
         .contextMenu {
             NoteMenu(note: note, store: store)
