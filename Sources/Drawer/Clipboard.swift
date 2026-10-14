@@ -303,6 +303,7 @@ final class ClipboardStore: ObservableObject {
         let isSelf = app?.bundleIdentifier == Bundle.main.bundleIdentifier
         let who = isSelf ? "Drawer" : (app?.localizedName ?? "Unknown app")
         let log = CaptureLog.shared
+        if AppModel.shared.standby { log.add(app: who, result: "Skipped: another Drawer is active"); return }
         if s.paused { log.add(app: who, result: "Skipped: capture is paused"); return }
         let types = Set((pb.types ?? []).map(\.rawValue))
         if s.ignoreConfidential, !types.isDisjoint(with: confidentialTypes) { log.add(app: who, result: "Skipped: marked confidential"); return }

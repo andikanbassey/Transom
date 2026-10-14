@@ -469,6 +469,8 @@ final class AppModel {
         guard let d = dragged, Date().timeIntervalSince(d.at) < 120 else { return nil }
         return d.clip
     }
+    /// Another Drawer is running and this one chose to wait: no clipboard capture, shortcut or edge swipe.
+    var standby = false
     /// True while an options popover is open, so the auto-close timer does not run under it.
     var popoverOpen = false
     /// The app that was frontmost when the drawer opened; pasted text goes there.

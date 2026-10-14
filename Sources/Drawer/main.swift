@@ -8,6 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem!
     var cancellable: AnyCancellable?
     let pauseItem = NSMenuItem(title: "Pause Clipboard Capture", action: #selector(togglePause), keyEquivalent: "")
+    let headerItem = NSMenuItem()
+    let activateItem = NSMenuItem(title: "", action: #selector(makeActive), keyEquivalent: "")
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         // drawer:// links. Registered this early so a link that launches Drawer is not lost.
@@ -22,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppModel.shared.standby = !InstanceGuard.resolveAtLaunch()
         drawer = DrawerController()
         AppModel.shared.showDrawer = { [weak self] in self?.drawer.openIfClosed() }
         AppModel.shared.openSettings = { pane in
@@ -34,11 +37,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = MenuBarIcon.image()
-        statusItem.button?.setAccessibilityLabel(isBeta ? "Drawer Beta" : "Drawer")
+        statusItem.button?.setAccessibilityLabel(Brand.name)
         if isBeta { statusItem.button?.title = " β"; statusItem.button?.imagePosition = .imageLeft }
+        statusItem.button?.appearsDisabled = AppModel.shared.standby
 
         let menu = NSMenu()
         menu.delegate = self
+        // Always says which build this is and where its data lives; in standby it also says why nothing is captured.
+        headerItem.isEnabled = false
+        menu.addItem(headerItem)
+        activateItem.target = self
+        menu.addItem(activateItem)
+        menu.addItem(.separator())
         func add(_ title: String, _ symbol: String, _ action: Selector, key: String = "") {
             let item = menu.addItem(withTitle: title, action: action, keyEquivalent: key)
             item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
@@ -54,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         add("Settings…", "gearshape", #selector(showSettings), key: ",")
         menu.addItem(.separator())
-        let quit = menu.addItem(withTitle: "Quit Drawer", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = menu.addItem(withTitle: "Quit \(Brand.name)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.image = NSImage(systemSymbolName: "power", accessibilityDescription: nil)
         statusItem.menu = menu
 
@@ -120,7 +130,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         cancellable = Settings.shared.$v.sink { [weak self] v in
             self?.statusItem.isVisible = v.showMenuBarIcon
-            HotKeyCenter.shared.register(v.hotkeyEnabled ? v.hotkey : nil)
+            HotKeyCenter.shared.register(v.hotkeyEnabled && !AppModel.shared.standby ? v.hotkey : nil)
+        }
+        // A waiting Drawer takes over by itself once the other one quits.
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
+            if AppModel.shared.standby, InstanceGuard.others().isEmpty { self?.becomeActive() }
         }
 
         if !Settings.shared.v.onboarded, !drawer.stayOpen, ProcessInfo.processInfo.environment["DRAWER_SNAPSHOT"] == nil {
@@ -159,6 +173,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         pauseItem.state = Settings.shared.v.paused ? .on : .off
+        let standby = AppModel.shared.standby
+        let version = Brand.version.isEmpty ? "" : " \(Brand.version)"
+        headerItem.title = standby ? "\(Brand.name)\(version) · waiting, not capturing" : "\(Brand.name)\(version) · \(Brand.channel)"
+        headerItem.toolTip = "Data: \(supportDir.path)"
+        activateItem.title = "Make \(Brand.name) the Active Drawer"
+        activateItem.isHidden = !standby
+        pauseItem.isEnabled = !standby
+    }
+
+    @objc func makeActive() {
+        InstanceGuard.quit(InstanceGuard.others())
+        becomeActive()
+    }
+
+    private func becomeActive() {
+        AppModel.shared.standby = false
+        statusItem.button?.appearsDisabled = false
+        let v = Settings.shared.v
+        HotKeyCenter.shared.register(v.hotkeyEnabled ? v.hotkey : nil)
     }
 
     // Opening the app again from Finder/Applications brings up settings, the way back if the icon is hidden.

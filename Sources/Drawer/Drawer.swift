@@ -94,6 +94,7 @@ final class DrawerController {
     }
 
     private func handleGlobalScroll(_ event: NSEvent) {
+        if AppModel.shared.standby { return }
         logScroll("global", event)
         // While the drawer is still sliding down the pointer is over the menu bar, not the drawer: a quick swipe up
         // there arrives here, and has to close it too.

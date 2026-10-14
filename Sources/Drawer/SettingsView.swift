@@ -289,7 +289,7 @@ struct SettingsView: View {
             }
             Spacer()
             SidebarSwitch(title: "Library", symbol: "square.grid.2x2") { MainNav.shared.tab = .library }
-            Text("Drawer 0.5.1").font(.system(size: 11)).foregroundStyle(.tertiary).padding(.leading, 10).padding(.top, 6)
+            Text("\(Brand.name) \(Brand.version)").font(.system(size: 11)).foregroundStyle(.tertiary).padding(.leading, 10).padding(.top, 6)
         }
         .padding(.horizontal, 14).padding(.bottom, 16)
     }
@@ -623,6 +623,17 @@ struct SettingsView: View {
                         .font(Look.meta).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 13)
+            }
+        }
+        Section("About this build") {
+            Row("\(Brand.name) \(Brand.version)", subtitle: isBeta
+                ? "The preview build. It has its own history, notes and settings, separate from the Drawer you release."
+                : "The release build.") {
+                HStack(spacing: 8) { if isBeta { BetaPill() } else { Text(Brand.channel).foregroundStyle(.secondary) } }
+            }
+            RowDivider()
+            Row("Data folder", subtitle: supportDir.path) {
+                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([supportDir]) }
             }
         }
         Section("Capture log") {

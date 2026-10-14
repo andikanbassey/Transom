@@ -24,10 +24,11 @@ cp .build/release/Drawer "$APP/Contents/MacOS/$NAME"
 SDK_VERSION="$(xcrun --show-sdk-version 2>/dev/null || echo 26.0)"
 vtool -set-build-version macos 14.0 "$SDK_VERSION" -replace -output "$APP/Contents/MacOS/$NAME" "$APP/Contents/MacOS/$NAME"
 mkdir -p "$APP/Contents/Resources"
-if [ ! -f AppIcon.icns ]; then
-  swift make-icon.swift AppIcon && iconutil -c icns AppIcon.iconset -o AppIcon.icns && rm -rf AppIcon.iconset
+if [ "${DRAWER_CHANNEL:-}" = "beta" ]; then ICON=AppIcon-beta; ICON_ARGS="beta"; else ICON=AppIcon; ICON_ARGS=""; fi
+if [ ! -f "$ICON.icns" ]; then
+  swift make-icon.swift "$ICON" $ICON_ARGS && iconutil -c icns "$ICON.iconset" -o "$ICON.icns" && rm -rf "$ICON.iconset"
 fi
-cp AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp "$ICON.icns" "$APP/Contents/Resources/AppIcon.icns"
 cp Drawer.sdef "$APP/Contents/Resources/Drawer.sdef"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

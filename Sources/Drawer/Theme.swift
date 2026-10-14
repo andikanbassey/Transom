@@ -115,7 +115,8 @@ struct SidebarBrand: View {
     var body: some View {
         HStack(spacing: 9) {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 28, height: 28)
-            Text(isBeta ? "Drawer Beta" : "Drawer").font(.system(size: 16, weight: .semibold))
+            Text("Drawer").font(.system(size: 16, weight: .semibold))
+            BetaPill()
         }
         .padding(.horizontal, 10).padding(.top, 40).padding(.bottom, 16)
     }
