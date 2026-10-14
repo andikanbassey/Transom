@@ -2,9 +2,13 @@ import AppKit
 import SwiftUI
 import Combine
 
+/// The preview build (`DRAWER_CHANNEL=beta ./build.sh`) has its own bundle id, data folder and link scheme, so it
+/// can be tried out beside the real app without touching its history, notes or settings.
+let isBeta = Bundle.main.bundleIdentifier?.hasSuffix(".beta") == true
+
 let supportDir: URL = {
     let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("Drawer", isDirectory: true)
+        .appendingPathComponent(isBeta ? "Drawer Beta" : "Drawer", isDirectory: true)
     try? FileManager.default.createDirectory(at: url.appendingPathComponent("images"), withIntermediateDirectories: true)
     return url
 }()
