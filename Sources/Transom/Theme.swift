@@ -207,18 +207,29 @@ struct PillButtonStyle: ButtonStyle {
 // MARK: - Menu bar icon
 
 enum MenuBarIcon {
-    /// A screen edge with a drawer pulled down from it. Drawn as a template so macOS tints it for light and dark bars.
+    /// A window: a glass top pane (the transom) over a bar, with three small items below. Drawn as a template so macOS tints it
+    /// for light and dark bars; the pane is a lighter tone of the same tint.
     static func image() -> NSImage {
-        let img = NSImage(size: NSSize(width: 20, height: 16), flipped: false) { _ in
+        let img = NSImage(size: NSSize(width: 20, height: 16), flipped: true) { _ in
+            // Top-down coordinates (the image is flipped).
+            let frame = NSRect(x: 2, y: 1.5, width: 16, height: 13)
             NSColor.black.setStroke()
+            let outline = NSBezierPath(roundedRect: frame, xRadius: 3.2, yRadius: 3.2)
+            outline.lineWidth = 1.4
+            // The pane: a lighter fill under the frame's top.
+            NSGraphicsContext.saveGraphicsState()
+            outline.addClip()
+            NSColor.black.withAlphaComponent(0.38).setFill()
+            NSRect(x: 2, y: 1.5, width: 16, height: 4.9).fill()
+            NSGraphicsContext.restoreGraphicsState()
+            outline.stroke()
+            // The transom bar.
             NSColor.black.setFill()
-            let frame = NSBezierPath(roundedRect: NSRect(x: 2, y: 1.5, width: 16, height: 13), xRadius: 3.6, yRadius: 3.6)
-            frame.lineWidth = 1.4
-            frame.stroke()
-            let drawer = NSBezierPath(roundedRect: NSRect(x: 4.6, y: 6.2, width: 10.8, height: 5.6), xRadius: 1.8, yRadius: 1.8)
-            drawer.fill()
-            let handle = NSBezierPath(roundedRect: NSRect(x: 8, y: 4.1, width: 4, height: 1.3), xRadius: 0.65, yRadius: 0.65)
-            handle.fill()
+            NSRect(x: 2.4, y: 5.9, width: 15.2, height: 1.5).fill()
+            // Page, picture and link.
+            NSBezierPath(roundedRect: NSRect(x: 4.4, y: 9, width: 2.8, height: 3.6), xRadius: 0.7, yRadius: 0.7).fill()
+            NSBezierPath(roundedRect: NSRect(x: 8.6, y: 9, width: 2.8, height: 3.0), xRadius: 0.7, yRadius: 0.7).fill()
+            NSBezierPath(roundedRect: NSRect(x: 12.8, y: 9, width: 2.8, height: 2.8), xRadius: 1.0, yRadius: 1.0).fill()
             return true
         }
         img.isTemplate = true
