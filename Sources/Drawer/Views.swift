@@ -957,20 +957,21 @@ struct FilesOptionsPopover: View {
             OptionDivider()
             OptionLabel("Item Size")
             HStack(spacing: 10) {
-                Image(systemName: "photo").font(.system(size: 10)).foregroundStyle(.secondary)
+                Image(systemName: "photo").font(.system(size: 9)).foregroundStyle(.secondary)
                 Slider(value: Binding(
                     get: { Double(FileIconSize.allCases.firstIndex(of: v.filesIconSize) ?? 1) },
                     set: { settings.v.filesIconSize = FileIconSize.allCases[min(2, max(0, Int($0.rounded())))] }
                 ), in: 0...2, step: 1)
-                Image(systemName: "photo").font(.system(size: 18)).foregroundStyle(.secondary)
+                Image(systemName: "photo").font(.system(size: 14)).foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 12).padding(.vertical, 6)
+            .controlSize(.small)
+            .padding(.horizontal, 12).padding(.vertical, 4)
             OptionDivider()
             OptionRow("Quick Access Settings…") { close(); AppModel.shared.openSettings(.files) }
             OptionRow("Hide Quick Access Panel") { close(); settings.v.showFiles = false }
         }
-        .padding(8)
-        .frame(width: 280)
+        .padding(6)
+        .frame(width: 236)
     }
 }
 
@@ -987,14 +988,14 @@ private struct OptionRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "checkmark").font(.system(size: fs(11), weight: .semibold)).frame(width: 14).opacity(checked ? 1 : 0)
-            Text(title).font(.system(size: fs(13)))
+            Image(systemName: "checkmark").font(.system(size: 10, weight: .semibold)).frame(width: 12).opacity(checked ? 1 : 0)
+            Text(title).font(.system(size: 13))
             Spacer()
-            if let shortcut { Text(shortcut).font(.system(size: fs(12))).foregroundStyle(hovering.value ? Color.white.opacity(0.85) : .secondary) }
+            if let shortcut { Text(shortcut).font(.system(size: 12)).foregroundStyle(hovering.value ? Color.white.opacity(0.85) : .secondary) }
         }
         .foregroundStyle(hovering.value ? Color.white : Color.primary)
-        .padding(.horizontal, 8).padding(.vertical, 5)
-        .background(hovering.value ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .padding(.horizontal, 8).padding(.vertical, 3)
+        .background(hovering.value ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
         .contentShape(Rectangle())
         .onHover { hovering.value = $0 }
         .onTapGesture(perform: action)
@@ -1005,13 +1006,13 @@ private struct OptionLabel: View {
     let title: String
     init(_ title: String) { self.title = title }
     var body: some View {
-        Text(title).font(.system(size: fs(12), weight: .medium)).foregroundStyle(.secondary)
-            .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 2)
+        Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+            .padding(.horizontal, 12).padding(.top, 3).padding(.bottom, 1)
     }
 }
 
 private struct OptionDivider: View {
-    var body: some View { Divider().padding(.horizontal, 8).padding(.vertical, 4) }
+    var body: some View { Divider().padding(.horizontal, 8).padding(.vertical, 3) }
 }
 
 /// The preview area of a card: text excerpt, link cover, colour, picture or file thumbnail.

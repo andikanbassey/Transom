@@ -2,6 +2,35 @@
 
 Each release is written as what you can now do.
 
+## 0.6 (2026-10-15)
+
+**Clipboard**
+- ✨ Filter by **time, type and app** from three dropdowns, in the drawer and in the Library. The app menu lists the apps in your history, with their icons.
+- ✨ **Drag an item** onto Quick Access to keep it, or onto Notes to turn it into a note. Pictures are embedded in the note.
+- Copy the same picture again and it moves to the top instead of being stored twice.
+- Link cover images stay on your Mac instead of syncing through iCloud, and a link copied on another Mac gets its cover fetched again.
+
+**Library**
+- ✨ **Select** several items to pin or delete them together. Pick all, the last 5 minutes, the last hour or today, and a confirmation protects you from deleting by accident.
+- Library and Settings are one window with a switch at the bottom of the sidebar. Settings has a new **About** section: what Drawer is, the GitHub link, privacy, the licence and credits.
+- Tidier headers: Select and search sit with the filters, at one height. The Theme setting (system, dark, light) now applies as soon as you change it.
+
+**Drawer**
+- ✨ **Scroll down anywhere on the menu bar** to open the drawer, not only at the very top edge (Settings › Shortcuts can limit it to the edge).
+- With the clipboard shown as a list, the three panels are equal width.
+- A cleaner clipboard header: filters in the middle, search first on the right, pause beside it.
+- Clicking the x on a note asks before it deletes.
+- The welcome screen is easier to read, with shorter copy.
+
+**Fixed**
+- Drawer no longer fails to start (no menu bar icon) when iCloud has moved the clipboard history off your Mac. History loads in the background.
+- A screenshot saved from a tool that leaves its file in a temporary folder is kept properly in Notes and Quick Access.
+- Opening a second copy of Drawer asks which one to keep, so both don't capture.
+
+**Good to know**
+- SHA-256 of `Drawer.dmg`: `bf0f0170b472e96f6b43e010128142f669651ecf1d7a9759ee78068ef598c40a`
+- Not notarized yet, so macOS asks you to confirm opening it the first time. See [Install](README.md#install).
+
 ## 0.5.1 (2026-10-13)
 
 **Fixed**

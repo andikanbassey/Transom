@@ -886,9 +886,10 @@ struct TimeMenu: View {
     var showsText = true
     var body: some View {
         Menu {
-            Picker("", selection: Binding(get: { store.time }, set: { store.time = $0 })) {
-                ForEach(TimeFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }.pickerStyle(.inline)
+            // A Toggle per choice is how a menu gets its tick; a Picker here left an empty row above the first item.
+            ForEach(TimeFilter.allCases, id: \.self) { t in
+                Toggle(isOn: Binding(get: { store.time == t }, set: { if $0 { store.time = t } })) { Text(t.rawValue) }
+            }
         } label: { FilterMenuLabel(symbol: "clock", value: store.time.rawValue, active: store.time != .any, compact: compact, showsText: showsText) }
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
     }
@@ -902,11 +903,11 @@ struct TypeMenu: View {
     var body: some View {
         let current = store.filter
         Menu {
-            Picker("", selection: Binding(get: { store.filter }, set: { store.filter = $0 })) {
-                ForEach(Category.Filter.allCases, id: \.self) { f in
-                    Label(f == .all ? "All types" : f.rawValue, systemImage: FilterIcon.symbol(f)).tag(f)
+            ForEach(Category.Filter.allCases, id: \.self) { f in
+                Toggle(isOn: Binding(get: { store.filter == f }, set: { if $0 { store.filter = f } })) {
+                    Label(f == .all ? "All types" : f.rawValue, systemImage: FilterIcon.symbol(f))
                 }
-            }.pickerStyle(.inline)
+            }
         } label: {
             FilterMenuLabel(symbol: FilterIcon.symbol(current), value: current == .all ? "All types" : current.rawValue, active: current != .all, compact: compact, showsText: showsText)
         }
@@ -930,16 +931,19 @@ struct AppMenu: View {
         let apps = store.appsInHistory
         let current = apps.first { $0.key == store.appFilter }
         Menu {
-            Picker("", selection: Binding(get: { store.appFilter ?? "" }, set: { store.appFilter = $0.isEmpty ? nil : $0 })) {
-                Label("All apps", systemImage: "square.grid.2x2").tag("")
-                ForEach(apps, id: \.key) { app in
+            Toggle(isOn: Binding(get: { store.appFilter == nil }, set: { if $0 { store.appFilter = nil } })) {
+                Label("All apps", systemImage: "square.grid.2x2")
+            }
+            if !apps.isEmpty { Divider() }
+            ForEach(apps, id: \.key) { app in
+                Toggle(isOn: Binding(get: { store.appFilter == app.key }, set: { if $0 { store.appFilter = app.key } })) {
                     if let icon = small(app.bundle) {
-                        Label { Text("\(app.name) (\(app.count))") } icon: { Image(nsImage: icon) }.tag(app.key)
+                        Label { Text("\(app.name) (\(app.count))") } icon: { Image(nsImage: icon) }
                     } else {
-                        Text("\(app.name) (\(app.count))").tag(app.key)
+                        Text("\(app.name) (\(app.count))")
                     }
                 }
-            }.pickerStyle(.inline)
+            }
         } label: {
             FilterMenuLabel(symbol: "app.dashed", image: small(current?.bundle), value: current?.name ?? "All apps", active: current != nil, compact: compact, showsText: showsText)
         }

@@ -7,7 +7,9 @@ images for pictures, videos, links and files.
 Drawer takes its layout from [Unclutter](https://unclutterapp.com) and its clipboard feature set from
 [Paste](https://pasteapp.io). It is an independent project and is not affiliated with either.
 
-> **Status:** early (v0.5.1). It is a native Swift app with no third-party dependencies.
+![The Drawer, with sample items](docs/images/drawer.png)
+
+> **Status:** early (v0.6). It is a native Swift app with no third-party dependencies.
 
 ## Features
 
@@ -30,25 +32,33 @@ Drawer takes its layout from [Unclutter](https://unclutterapp.com) and its clipb
   swatches for hex colours.
 - Grouped by recency: Pinned, Past Hour, Today, Yesterday, This Week, This Month, Older.
 - **Paste straight into the app you were using**, or just copy. ⌘1–⌘9 quick paste.
-- Pin, search, filter by type, and see which app each item came from.
+- Pin, search, and filter by **time, type and app** with three dropdowns; each item shows which app it came from.
+- **Drag an item** onto Quick Access to keep it, or onto Notes to make a note from it (pictures are embedded).
+- Copying the same picture again moves the earlier item to the top instead of storing it twice.
 - History kept for a day, week, month, year or forever. Time is the only limit.
 - Stored as one Markdown file per month, with formatting kept as Markdown, in the Clipboard folder.
 
-### Files
+### Quick Access
 - Pin files and folders by dragging them in, or keep copies in a folder of your choice.
 - Icon or list view, three item sizes, sort by name, kind, date added or date modified.
 - Drag files back out to any app.
 
 ### Notes
-- Notes are plain **Markdown files** in a folder you choose.
+- Notes are plain **Markdown files** in a folder you choose; pictures sit in an `Attachments` folder beside them.
 - Opens on the list of your notes with a preview line each, remembers the note you were editing.
+
+### Library
+- A bigger window for everything, opened from the menu bar: clipboard, pinned, notes and Quick Access, with search (⌘K) for the page you are on.
+- **Select** several items to pin or delete them together, or pick "last 5 minutes", "last hour" or "today" and clear them in one go.
+- Cards or lists, for everything or per kind. Settings sit one click away, behind the same window.
 
 ### Privacy
 - Skips passwords and other items that apps flag as concealed or transient.
 - Allow list and block list for the apps Drawer records from.
 - Optionally hide the drawer from screen sharing.
 - Link previews can be switched off. They download the page to get a title and image.
-- Everything is stored locally. Nothing is sent anywhere.
+- Everything is stored locally. Nothing is sent anywhere: no accounts, no analytics. The only network use is link previews (off if you like) and the iCloud Drive sync you turn on yourself.
+- Link cover images are kept on your Mac only, never in the synced folder.
 
 ### Look and feel
 - Liquid Glass on macOS 26 and later, a blurred material on earlier versions.
@@ -202,6 +212,22 @@ Off by default (Settings › Advanced › Automation). Once on, other apps and s
 **Safety:** links that only change Drawer always work once automation is on. Copying and pasting for another app needs
 that app to be trusted (you are asked the first time; trusted apps are listed in Settings and can be removed).
 Clipboard content can be read out only with AppleScript, never through a link.
+
+## FAQ
+
+**Is it free?** Yes. It is open source under the MIT licence.
+
+**Does it send my clipboard anywhere?** No. There are no accounts and no analytics. See [Privacy](#privacy).
+
+**Why does macOS warn me when I open it?** The app is not notarized yet. See [Why macOS shows a warning](#why-macos-shows-a-warning); it explains the steps and how to check the download.
+
+**Where is my history stored?** As plain Markdown files, in `~/Library/Application Support/Drawer/` or the iCloud Drive folder you pick. See [Data](#data).
+
+**How do I use it on two Macs?** Turn on iCloud Drive in Settings. Notes, Quick Access and clipboard history then sync through the folders themselves.
+
+**How do I remove it?** Delete Drawer from Applications, then delete `~/Library/Application Support/Drawer` (and the iCloud Drive `Drawer` folder if you used it).
+
+**I found a bug or have an idea.** Open an [issue](../../issues) or use *Settings › General › About*.
 
 ## Roadmap
 
