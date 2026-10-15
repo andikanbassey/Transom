@@ -218,6 +218,7 @@ final class ClipboardStore: ObservableObject {
     // MARK: Storage
 
     private let diskQueue = DispatchQueue(label: "studioab.drawer.clipboard-disk", qos: .userInitiated)
+    private let imageQueue = DispatchQueue(label: "studioab.drawer.clipboard-images", qos: .utility)
     private var loading = false
     private var isLoaded = false
     private var loadGeneration = 0
@@ -388,20 +389,40 @@ final class ClipboardStore: ObservableObject {
     }
 
     /// Encoding a large screenshot takes a moment: do it off the main thread, then add the item.
-    private func storeImage(_ data: Data, alreadyPNG: Bool, base: Clip, who: String) {
+    /// Saves a copied picture. The same picture copied again (byte for byte, among the newest pictures) is not stored twice:
+    /// the earlier item moves to the top and keeps its file.
+    func storeImage(_ data: Data, alreadyPNG: Bool, base: Clip, who: String) {
         ClipboardFolder.prepare()
         let name = UUID().uuidString + ".png"
         let dest = ClipboardFolder.images.appendingPathComponent(name)
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let png = alreadyPNG ? data : NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:])
-            let saved = png.map { (try? $0.write(to: dest)) != nil } ?? false
+        let candidates = clips.filter { $0.kind == .image }.prefix(60).compactMap(\.imageFile)
+        imageQueue.async { [weak self] in
+            guard let png = alreadyPNG ? data : NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:]) else {
+                DispatchQueue.main.async { CaptureLog.shared.add(app: who, result: "Failed: could not save the image") }
+                return
+            }
+            var existing: String?
+            for file in candidates {
+                let url = ClipboardFolder.images.appendingPathComponent(file)
+                // Same size first, and only files already on this Mac: never wait on an iCloud download for this.
+                guard let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size == png.count,
+                      ClipboardFolder.isOnThisMac(url), let old = try? Data(contentsOf: url), old == png else { continue }
+                existing = file
+                break
+            }
+            let saved = existing != nil || (try? png.write(to: dest)) != nil
             DispatchQueue.main.async {
                 guard saved else { CaptureLog.shared.add(app: who, result: "Failed: could not save the image"); return }
                 var clip = base
                 clip.kind = .image
-                clip.imageFile = name
-                self?.insert(clip, replacing: { _ in false })
-                CaptureLog.shared.add(app: who, result: "Stored: image")
+                clip.imageFile = existing ?? name
+                if let existing {
+                    self?.insert(clip, replacing: { $0.kind == .image && $0.imageFile == existing })
+                    CaptureLog.shared.add(app: who, result: "Stored: image (same as an earlier one, moved to the top)")
+                } else {
+                    self?.insert(clip, replacing: { _ in false })
+                    CaptureLog.shared.add(app: who, result: "Stored: image")
+                }
             }
         }
     }
