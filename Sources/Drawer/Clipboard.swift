@@ -32,7 +32,7 @@ struct Clip: Codable, Identifiable, Equatable {
         let url = LinkPreviews.folder.appendingPathComponent(name)
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
-    var imageURL: URL? { imageFile.map { ClipboardFolder.images.appendingPathComponent($0) } }
+    var imageURL: URL? { imageFile.map { ClipboardFolder.imageURL($0) } }
     var fileURLs: [URL] { (paths ?? []).map { URL(fileURLWithPath: $0) } }
     /// The file used for the card's cover art.
     var previewURL: URL? { imageURL ?? linkImageURL ?? fileURLs.first }
@@ -394,7 +394,7 @@ final class ClipboardStore: ObservableObject {
     func storeImage(_ data: Data, alreadyPNG: Bool, base: Clip, who: String) {
         ClipboardFolder.prepare()
         let name = UUID().uuidString + ".png"
-        let dest = ClipboardFolder.images.appendingPathComponent(name)
+        let dest = ClipboardFolder.imageWriteFolder.appendingPathComponent(name)
         let candidates = clips.filter { $0.kind == .image }.prefix(60).compactMap(\.imageFile)
         imageQueue.async { [weak self] in
             guard let png = alreadyPNG ? data : NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:]) else {
@@ -403,7 +403,7 @@ final class ClipboardStore: ObservableObject {
             }
             var existing: String?
             for file in candidates {
-                let url = ClipboardFolder.images.appendingPathComponent(file)
+                let url = ClipboardFolder.imageURL(file)
                 // Same size first, and only files already on this Mac: never wait on an iCloud download for this.
                 guard let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size == png.count,
                       ClipboardFolder.isOnThisMac(url), let old = try? Data(contentsOf: url), old == png else { continue }
@@ -597,12 +597,20 @@ final class ClipboardStore: ObservableObject {
 
     func eraseAll() {
         for i in clips.indices.reversed() { remove(at: i, tombstone: true) }
+        // Nothing refers to this Mac's own pictures any more, so none are kept.
+        for name in (try? FileManager.default.contentsOfDirectory(atPath: ClipboardFolder.localImages.path)) ?? [] {
+            try? FileManager.default.removeItem(at: ClipboardFolder.localImages.appendingPathComponent(name))
+        }
         save()
     }
 
     private func remove(at i: Int, tombstone: Bool = false) {
         if tombstone { ClipboardFolder.addTombstone(clips[i].id) }
-        if let file = clips[i].imageFile { try? FileManager.default.removeItem(at: ClipboardFolder.images.appendingPathComponent(file)) }
+        if let file = clips[i].imageFile {
+            // Clearing history deletes the picture too, wherever it is kept.
+            try? FileManager.default.removeItem(at: ClipboardFolder.images.appendingPathComponent(file))
+            try? FileManager.default.removeItem(at: ClipboardFolder.localImages.appendingPathComponent(file))
+        }
         if let file = clips[i].linkImageFile { try? FileManager.default.removeItem(at: LinkPreviews.folder.appendingPathComponent(file)) }
         dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
         clips.remove(at: i)
@@ -721,6 +729,11 @@ enum LinkPreviews {
         guard !clips.isEmpty else { return }
         for name in (try? fm.contentsOfDirectory(atPath: folder.path)) ?? [] where !wanted.contains(name) && !name.hasPrefix(".") {
             try? fm.removeItem(at: folder.appendingPathComponent(name))
+        }
+        // Pictures kept on this Mac that no item refers to (left by a failed delete) are removed too.
+        let pictures = Set(clips.compactMap(\.imageFile))
+        for name in (try? fm.contentsOfDirectory(atPath: ClipboardFolder.localImages.path)) ?? [] where !pictures.contains(name) && !name.hasPrefix(".") {
+            try? fm.removeItem(at: ClipboardFolder.localImages.appendingPathComponent(name))
         }
     }
 }

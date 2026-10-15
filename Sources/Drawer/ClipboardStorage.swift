@@ -7,10 +7,38 @@ enum ClipboardFolder {
     static var url: URL {
         Settings.shared.v.clipboardFolder.map { URL(fileURLWithPath: $0) } ?? supportDir.appendingPathComponent("Clipboard", isDirectory: true)
     }
+    /// Pictures that sync with the history.
     static var images: URL { url.appendingPathComponent("Images", isDirectory: true) }
+    /// Pictures kept on this Mac only (Settings › Clipboard › Pictures). Never inside iCloud Drive.
+    static var localImages: URL { supportDir.appendingPathComponent("ClipboardImages", isDirectory: true) }
+    static var picturesStayLocal: Bool { Settings.shared.v.picturesStayOnThisMac && Settings.shared.v.clipboardFolder != nil }
+    /// Where a new picture is written.
+    static var imageWriteFolder: URL { picturesStayLocal ? localImages : images }
+
+    /// Where a picture is now: this Mac's own folder first, then the synced one.
+    static func imageURL(_ file: String) -> URL {
+        let local = localImages.appendingPathComponent(file)
+        return FileManager.default.fileExists(atPath: local.path) ? local : images.appendingPathComponent(file)
+    }
 
     static func prepare() {
         try? FileManager.default.createDirectory(at: images, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: localImages, withIntermediateDirectories: true)
+    }
+
+    /// Moves every picture between the synced folder and this Mac's folder after the setting changes.
+    /// Moving them out of iCloud frees that space; other Macs lose the pictures but keep the text of the items.
+    static func relocatePictures(toLocal: Bool) {
+        DispatchQueue.global(qos: .utility).async {
+            let fm = FileManager.default
+            prepare()
+            let (from, to) = toLocal ? (images, localImages) : (localImages, images)
+            for name in (try? fm.contentsOfDirectory(atPath: from.path)) ?? [] where !name.hasPrefix(".") {
+                let dest = to.appendingPathComponent(name)
+                if fm.fileExists(atPath: dest.path) { try? fm.removeItem(at: from.appendingPathComponent(name)) }
+                else { try? fm.moveItem(at: from.appendingPathComponent(name), to: dest) }
+            }
+        }
     }
 
     /// False for a file iCloud has moved off this Mac, so reading it would wait for a download.

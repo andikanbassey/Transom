@@ -399,6 +399,14 @@ struct SettingsView: View {
             FolderRow(title: "Clipboard folder", subtitle: "One Markdown file per month. Pictures copied from the screen are kept in an Images folder inside it; copied files stay where they are.",
                       path: settings.v.clipboardFolder, defaultURL: supportDir.appendingPathComponent("Clipboard"),
                       iCloudSub: "Drawer/Clipboard") { settings.v.clipboardFolder = $0 }
+            if settings.v.clipboardFolder != nil {
+                RowDivider()
+                Row("Keep pictures on this Mac", subtitle: "Copied pictures can be large. When this is on they stay out of the synced folder and don't use iCloud storage; your other Macs keep the text and links but not the pictures. Clearing history deletes the pictures either way.") {
+                    Toggle("", isOn: Binding(get: { settings.v.picturesStayOnThisMac },
+                                             set: { settings.v.picturesStayOnThisMac = $0; ClipboardFolder.relocatePictures(toLocal: $0) }))
+                        .toggleStyle(.switch).labelsHidden()
+                }
+            }
         }
         Section("Paste items") {
             Row("Clicking an item") {

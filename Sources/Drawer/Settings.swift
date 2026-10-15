@@ -249,6 +249,8 @@ struct SettingsValues: Codable, Equatable {
     // Storage. nil means the app's own folder.
     var notesFolder: String?
     var clipboardFolder: String?
+    /// With a synced clipboard folder: keep copied pictures on this Mac only, so they don't use iCloud storage.
+    var picturesStayOnThisMac = false
     var filesMode = FilesMode.reference
     var filesFolder: String?
 
