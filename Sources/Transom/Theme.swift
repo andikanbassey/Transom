@@ -60,6 +60,10 @@ enum Look {
     static let controlHeight: CGFloat = 34
     /// Space between a page heading (title, subtitle, chips) and the content under it, the same on every page.
     static let headerGap: CGFloat = 26
+    /// Between a page's heading row and its controls row (filters, Select, Search).
+    static let toolbarGap: CGFloat = 18
+    /// The search field on every Library and Settings page.
+    static let searchWidth: CGFloat = 260
     static let sidebarWidth: CGFloat = 230
 }
 
@@ -140,35 +144,48 @@ struct SidebarBrand: View {
     }
 }
 
-/// Page title with Craft's round "+" button beside it.
-struct PageHeader<Trailing: View>: View {
+/// The header of every Library and Settings page, so the same controls always sit in the same place:
+///
+///     [+]  Title                                  <- row 1: the primary action (if any) and the heading
+///     filters, or the selection bar    [Select] [Search <page>  ⌘K]   <- row 2: this page's own controls on the left, then Select and Search
+///
+/// The search field has one width, height, radius and ⌘K hint everywhere and stays on the right of row 2 even when a page has
+/// no filters. `onSelect` is nil when there is nothing to select (the Select button is left out; Search does not move).
+struct PageHeader<Filters: View>: View {
     let title: String
     var subtitle: String?
     var plus: (() -> Void)?
-    /// Pages with their own toolbar row put the search field there instead.
-    var showsSearch = true
-    @ViewBuilder var trailing: () -> Trailing
+    var onSelect: (() -> Void)?
+    @ViewBuilder var filters: () -> Filters
 
     var body: some View {
-        HStack(spacing: 14) {
-            if let plus {
-                Image(systemName: "plus").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.primary)
-                    .frame(width: 40, height: 40)
-                    .background(Look.card, in: Circle())
-                    .overlay(Circle().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.10), radius: 6, y: 2)
-                    .contentShape(Circle())
-                    .onTapGesture(perform: plus)
+        VStack(alignment: .leading, spacing: Look.toolbarGap) {
+            HStack(spacing: 14) {
+                if let plus {
+                    Image(systemName: "plus").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.primary)
+                        .frame(width: 40, height: 40)
+                        .background(Look.card, in: Circle())
+                        .overlay(Circle().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.10), radius: 6, y: 2)
+                        .contentShape(Circle())
+                        .onTapGesture(perform: plus)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(Look.pageTitle)
+                    if let subtitle { Text(subtitle).font(Look.body).foregroundStyle(.secondary) }
+                }
+                Spacer(minLength: 0)
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(Look.pageTitle)
-                if let subtitle { Text(subtitle).font(Look.body).foregroundStyle(.secondary) }
-            }
-            Spacer()
+            .frame(minHeight: 40)
             HStack(spacing: 10) {
-                trailing()
-                if showsSearch { SearchBarButton() }
+                filters()
+                Spacer(minLength: 12)
+                if let onSelect {
+                    Button(action: onSelect) { HeaderButtonLabel(title: "Select", symbol: "checkmark.circle") }.buttonStyle(.plain)
+                }
+                SearchBarButton()
             }
+            .frame(minHeight: Look.controlHeight)
         }
         .zIndex(10)
     }

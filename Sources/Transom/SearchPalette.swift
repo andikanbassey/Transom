@@ -17,7 +17,7 @@ private struct PaletteItem: Identifiable {
 
 /// Global search and jump: clipboard items, notes, files and app actions in one list, driven from the keyboard.
 struct SearchPalette: View {
-    /// The open search is exactly as wide as the field it opens from.
+    /// The open search is wider than the field it opens from (room for results); it grows to the left from the same corner.
     static let width: CGFloat = 340
     @ObservedObject var nav = MainNav.shared
     @ObservedObject var clipboard = AppModel.shared.clipboard
@@ -198,7 +198,7 @@ struct SearchPalette: View {
 
 /// The search field in each page header. Click it, or press ⌘K: the search opens from this corner and grows to the left.
 struct SearchBarButton: View {
-    var width: CGFloat = SearchPalette.width
+    var width: CGFloat = Look.searchWidth
     @ObservedObject var nav = MainNav.shared
     @StateObject private var hovering = Box(false)
 
