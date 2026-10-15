@@ -28,7 +28,7 @@ Each release is written as what you can now do.
 - Opening a second copy of Drawer asks which one to keep, so both don't capture.
 
 **Good to know**
-- SHA-256 of `Drawer.dmg`: `b8f72b28665a170a76108aa70dcf7b3563901650499e0010583b432bba6bc57a`
+- SHA-256 of `Drawer.dmg`: `bf0f0170b472e96f6b43e010128142f669651ecf1d7a9759ee78068ef598c40a`
 - Not notarized yet, so macOS asks you to confirm opening it the first time. See [Install](README.md#install).
 
 ## 0.5.1 (2026-10-13)
