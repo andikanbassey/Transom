@@ -5,12 +5,19 @@
 #   ./build.sh install  build, copy to /Applications and launch
 #   ./build.sh zip      build and write build/Transom.zip (and its SHA-256) for sharing
 #   ./build.sh dmg      build and write build/Transom.dmg (and its SHA-256) for sharing
+#   ./build.sh clean    delete .build and build (the compiler's caches grow to about 1 GB over time; the next build is a clean
+#                       one, about a minute). Worth doing after a Command Line Tools or macOS update.
 #   ./build.sh dev      fast debug build (a few seconds after the first), then launch; for trying changes. It is
 #                       unoptimised, so judge smoothness with a normal build, and never release a dev build.
 # To try a build without touching your real history, notes and settings, run it with TRANSOM_SUPPORT_DIR set to a
 # scratch folder (see CLAUDE.md).
 set -euo pipefail
 cd "$(dirname "$0")"
+if [ "${1:-}" = "clean" ]; then
+  rm -rf .build build
+  echo "Cleaned .build and build"
+  exit 0
+fi
 CONFIG=release
 [ "${1:-}" = "dev" ] && CONFIG=debug
 swift build -c "$CONFIG"

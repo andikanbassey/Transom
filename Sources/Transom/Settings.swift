@@ -240,6 +240,8 @@ struct SettingsValues: Codable, Equatable {
     var liquidGlass = true
     var drawerHeight = 300.0
     var showMenuBarIcon = true
+    /// Looks for a new release on GitHub about once a day. Nothing is installed without a click.
+    var checkForUpdates = true
 
     // Automation: transom:// links and AppleScript. Off until the user turns it on.
     var automationEnabled = false

@@ -10,6 +10,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let pauseItem = NSMenuItem(title: "Pause Clipboard Capture", action: #selector(togglePause), keyEquivalent: "")
     let headerItem = NSMenuItem()
     let activateItem = NSMenuItem(title: "", action: #selector(makeActive), keyEquivalent: "")
+    let updateItem = NSMenuItem(title: "", action: #selector(installUpdate), keyEquivalent: "")
+    var updateCheckTimer: Timer?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         // transom:// links. Registered this early so a link that launches Transom is not lost.
@@ -47,6 +49,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(headerItem)
         activateItem.target = self
         menu.addItem(activateItem)
+        updateItem.target = self
+        updateItem.image = NSImage(systemSymbolName: "arrow.down.circle.fill", accessibilityDescription: nil)
+        updateItem.isHidden = true
+        menu.addItem(updateItem)
         menu.addItem(.separator())
         func add(_ title: String, _ symbol: String, _ action: Selector, key: String = "") {
             let item = menu.addItem(withTitle: title, action: action, keyEquivalent: key)
@@ -66,6 +72,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let quit = menu.addItem(withTitle: "Quit \(Brand.name)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.image = NSImage(systemSymbolName: "power", accessibilityDescription: nil)
         statusItem.menu = menu
+
+        // A new release shows up in the menu; the check runs at launch and then every few hours (at most one request a day).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { Updater.shared.checkIfDue() }
+        updateCheckTimer = Timer.scheduledTimer(withTimeInterval: 4 * 3600, repeats: true) { _ in Updater.shared.checkIfDue() }
 
         if drawer.stayOpen { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.drawer.toggle() } }
         if Env["THEME_TEST"] != nil {
@@ -234,10 +244,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let version = Brand.version.isEmpty ? "" : " \(Brand.version)"
         headerItem.title = standby ? "\(Brand.name)\(version) · waiting, not capturing" : "\(Brand.name)\(version)"
         headerItem.toolTip = "Data: \(supportDir.path)"
+        updateItem.isHidden = Updater.shared.available == nil
+        if let r = Updater.shared.available { updateItem.title = "Update to \(Brand.name) \(r.version)…" }
         activateItem.title = "Make \(Brand.name) the Active Copy"
         activateItem.isHidden = !standby
         pauseItem.isEnabled = !standby
     }
+
+    @objc func installUpdate() { Updater.shared.install() }
 
     @objc func makeActive() {
         InstanceGuard.quit(InstanceGuard.others())

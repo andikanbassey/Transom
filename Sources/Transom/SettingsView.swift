@@ -346,6 +346,8 @@ struct SettingsView: View {
             RowDivider()
             Row("Show menu bar icon", subtitle: "If hidden, open Transom again from Applications to get back here.") { toggle(\.showMenuBarIcon) }
             RowDivider()
+            Row("Check for updates", subtitle: "Looks for a new version on GitHub about once a day. Nothing installs until you say so.") { toggle(\.checkForUpdates) }
+            RowDivider()
             Row("Sound effects") { toggle(\.sounds) }
         }
         Section("Data") {
@@ -366,6 +368,8 @@ struct SettingsView: View {
             RowDivider()
             Row("Why “Transom”?", subtitle: "A transom is the small window above a door: open it a little and you can see through without opening the door.") { EmptyView() }
             RowDivider()
+            UpdateRow()
+            RowDivider()
             Row("Source code", subtitle: "github.com/andikanbassey/Transom") {
                 Button("Open on GitHub") { NSWorkspace.shared.open(Brand.repoURL) }
             }
@@ -374,7 +378,7 @@ struct SettingsView: View {
                 Button("Open Issues") { NSWorkspace.shared.open(Brand.issuesURL) }
             }
             RowDivider()
-            Row("Privacy", subtitle: "No accounts and no analytics. What you copy never leaves your Mac, except in the iCloud Drive folders you choose to sync.") { EmptyView() }
+            Row("Privacy", subtitle: "No accounts and no analytics. What you copy never leaves your Mac, except in the iCloud Drive folders you choose to sync. The only other request is the update check to GitHub.") { EmptyView() }
             RowDivider()
             Row("License", subtitle: "MIT License. Free to use, copy and modify.") {
                 Button("View License…") { showLicense.value = true }

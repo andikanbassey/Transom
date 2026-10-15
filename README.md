@@ -67,6 +67,9 @@ Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clip
 - Dark, light or system theme, background opacity, height, camera-notch aware.
 - Menu bar icon with pause, settings and quit. First-launch welcome screen.
 
+### Updates
+- Transom checks GitHub for a new release about once a day and tells you in the menu bar menu (and once in a dialog per version). **Update Now** downloads the DMG, checks it against the published checksum, replaces the app in place and reopens it. Your settings and Accessibility permission carry over. Turn the check off in Settings › General, or use **Check for Updates** in About any time.
+
 ### iCloud
 - Pictures can be big: turn on **Keep pictures on this Mac** (Settings › Clipboard) and they never go into iCloud Drive. Other Macs keep the text and links, not the pictures. Clearing history deletes the pictures too.
 - Keep notes and files in iCloud Drive with one switch. macOS syncs the folders between your Macs.
@@ -116,7 +119,8 @@ You don't have to take my word for it:
 - **What it can see.** The clipboard (that is the point of the app). **Accessibility** is requested only if you want
   items to paste straight into the app you were using; without it, items are copied and you paste yourself.
 - **What it sends.** Nothing. Everything is stored on your Mac. The only network use is link previews (a setting you can
-  switch off, which downloads the linked page to get a title and image) and iCloud Drive sync if you turn it on, which
+  switch off, which downloads the linked page to get a title and image), a once-a-day check for a new version on GitHub
+  (Settings › General › Check for updates, also switchable; it sends nothing but a request for the latest release) and iCloud Drive sync if you turn it on, which
   macOS itself performs. There is no analytics or tracking. If that ever changes it will be disclosed and switchable.
 - **Where your data lives.** Plain files in `~/Library/Application Support/Transom/`, or the iCloud Drive folders you pick.
   See [Data](#data). Delete the app and that folder to remove everything.
@@ -156,6 +160,17 @@ To sign with a real certificate instead:
 security find-identity -v -p codesigning
 TRANSOM_SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" ./build.sh install
 ```
+
+### First launch
+
+A short welcome explains how Transom works and asks for the one permission it needs. You can change everything later in Settings.
+
+<p align="center">
+  <img src="docs/images/onboarding-1.png" width="24%" alt="Welcome">
+  <img src="docs/images/onboarding-2.png" width="24%" alt="How Transom works">
+  <img src="docs/images/onboarding-3.png" width="24%" alt="Quick start">
+  <img src="docs/images/onboarding-4.png" width="24%" alt="Paste to any app">
+</p>
 
 ## Permissions
 

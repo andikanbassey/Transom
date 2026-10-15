@@ -15,6 +15,9 @@ Each release is written as what you can now do.
 - Test and debug switches are now `TRANSOM_*` (`TRANSOM_SUPPORT_DIR`, `TRANSOM_SNAPSHOT` and so on); the old `DRAWER_*` names are still read.
 - The download is `Transom.dmg` (and `Transom.zip`) and the app inside is `Transom.app`.
 
+**Updates**
+- ✨ Transom now **checks for updates** (about once a day, switchable in Settings › General) and can **install them for you**: it downloads the release from GitHub, verifies its checksum, swaps the app and reopens. A new version shows in the menu bar menu and under Settings › General › About › Updates.
+
 ## 0.6 (2026-10-15)
 
 **Clipboard**
