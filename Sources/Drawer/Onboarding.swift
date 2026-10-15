@@ -116,19 +116,19 @@ struct OnboardingView: View {
     private var howItWorks: some View {
         VStack(spacing: 24) {
             icon
-            heading("How Drawer works", "Four things to know. Everything here can be changed later in Settings.")
+            heading("How Drawer works", "Four things to know. You can change all of it in Settings.")
             VStack(spacing: 0) {
                 feature("rectangle.topthird.inset.filled", "Open the drawer",
-                        "Scroll down at the very top edge of your screen, or press ⇧⌘V. Click outside, press esc or scroll up to close it.")
+                        "Scroll down on the menu bar, or press ⇧⌘V.")
                 RowDivider()
                 feature("doc.on.clipboard", "Clipboard history",
-                        "Everything you copy, with previews. Click to paste, drag to take an item with you, pin what you want to keep.")
+                        "Everything you copy, with previews. Click to paste.")
                 RowDivider()
                 feature("folder", "Quick Access and Notes",
-                        "Pin files and folders for one-click access, and jot notes. Notes are plain Markdown files you own.")
+                        "Pin files and folders, and jot notes in Markdown.")
                 RowDivider()
                 feature("icloud", "Sync across your Macs",
-                        "With iCloud on, notes, Quick Access and clipboard history stay in step both ways. Deleting something on one Mac removes it on the others. Needs iCloud Drive on each Mac.")
+                        "With iCloud Drive on, everything syncs across your Macs.")
             }
             .glassSurface(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .padding(.horizontal, 40)
@@ -137,16 +137,17 @@ struct OnboardingView: View {
     }
 
     private func feature(_ symbol: String, _ title: String, _ text: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 16) {
             Image(systemName: symbol).font(.system(size: 15, weight: .medium)).foregroundStyle(Color.accentColor)
-                .frame(width: 30, height: 30).background(Color.accentColor.opacity(0.16), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 13.5, weight: .semibold))
-                Text(text).font(.system(size: 12)).foregroundStyle(.white.opacity(0.62)).fixedSize(horizontal: false, vertical: true)
+                .frame(width: 32, height: 32).background(Color.accentColor.opacity(0.16), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.system(size: 14, weight: .semibold))
+                Text(text).font(.system(size: 13)).lineSpacing(4).foregroundStyle(.white.opacity(0.7))
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 18).padding(.vertical, 12)
+        .padding(.horizontal, 20).padding(.vertical, 16)
     }
 
     private var quickStart: some View {
