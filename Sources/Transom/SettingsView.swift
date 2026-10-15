@@ -19,9 +19,9 @@ enum Pane: String, CaseIterable, Identifiable {
         case .clipboard: "How long items are kept and how they paste."
         case .files: "How pinned files are stored and shown."
         case .notes: "Where notes live and how they open."
-        case .panels: "Choose what appears in the drawer."
-        case .privacy: "Control what Drawer is allowed to remember."
-        case .shortcuts: "Open and close the drawer your way."
+        case .panels: "Choose what appears in Transom."
+        case .privacy: "Control what Transom is allowed to remember."
+        case .shortcuts: "Open and close Transom your way."
         case .appearance: "Theme, glass and size."
         case .storage: "Where notes and files live, and syncing."
         case .advanced: "Fine-tuning and setup."
@@ -60,7 +60,7 @@ enum Pane: String, CaseIterable, Identifiable {
 /// Which settings pane is showing. Shared so the drawer can open a specific pane.
 final class SettingsNav: ObservableObject {
     static let shared = SettingsNav()
-    @Published var pane = Pane(rawValue: ProcessInfo.processInfo.environment["DRAWER_PANE"] ?? "") ?? .general
+    @Published var pane = Pane(rawValue: Env["PANE"] ?? "") ?? .general
 }
 
 // MARK: - Shared helpers
@@ -86,9 +86,9 @@ enum SettingsActions {
     /// Keep notes and files in iCloud Drive (synced by macOS), or go back to the app's own folders.
     static func setICloudStorage(_ on: Bool) {
         if on, let base = Settings.iCloudDrive {
-            Settings.shared.v.notesFolder = base.appendingPathComponent("Drawer/Notes").path
-            Settings.shared.v.filesFolder = base.appendingPathComponent("Drawer/Files").path
-            Settings.shared.v.clipboardFolder = base.appendingPathComponent("Drawer/Clipboard").path
+            Settings.shared.v.notesFolder = base.appendingPathComponent("Transom/Notes").path
+            Settings.shared.v.filesFolder = base.appendingPathComponent("Transom/Files").path
+            Settings.shared.v.clipboardFolder = base.appendingPathComponent("Transom/Clipboard").path
             Settings.shared.v.filesMode = .folder
         } else {
             Settings.shared.v.notesFolder = nil
@@ -189,7 +189,7 @@ struct RetentionSlider: View {
 struct AccessibilityRow: View {
     @StateObject private var trusted = Box(Paster.trusted)
     var body: some View {
-        Row("Accessibility access", subtitle: trusted.value ? "Drawer can paste into the app you are using."
+        Row("Accessibility access", subtitle: trusted.value ? "Transom can paste into the app you are using."
                                                             : "Needed to paste straight into other apps. Without it, items are only copied.") {
             if trusted.value {
                 Label("Allowed", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.system(size: 12))
@@ -211,7 +211,7 @@ struct FolderRow: View {
 
     private var current: String { path ?? defaultURL.path }
 
-    /// "iCloud Drive › Drawer › Notes" instead of the long Mobile Documents path.
+    /// "iCloud Drive › Transom › Notes" instead of the long Mobile Documents path.
     private var friendly: String {
         if let base = Settings.iCloudDrive?.path, current.hasPrefix(base) {
             let rest = current.dropFirst(base.count).split(separator: "/").joined(separator: " › ")
@@ -264,7 +264,7 @@ struct SettingsView: View {
     @StateObject private var showLicense = Box(false)
 
     private static let groups: [(String, [Pane])] = [
-        ("Drawer", [.general, .panels, .shortcuts, .appearance]),
+        ("Transom", [.general, .panels, .shortcuts, .appearance]),
         ("Content", [.clipboard, .files, .notes]),
         ("Data", [.privacy, .storage, .advanced]),
     ]
@@ -344,7 +344,7 @@ struct SettingsView: View {
         Section("App") {
             Row("Open at login") { Toggle("", isOn: SettingsActions.launchAtLogin).toggleStyle(.switch).labelsHidden() }
             RowDivider()
-            Row("Show menu bar icon", subtitle: "If hidden, open Drawer again from Applications to get back here.") { toggle(\.showMenuBarIcon) }
+            Row("Show menu bar icon", subtitle: "If hidden, open Transom again from Applications to get back here.") { toggle(\.showMenuBarIcon) }
             RowDivider()
             Row("Sound effects") { toggle(\.sounds) }
         }
@@ -362,9 +362,11 @@ struct SettingsView: View {
             }
         }
         Section("About \(Brand.name)") {
-            Row("\(Brand.name) \(Brand.version)", subtitle: "A clipboard history, quick notes and pinned files in a drawer that opens at the top of your screen. Everything stays on your Mac.") { EmptyView() }
+            Row("\(Brand.name) \(Brand.version)", subtitle: "A clipboard history, quick notes and pinned files in a window that opens at the top of your screen. Everything stays on your Mac.") { EmptyView() }
             RowDivider()
-            Row("Source code", subtitle: "github.com/andikanbassey/Drawer") {
+            Row("Why “Transom”?", subtitle: "A transom is the small window above a door: open it a little and you can see through without opening the door.") { EmptyView() }
+            RowDivider()
+            Row("Source code", subtitle: "github.com/andikanbassey/Transom") {
                 Button("Open on GitHub") { NSWorkspace.shared.open(Brand.repoURL) }
             }
             RowDivider()
@@ -378,7 +380,7 @@ struct SettingsView: View {
                 Button("View License…") { showLicense.value = true }
             }
             RowDivider()
-            Row("Third-party software", subtitle: "None. Drawer is built only with Apple's frameworks (AppKit and SwiftUI).") { EmptyView() }
+            Row("Third-party software", subtitle: "None. Transom is built only with Apple's frameworks (AppKit and SwiftUI).") { EmptyView() }
             RowDivider()
             Row("Made by Andikan Bassey", subtitle: Brand.copyright) { EmptyView() }
         }
@@ -398,7 +400,7 @@ struct SettingsView: View {
         Section("Storage") {
             FolderRow(title: "Clipboard folder", subtitle: "One Markdown file per month. Pictures copied from the screen are kept in an Images folder inside it; copied files stay where they are.",
                       path: settings.v.clipboardFolder, defaultURL: supportDir.appendingPathComponent("Clipboard"),
-                      iCloudSub: "Drawer/Clipboard") { settings.v.clipboardFolder = $0 }
+                      iCloudSub: "Transom/Clipboard") { settings.v.clipboardFolder = $0 }
             if settings.v.clipboardFolder != nil {
                 RowDivider()
                 Row("Keep pictures on this Mac", subtitle: "Copied pictures can be large. When this is on they stay out of the synced folder and don't use iCloud storage; your other Macs keep the text and links but not the pictures. Clearing history deletes the pictures either way.") {
@@ -419,7 +421,7 @@ struct SettingsView: View {
             }
             if settings.v.pasteMode != .clipboard { RowDivider(); AccessibilityRow() }
             RowDivider()
-            Row("Quick paste", subtitle: "Press the modifier with 1–9 while the drawer is open.") {
+            Row("Quick paste", subtitle: "Press the modifier with 1–9 while Transom is open.") {
                 HStack(spacing: 8) {
                     Picker("", selection: bind(\.quickPasteModifier)) {
                         ForEach(Mod.allCases, id: \.self) { Text($0.label).tag($0) }
@@ -443,7 +445,7 @@ struct SettingsView: View {
             if settings.v.filesMode == .folder {
                 RowDivider()
                 FolderRow(title: "Quick Access folder", subtitle: "Dropped files are copied here.", path: settings.v.filesFolder,
-                          defaultURL: supportDir.appendingPathComponent("Files"), iCloudSub: "Drawer/Files") { settings.v.filesFolder = $0 }
+                          defaultURL: supportDir.appendingPathComponent("Files"), iCloudSub: "Transom/Files") { settings.v.filesFolder = $0 }
             }
         }
         Section("Display") {
@@ -475,7 +477,7 @@ struct SettingsView: View {
     @ViewBuilder private var notes: some View {
         Section("Storage") {
             FolderRow(title: "Notes folder", subtitle: "Each note is a Markdown file.", path: settings.v.notesFolder,
-                      defaultURL: supportDir.appendingPathComponent("Notes"), iCloudSub: "Drawer/Notes") { settings.v.notesFolder = $0 }
+                      defaultURL: supportDir.appendingPathComponent("Notes"), iCloudSub: "Transom/Notes") { settings.v.notesFolder = $0 }
         }
         Section("Display") {
             Row("Open notes with", subtitle: "The list is your front page. “Last view” returns to the note you were editing.") {
@@ -496,7 +498,7 @@ struct SettingsView: View {
     }
 
     @ViewBuilder private var panels: some View {
-        Section("Show in the drawer") {
+        Section("Show in Transom") {
             Row("Clipboard", subtitle: "History of everything you copy.") { toggle(\.showClipboard) }
             RowDivider()
             Row("Quick Access", subtitle: "Pinned files and folders, one click away.") { toggle(\.showFiles) }
@@ -506,7 +508,7 @@ struct SettingsView: View {
         Section("Order") {
             PanelPad()
             RowDivider()
-            Row("Sizes", subtitle: "Drag a panel above to move it. Drag a divider in the drawer to resize panels, or its bottom edge to change the height.") {
+            Row("Sizes", subtitle: "Drag a panel above to move it. Drag a divider to resize panels, or the bottom edge to change the height.") {
                 Button("Reset Sizes") {
                     settings.v.panelWeights = SettingsValues().panelWeights
                     settings.v.panelWeightsList = SettingsValues().panelWeightsList
@@ -524,7 +526,7 @@ struct SettingsView: View {
             RowDivider()
             Row("Generate link previews", subtitle: "Downloads the page for a title and image. May trigger one-time or analytics-sensitive links.") { toggle(\.linkPreviews) }
             RowDivider()
-            Row("Show during screen sharing", subtitle: "Let the drawer appear to others when you share your screen.") { toggle(\.showDuringScreenSharing) }
+            Row("Show during screen sharing", subtitle: "Let Transom appear to others when you share your screen.") { toggle(\.showDuringScreenSharing) }
         }
         Section("Record clipboard from") {
             Row("Apps") {
@@ -539,10 +541,10 @@ struct SettingsView: View {
     }
 
     @ViewBuilder private var shortcuts: some View {
-        Section("Open the drawer") {
-            Row("Scroll down at the top of the screen", subtitle: "Swipe up over the top of the drawer to close it.") { toggle(\.scrollOpen) }
+        Section("Open Transom") {
+            Row("Scroll down at the top of the screen", subtitle: "Swipe up over the top of Transom to close it.") { toggle(\.scrollOpen) }
             RowDivider()
-            Row("Where scrolling opens it", subtitle: "With the menu bar showing, scrolling anywhere along it opens the drawer. A hidden menu bar only reacts at the very top edge.") {
+            Row("Where scrolling opens it", subtitle: "With the menu bar showing, scrolling anywhere along it opens Transom. A hidden menu bar only reacts at the very top edge.") {
                 Picker("", selection: bind(\.scrollZone)) {
                     ForEach(ScrollZone.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
@@ -574,7 +576,7 @@ struct SettingsView: View {
             Row("Or just press") { HotKeyField() }
         }
         Section("Closing") {
-            Row("Close the drawer", subtitle: "Clicking outside always closes it. This also closes it on its own after the pointer has left.") {
+            Row("Close Transom", subtitle: "Clicking outside always closes it. This also closes it on its own after the pointer has left.") {
                 Picker("", selection: bind(\.autoHideSeconds)) {
                     Text("Only on click").tag(0.0)
                     Text("After 5 seconds").tag(5.0)
@@ -588,7 +590,7 @@ struct SettingsView: View {
 
     @ViewBuilder private var appearance: some View {
         Section("Items") {
-            Row("Show everything as", subtitle: "Cards show a preview; lists are compact. Custom chooses for each. The drawer's files and notes keep their own layout.") {
+            Row("Show everything as", subtitle: "Cards show a preview; lists are compact. Custom chooses for each. Transom's files and notes keep their own layout.") {
                 Picker("", selection: Binding(get: { settings.v.itemsMode }, set: { mode in
                     settings.v.itemsMode = mode
                     switch mode {
@@ -620,7 +622,7 @@ struct SettingsView: View {
             }
             if #available(macOS 26.0, *) {
                 RowDivider()
-                Row("Liquid Glass", subtitle: "Use the system glass material for the drawer.") { toggle(\.liquidGlass) }
+                Row("Liquid Glass", subtitle: "Use the system glass material for Transom.") { toggle(\.liquidGlass) }
             }
             RowDivider()
             Row("Background opacity", subtitle: "Lower values let the wallpaper show through.") {
@@ -630,7 +632,7 @@ struct SettingsView: View {
                 }
             }
             RowDivider()
-            Row("Drawer height") {
+            Row("Height") {
                 HStack {
                     Slider(value: bind(\.activeHeight), in: settings.v.minimumHeight...700).frame(width: 160)
                     Text("\(Int(settings.v.activeHeight))").monospacedDigit().foregroundStyle(.secondary).frame(width: 40)
@@ -655,12 +657,12 @@ struct SettingsView: View {
             Row("Invert for Apple trackpad and Magic Mouse", subtitle: "Applies to devices that report touch gestures. Separate from the setting above.") { toggle(\.invertTrackpadScroll) }
         }
         Section("Automation") {
-            Row("Allow automation", subtitle: "Let other apps and scripts control Drawer with drawer:// links and AppleScript. Off by default.") { toggle(\.automationEnabled) }
+            Row("Allow automation", subtitle: "Let other apps and scripts control Transom with transom:// links and AppleScript. Off by default.") { toggle(\.automationEnabled) }
             if settings.v.automationEnabled {
                 RowDivider()
                 Row("Trusted apps", subtitle: settings.v.automationTrusted.isEmpty
                     ? "No app is trusted yet. The first time an app asks to copy or paste, you will be asked."
-                    : "These apps can copy and paste through Drawer without asking.") { EmptyView() }
+                    : "These apps can copy and paste through Transom without asking.") { EmptyView() }
                 ForEach(settings.v.automationTrusted) { app in
                     RowDivider()
                     Row(app.name, subtitle: app.bundleID) {
@@ -670,9 +672,9 @@ struct SettingsView: View {
                 RowDivider()
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Examples").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
-                    Text("open \"drawer://open\"\nopen \"drawer://search?q=invoice\"\nopen \"drawer://pause\"\nopen \"drawer://paste?index=1&plain=1\"\nosascript -e 'tell application \"Drawer\" to get clip text 1'")
+                    Text("open \"transom://open\"\nopen \"transom://search?q=invoice\"\nopen \"transom://pause\"\nopen \"transom://paste?index=1&plain=1\"\nosascript -e 'tell application \"Transom\" to get clip text 1'")
                         .font(.system(size: 11.5, design: .monospaced)).foregroundStyle(.secondary).textSelection(.enabled)
-                    Text("Item 1 is the newest. Links that only change Drawer always work once this is on; copying and pasting need a trusted app. Clipboard content can be read out only with AppleScript.")
+                    Text("Item 1 is the newest. Links that only change Transom always work once this is on; copying and pasting need a trusted app. Clipboard content can be read out only with AppleScript.")
                         .font(Look.meta).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 13)
@@ -680,7 +682,7 @@ struct SettingsView: View {
         }
         Section("Capture log") {
             VStack(alignment: .leading, spacing: 8) {
-                Text("What Drawer saw on the clipboard and what it did with it. Useful if something you copied did not show up.")
+                Text("What Transom saw on the clipboard and what it did with it. Useful if something you copied did not show up.")
                     .font(Look.meta).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 if captureLog.entries.isEmpty {
                     Text("Nothing copied yet this session.").font(Look.meta).foregroundStyle(.tertiary)

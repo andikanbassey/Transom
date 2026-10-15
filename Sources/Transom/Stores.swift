@@ -2,13 +2,15 @@ import AppKit
 import SwiftUI
 import Combine
 
-/// Where settings and app data live. `DRAWER_SUPPORT_DIR=/some/folder` points a run at a scratch folder instead, so a
+/// Where settings and app data live. `TRANSOM_SUPPORT_DIR=/some/folder` points a run at a scratch folder instead, so a
 /// test build never touches the real history, notes or settings.
 let supportDir: URL = {
     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-    var url = base.appendingPathComponent("Drawer", isDirectory: true)
-    if let override = ProcessInfo.processInfo.environment["DRAWER_SUPPORT_DIR"], !override.isEmpty {
+    var url = base.appendingPathComponent("Transom", isDirectory: true)
+    if let override = Env["SUPPORT_DIR"], !override.isEmpty {
         url = URL(fileURLWithPath: override, isDirectory: true)
+    } else {
+        url = LegacyData.moveIfNeeded(base: base, into: url)
     }
     try? FileManager.default.createDirectory(at: url.appendingPathComponent("images"), withIntermediateDirectories: true)
     return url
@@ -482,7 +484,7 @@ final class AppModel {
     let clipboard = ClipboardStore()
     let files = FilesStore()
     let notes = NotesStore()
-    let layout = DrawerLayout()
+    let layout = TransomLayout()
     var hideDrawer: () -> Void = {}
     var hideDrawerThen: (@escaping () -> Void) -> Void = { $0() }
     var openSettings: (Pane?) -> Void = { _ in }
@@ -497,7 +499,7 @@ final class AppModel {
         guard let d = dragged, Date().timeIntervalSince(d.at) < 120 else { return nil }
         return d.clip
     }
-    /// Another Drawer is running and this one chose to wait: no clipboard capture, shortcut or edge swipe.
+    /// Another Transom is running and this one chose to wait: no clipboard capture, shortcut or edge swipe.
     var standby = false
     /// True while an options popover is open, so the auto-close timer does not run under it.
     var popoverOpen = false
@@ -531,7 +533,7 @@ final class AppModel {
     }
 }
 
-final class DrawerLayout: ObservableObject {
+final class TransomLayout: ObservableObject {
     /// Space reserved at the top so content clears the menu bar / camera notch.
     @Published var topInset: CGFloat = 14
 }

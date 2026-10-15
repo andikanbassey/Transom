@@ -1,6 +1,6 @@
 import AppKit
 
-/// Two copies of Drawer (one in Applications and one somewhere else, say) watch the same shortcut, the same screen edge
+/// Two copies of Transom (one in Applications and one somewhere else, say) watch the same shortcut, the same screen edge
 /// and the same clipboard, so running two at once makes both open the drawer and both save every copy. When a second
 /// one starts it asks which to keep. "Keep Both" leaves this one in standby: it does not capture the clipboard or answer the
 /// shortcut and edge until it is made the active one.
@@ -14,21 +14,20 @@ enum InstanceGuard {
     }
 
     private static func names(_ apps: [NSRunningApplication]) -> String {
-        let n = Array(Set(apps.map { $0.localizedName ?? "Drawer" })).sorted()
+        let n = Array(Set(apps.map { $0.localizedName ?? "Transom" })).sorted()
         return n.joined(separator: " and ")
     }
 
-    /// Asks what to do when another Drawer is already running. Returns true if this one should carry on active.
+    /// Asks what to do when another Transom is already running. Returns true if this one should carry on active.
     static func resolveAtLaunch() -> Bool {
         // Debug runs (snapshots, tests) never stop to ask.
-        let env = ProcessInfo.processInfo.environment
-        if env.keys.contains(where: { $0.hasPrefix("DRAWER_") && $0 != "DRAWER_GUARD_CHOICE" }) { return true }
+        if Env.hasTestSwitch { return true }
         let running = others()
         guard !running.isEmpty else { return true }
         let other = names(running)
         let sameName = other == Brand.name
-        // Debug aid: DRAWER_GUARD_CHOICE=use-this | use-other | keep-both answers the question without showing it.
-        if let choice = env["DRAWER_GUARD_CHOICE"] {
+        // Debug aid: TRANSOM_GUARD_CHOICE=use-this | use-other | keep-both answers the question without showing it.
+        if let choice = Env["GUARD_CHOICE"] {
             switch choice {
             case "use-this": quit(running); return true
             case "use-other": NSApp.terminate(nil); return false

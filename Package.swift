@@ -2,9 +2,9 @@
 import PackageDescription
 
 let package = Package(
-    name: "Drawer",
+    name: "Transom",
     platforms: [.macOS(.v14)],
     targets: [
-        .executableTarget(name: "Drawer", path: "Sources/Drawer")
+        .executableTarget(name: "Transom", path: "Sources/Transom")
     ]
 )

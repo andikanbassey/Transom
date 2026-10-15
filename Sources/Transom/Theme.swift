@@ -6,7 +6,7 @@ import AppKit
 extension View {
     /// Liquid Glass on macOS 26 and later (when enabled), a blurred material elsewhere.
     @ViewBuilder func glassSurface<S: Shape>(_ shape: S, tint: Color? = nil, interactive: Bool = false, enabled: Bool = true) -> some View {
-        if enabled, ProcessInfo.processInfo.environment["DRAWER_NOGLASS"] == nil, #available(macOS 26.0, *) {
+        if enabled, Env["NOGLASS"] == nil, #available(macOS 26.0, *) {
             self.glassEffect(.regular.tint(tint).interactive(interactive), in: shape)
         } else {
             self.background(.ultraThinMaterial, in: shape)
@@ -134,7 +134,7 @@ struct SidebarBrand: View {
     var body: some View {
         HStack(spacing: 9) {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 28, height: 28)
-            Text("Drawer").font(.system(size: 16, weight: .semibold))
+            Text("Transom").font(.system(size: 16, weight: .semibold))
         }
         .padding(.horizontal, 10).padding(.top, 40).padding(.bottom, 16)
     }

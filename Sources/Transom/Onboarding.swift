@@ -27,7 +27,7 @@ final class OnboardingWindow {
 
 struct OnboardingView: View {
     let finish: () -> Void
-    @StateObject private var step = Box(Int(ProcessInfo.processInfo.environment["DRAWER_STEP"] ?? "") ?? 0)
+    @StateObject private var step = Box(Int(Env["STEP"] ?? "") ?? 0)
     @ObservedObject var settings = Settings.shared
 
     var body: some View {
@@ -106,7 +106,10 @@ struct OnboardingView: View {
         VStack(spacing: 30) {
             icon
             heading("Your clipboard,\nalways within reach",
-                    "Drawer remembers what you copy and keeps notes and files tucked at the top of your screen. Scroll there to open it.")
+                    "Transom remembers what you copy and keeps notes and files tucked at the top of your screen. Scroll there to open it.")
+            Text("A transom is the small window above a door. Open it a little, and you can see what is on the other side.")
+                .font(.system(size: 13)).italic().foregroundStyle(.white.opacity(0.5))
+                .multilineTextAlignment(.center).lineSpacing(2).frame(maxWidth: 360)
             primary("Get Started") { step.value = 1 }
         }
     }
@@ -116,9 +119,9 @@ struct OnboardingView: View {
     private var howItWorks: some View {
         VStack(spacing: 24) {
             icon
-            heading("How Drawer works", "Four things to know. You can change all of it in Settings.")
+            heading("How Transom works", "Four things to know. You can change all of it in Settings.")
             VStack(spacing: 0) {
-                feature("rectangle.topthird.inset.filled", "Open the drawer",
+                feature("rectangle.topthird.inset.filled", "Open Transom",
                         "Scroll down on the menu bar, or press ⇧⌘V.")
                 RowDivider()
                 feature("doc.on.clipboard", "Clipboard history",
@@ -163,7 +166,7 @@ struct OnboardingView: View {
                     ICloudToggle()
                 }
                 RowDivider()
-                row("Activation shortcut", "Open Drawer from any app") { HotKeyField() }
+                row("Activation shortcut", "Open Transom from any app") { HotKeyField() }
                 RowDivider()
                 VStack(alignment: .leading, spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
@@ -196,7 +199,7 @@ struct OnboardingView: View {
         VStack(spacing: 28) {
             icon
             heading("Paste to any app",
-                    "To paste straight into the app you're using, allow Drawer in Privacy & Security › Accessibility. Without it, items are copied and you paste them yourself.")
+                    "To paste straight into the app you're using, allow Transom in Privacy & Security › Accessibility. Without it, items are copied and you paste them yourself.")
             HStack(spacing: 12) {
                 secondary("Not Now", action: finish)
                 primary("Open System Settings") {

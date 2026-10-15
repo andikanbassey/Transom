@@ -11,7 +11,7 @@ final class MainNav: ObservableObject {
     @Published var tab = MainTab.library
     @Published var section = DesktopSection.all
     @Published var paletteOpen = false
-    /// A search handed in from outside (drawer://search), picked up when the search opens.
+    /// A search handed in from outside (transom://search), picked up when the search opens.
     var pendingQuery: String?
     /// The last few things searched for, shown under "Earlier" when the search opens.
     @Published var recents: [String] = UserDefaults.standard.stringArray(forKey: "recentSearches") ?? []
@@ -51,7 +51,7 @@ final class SettingsWindow {
     static let shared = SettingsWindow()
     private var window: NSWindow?
     private var themeWatcher: AnyCancellable?
-    /// For the DRAWER_THEME_TEST debug aid.
+    /// For the TRANSOM_THEME_TEST debug aid.
     var appearanceName: String { window?.appearance?.name.rawValue ?? "system" }
 
     func show(pane: Pane? = nil, tab: MainTab = .settings) {
@@ -246,7 +246,7 @@ struct DesktopView: View {
         }
         .onAppear {
             clipboard.expanded = nil
-            if ProcessInfo.processInfo.environment["DRAWER_SELECT"] != nil {
+            if Env["SELECT"] != nil {
                 selecting.value = true
                 picked.value = Set(visibleIDs().prefix(2))
             }
