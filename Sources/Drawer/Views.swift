@@ -481,7 +481,7 @@ struct FilterPills: View {
     @ObservedObject var store: ClipboardStore
     var window = false
 
-    private func symbol(_ f: Category.Filter) -> String {
+    static func symbol(_ f: Category.Filter) -> String {
         switch f {
         case .all: "square.grid.2x2"
         case .text: "text.alignleft"
@@ -497,7 +497,7 @@ struct FilterPills: View {
         if window {
             HStack(spacing: 8) {
                 ForEach(Category.Filter.allCases, id: \.self) { f in
-                    Chip(title: f.rawValue, symbol: symbol(f), selected: store.filter == f) { store.filter = f }
+                    Chip(title: f.rawValue, symbol: Self.symbol(f), selected: store.filter == f) { store.filter = f }
                 }
             }
         } else {

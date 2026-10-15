@@ -177,6 +177,8 @@ final class ClipboardStore: ObservableObject {
     @Published var searching = false
     @Published var pinnedOnly = false
     @Published var filter = Category.Filter.all
+    /// Library only: show clips copied from one app (see `appKey`). Nil shows every app.
+    @Published var appFilter: String?
     /// Narrow the Library's clipboard page to a window of time.
     @Published var time = TimeFilter.any
     /// The item the keyboard has selected in the drawer (arrows move it, Return pastes it).
@@ -637,6 +639,24 @@ enum Thumbs {
         let s = "\(w) × \(h)"
         dimensionCache[url.path] = s
         return s
+    }
+}
+
+extension ClipboardStore {
+    /// What identifies the app a clip came from: its bundle id, or its name when there is none.
+    static func appKey(_ clip: Clip) -> String? { clip.sourceBundleID ?? clip.sourceApp }
+
+    /// The apps in the history, most used first, with a name, an icon key and a count, for the Library's App filter.
+    var appsInHistory: [(key: String, name: String, bundle: String?, count: Int)] {
+        var seen: [String: (name: String, bundle: String?, count: Int)] = [:]
+        for c in clips {
+            guard let key = Self.appKey(c) else { continue }
+            var entry = seen[key] ?? (c.sourceApp ?? key, c.sourceBundleID, 0)
+            entry.count += 1
+            seen[key] = entry
+        }
+        return seen.map { (key: $0.key, name: $0.value.name, bundle: $0.value.bundle, count: $0.value.count) }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 }
 

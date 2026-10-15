@@ -146,6 +146,8 @@ struct PageHeader<Trailing: View>: View {
     let title: String
     var subtitle: String?
     var plus: (() -> Void)?
+    /// Pages with their own toolbar row put the search field there instead.
+    var showsSearch = true
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
@@ -166,7 +168,7 @@ struct PageHeader<Trailing: View>: View {
             Spacer()
             HStack(spacing: 10) {
                 trailing()
-                SearchBarButton()
+                if showsSearch { SearchBarButton() }
             }
         }
         .zIndex(10)

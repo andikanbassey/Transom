@@ -198,6 +198,7 @@ struct SearchPalette: View {
 
 /// The search field in each page header. Click it, or press ⌘K: the search opens from this corner and grows to the left.
 struct SearchBarButton: View {
+    var width: CGFloat = SearchPalette.width
     @ObservedObject var nav = MainNav.shared
     @StateObject private var hovering = Box(false)
 
@@ -209,7 +210,7 @@ struct SearchBarButton: View {
             Text("⌘K").font(.system(size: 11, weight: .medium, design: .rounded)).foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 12)
-        .frame(width: SearchPalette.width, height: 34)
+        .frame(width: width, height: Look.controlHeight)
         .background(Look.card.opacity(hovering.value ? 1 : 0.85), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.09), lineWidth: 1))
         .contentShape(Rectangle())
