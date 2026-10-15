@@ -13,6 +13,12 @@ enum ClipboardFolder {
         try? FileManager.default.createDirectory(at: images, withIntermediateDirectories: true)
     }
 
+    /// False for a file iCloud has moved off this Mac, so reading it would wait for a download.
+    static func isOnThisMac(_ url: URL) -> Bool {
+        guard let status = try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus else { return true }
+        return status == .current
+    }
+
     static func monthFiles() -> [URL] {
         let items = (try? FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
         return items.filter { $0.pathExtension == "md" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
