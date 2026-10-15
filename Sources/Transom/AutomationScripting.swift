@@ -1,7 +1,7 @@
 import AppKit
 
-/// AppleScript commands (see Drawer.sdef). They run on the main thread and go through Automation, so the same rules apply.
-class DrawerScriptCommand: NSScriptCommand {
+/// AppleScript commands (see Transom.sdef). They run on the main thread and go through Automation, so the same rules apply.
+class TransomScriptCommand: NSScriptCommand {
     func run() throws -> Any? { nil }
 
     override func performDefaultImplementation() -> Any? {
@@ -22,13 +22,13 @@ class DrawerScriptCommand: NSScriptCommand {
     func perform(_ action: AutomationAction) throws -> Any? { try Automation.shared.perform(action, source: source); return nil }
 }
 
-@objc(DrawerClipCountCommand) final class DrawerClipCountCommand: DrawerScriptCommand {
+@objc(TransomClipCountCommand) final class TransomClipCountCommand: TransomScriptCommand {
     override func run() throws -> Any? {
         guard Automation.shared.enabled else { throw AutomationError.disabled }
         return AppModel.shared.clipboard.clips.count
     }
 }
-@objc(DrawerGetClipTextCommand) final class DrawerGetClipTextCommand: DrawerScriptCommand {
+@objc(TransomGetClipTextCommand) final class TransomGetClipTextCommand: TransomScriptCommand {
     override func run() throws -> Any? {
         guard Automation.shared.enabled else { throw AutomationError.disabled }
         let clip = try Automation.shared.item(number)
@@ -39,27 +39,27 @@ class DrawerScriptCommand: NSScriptCommand {
         }
     }
 }
-@objc(DrawerCopyClipCommand) final class DrawerCopyClipCommand: DrawerScriptCommand {
+@objc(TransomCopyClipCommand) final class TransomCopyClipCommand: TransomScriptCommand {
     override func run() throws -> Any? { try perform(.copy(number, plain: plain)) }
 }
-@objc(DrawerPasteClipCommand) final class DrawerPasteClipCommand: DrawerScriptCommand {
+@objc(TransomPasteClipCommand) final class TransomPasteClipCommand: TransomScriptCommand {
     override func run() throws -> Any? { try perform(.paste(number, plain: plain)) }
 }
-@objc(DrawerPinClipCommand) final class DrawerPinClipCommand: DrawerScriptCommand {
+@objc(TransomPinClipCommand) final class TransomPinClipCommand: TransomScriptCommand {
     override func run() throws -> Any? { try perform(.pin(number)) }
 }
-@objc(DrawerPauseCommand) final class DrawerPauseCommand: DrawerScriptCommand {
+@objc(TransomPauseCommand) final class TransomPauseCommand: TransomScriptCommand {
     override func run() throws -> Any? { try perform(.pause) }
 }
-@objc(DrawerResumeCommand) final class DrawerResumeCommand: DrawerScriptCommand {
+@objc(TransomResumeCommand) final class TransomResumeCommand: TransomScriptCommand {
     override func run() throws -> Any? { try perform(.resume) }
 }
-@objc(DrawerNewNoteCommand) final class DrawerNewNoteCommand: DrawerScriptCommand {
+@objc(TransomNewNoteCommand) final class TransomNewNoteCommand: TransomScriptCommand {
     override func run() throws -> Any? { try perform(.newNote("\(directParameter ?? "")")) }
 }
-@objc(DrawerSearchCommand) final class DrawerSearchCommand: DrawerScriptCommand {
+@objc(TransomSearchCommand) final class TransomSearchCommand: TransomScriptCommand {
     override func run() throws -> Any? { try perform(.search("\(directParameter ?? "")")) }
 }
-@objc(DrawerOpenCommand) final class DrawerOpenCommand: DrawerScriptCommand {
+@objc(TransomOpenCommand) final class TransomOpenCommand: TransomScriptCommand {
     override func run() throws -> Any? { try perform(.open) }
 }

@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
-<dictionary title="Drawer Terminology">
-  <suite name="Drawer Suite" code="DrwS" description="Control Drawer's clipboard history. Needs Automation turned on in Drawer's Settings.">
+<dictionary title="Transom Terminology">
+  <suite name="Transom Suite" code="DrwS" description="Control Transom's clipboard history. Needs Automation turned on in Transom's Settings.">
 
     <command name="clip count" code="DrwSCCnt" description="How many items are in the clipboard history.">
-      <cocoa class="DrawerClipCountCommand"/>
+      <cocoa class="TransomClipCountCommand"/>
       <result type="integer"/>
     </command>
 
     <command name="get clip text" code="DrwSGTxt" description="The text of a clipboard item. Item 1 is the newest.">
-      <cocoa class="DrawerGetClipTextCommand"/>
+      <cocoa class="TransomGetClipTextCommand"/>
       <direct-parameter type="integer" description="Item number. 1 is the newest."/>
       <result type="text"/>
     </command>
 
     <command name="copy clip" code="DrwSCopy" description="Put a clipboard item back on the system clipboard.">
-      <cocoa class="DrawerCopyClipCommand"/>
+      <cocoa class="TransomCopyClipCommand"/>
       <direct-parameter type="integer" description="Item number. 1 is the newest."/>
       <parameter name="plain" code="Plin" type="boolean" optional="yes" description="Copy as plain text, without formatting.">
         <cocoa key="plain"/>
@@ -23,7 +23,7 @@
     </command>
 
     <command name="paste clip" code="DrwSPast" description="Paste a clipboard item into the app in front.">
-      <cocoa class="DrawerPasteClipCommand"/>
+      <cocoa class="TransomPasteClipCommand"/>
       <direct-parameter type="integer" description="Item number. 1 is the newest."/>
       <parameter name="plain" code="Plin" type="boolean" optional="yes" description="Paste as plain text, without formatting.">
         <cocoa key="plain"/>
@@ -31,30 +31,30 @@
     </command>
 
     <command name="pin clip" code="DrwSPin_" description="Pin a clipboard item so it is kept.">
-      <cocoa class="DrawerPinClipCommand"/>
+      <cocoa class="TransomPinClipCommand"/>
       <direct-parameter type="integer" description="Item number. 1 is the newest."/>
     </command>
 
     <command name="pause capture" code="DrwSPaus" description="Stop recording new clipboard items.">
-      <cocoa class="DrawerPauseCommand"/>
+      <cocoa class="TransomPauseCommand"/>
     </command>
 
     <command name="resume capture" code="DrwSResm" description="Start recording clipboard items again.">
-      <cocoa class="DrawerResumeCommand"/>
+      <cocoa class="TransomResumeCommand"/>
     </command>
 
     <command name="new note" code="DrwSNote" description="Create a note with some text.">
-      <cocoa class="DrawerNewNoteCommand"/>
+      <cocoa class="TransomNewNoteCommand"/>
       <direct-parameter type="text" description="The note's text."/>
     </command>
 
     <command name="search clips" code="DrwSSrch" description="Open the Library on the clipboard with a search.">
-      <cocoa class="DrawerSearchCommand"/>
+      <cocoa class="TransomSearchCommand"/>
       <direct-parameter type="text" description="What to search for."/>
     </command>
 
-    <command name="open drawer" code="DrwSOpen" description="Show the drawer.">
-      <cocoa class="DrawerOpenCommand"/>
+    <command name="open transom" code="DrwSOpen" description="Show Transom.">
+      <cocoa class="TransomOpenCommand"/>
     </command>
   </suite>
 </dictionary>

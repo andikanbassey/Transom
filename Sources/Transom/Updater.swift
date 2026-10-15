@@ -42,22 +42,22 @@ final class Updater: ObservableObject {
     /// Called at launch and then every few hours: asks GitHub at most once a day, and only if the user allows it.
     func checkIfDue() {
         guard Settings.shared.v.checkForUpdates, !AppModel.shared.standby else { return }
-        if Self.isTestRun { if ProcessInfo.processInfo.environment["DRAWER_UPDATE_FILE"] != nil { check(manual: true) }; return }
+        if Self.isTestRun { if Env["UPDATE_FILE"] != nil { check(manual: true) }; return }
         if Date().timeIntervalSince(lastAutoCheck) > 24 * 3600 { check(manual: false) }
     }
 
-    private static var isTestRun: Bool { ProcessInfo.processInfo.environment.keys.contains { $0.hasPrefix("DRAWER_") } }
+    private static var isTestRun: Bool { Env.hasTestSwitch }
 
     func check(manual: Bool) {
         switch state { case .checking, .downloading, .installing: return; default: break }
-        // Debug aid: DRAWER_UPDATE_FILE=/path/Drawer.dmg offers that file as version 99 (and DRAWER_UPDATE_INSTALL=1 installs it).
-        if let file = ProcessInfo.processInfo.environment["DRAWER_UPDATE_FILE"] {
+        // Debug aid: TRANSOM_UPDATE_FILE=/path/Transom.dmg offers that file as version 99 (and TRANSOM_UPDATE_INSTALL=1 installs it).
+        if let file = Env["UPDATE_FILE"] {
             state = .available(Release(version: "99", notes: "", dmg: URL(fileURLWithPath: file), checksum: nil, page: Brand.repoURL))
-            if ProcessInfo.processInfo.environment["DRAWER_UPDATE_INSTALL"] != nil { install() }
+            if Env["UPDATE_INSTALL"] != nil { install() }
             return
         }
         state = .checking
-        var request = URLRequest(url: URL(string: "https://api.github.com/repos/andikanbassey/Drawer/releases/latest")!)
+        var request = URLRequest(url: URL(string: "https://api.github.com/repos/andikanbassey/Transom/releases/latest")!)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("\(Brand.name)/\(Brand.version)", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 15
@@ -86,9 +86,9 @@ final class Updater: ObservableObject {
         func asset(_ name: String) -> URL? {
             assets.first { $0["name"] as? String == name }.flatMap { ($0["browser_download_url"] as? String).flatMap(URL.init(string:)) }
         }
-        guard let dmg = asset("Drawer.dmg") else { return nil }
+        guard let dmg = asset("Transom.dmg") else { return nil }
         let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
-        return Release(version: version, notes: json["body"] as? String ?? "", dmg: dmg, checksum: asset("Drawer.dmg.sha256"), page: page)
+        return Release(version: version, notes: json["body"] as? String ?? "", dmg: dmg, checksum: asset("Transom.dmg.sha256"), page: page)
     }
 
     static func isNewer(_ a: String, than b: String) -> Bool {
@@ -106,7 +106,7 @@ final class Updater: ObservableObject {
         promptedVersion = r.version
         let alert = NSAlert()
         alert.messageText = "\(Brand.name) \(r.version) is available"
-        alert.informativeText = "You have \(Brand.version). Drawer can download and install the update, then reopen."
+        alert.informativeText = "You have \(Brand.version). Transom can download and install the update, then reopen."
         alert.addButton(withTitle: "Update Now")
         alert.addButton(withTitle: "Later")
         NSApp.activate(ignoringOtherApps: true)
@@ -124,12 +124,12 @@ final class Updater: ObservableObject {
             return
         }
         state = .downloading(0)
-        let work = FileManager.default.temporaryDirectory.appendingPathComponent("drawer-update-\(UUID().uuidString)")
+        let work = FileManager.default.temporaryDirectory.appendingPathComponent("transom-update-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
         Task.detached(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             do {
-                let dmg = try await self.download(release.dmg, to: work.appendingPathComponent("Drawer.dmg"))
+                let dmg = try await self.download(release.dmg, to: work.appendingPathComponent("Transom.dmg"))
                 if let sum = release.checksum { try await self.verify(dmg, against: sum) }
                 await MainActor.run { self.state = .installing }
                 let staged = try self.stage(dmg, in: work)
@@ -174,14 +174,14 @@ final class Updater: ObservableObject {
         guard actual == expected else { throw UpdateError(message: "The download didn't match its checksum, so it was not installed.") }
     }
 
-    /// Mounts the DMG, copies the app out to a staging folder and checks that it really is Drawer and is intact.
+    /// Mounts the DMG, copies the app out to a staging folder and checks that it really is Transom and is intact.
     private func stage(_ dmg: URL, in work: URL) throws -> URL {
         let mount = work.appendingPathComponent("mount")
         try FileManager.default.createDirectory(at: mount, withIntermediateDirectories: true)
         try Self.run("/usr/bin/hdiutil", ["attach", "-nobrowse", "-readonly", "-noverify", "-mountpoint", mount.path, dmg.path])
         defer { _ = try? Self.run("/usr/bin/hdiutil", ["detach", "-force", mount.path]) }
-        let staged = work.appendingPathComponent("Drawer.app")
-        try Self.run("/usr/bin/ditto", [mount.appendingPathComponent("Drawer.app").path, staged.path])
+        let staged = work.appendingPathComponent("Transom.app")
+        try Self.run("/usr/bin/ditto", [mount.appendingPathComponent("Transom.app").path, staged.path])
         guard Bundle(url: staged)?.bundleIdentifier == Brand.bundleID else { throw UpdateError(message: "The download isn't \(Brand.name).") }
         try Self.run("/usr/bin/codesign", ["--verify", "--deep", "--strict", staged.path])
         return staged
@@ -241,12 +241,12 @@ struct UpdateRow: View {
 
     private var subtitle: String {
         switch updater.state {
-        case .idle: "Drawer \(Brand.version). Updates come from GitHub releases."
+        case .idle: "Transom \(Brand.version). Updates come from GitHub releases."
         case .checking: "Checking…"
         case .upToDate: "You're up to date (\(Brand.version))."
-        case .available(let r): "\(Brand.name) \(r.version) is available. Drawer downloads it, checks it and reopens."
+        case .available(let r): "\(Brand.name) \(r.version) is available. Transom downloads it, checks it and reopens."
         case .downloading: "Downloading the update…"
-        case .installing: "Installing. Drawer will reopen."
+        case .installing: "Installing. Transom will reopen."
         case .failed(let m): m
         }
     }

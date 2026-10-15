@@ -7,9 +7,9 @@ final class Box<T>: ObservableObject {
     init(_ value: T) { self.value = value }
 }
 
-// MARK: - Drawer
+// MARK: - Transom
 
-struct DrawerView: View {
+struct TransomView: View {
     @ObservedObject var layout = AppModel.shared.layout
     @ObservedObject var settings = Settings.shared
     private let handleWidth: CGFloat = 12
@@ -185,7 +185,7 @@ struct AppMenuItems: View {
         Button("Quick Access Settings…") { AppModel.shared.openSettings(.files) }
         Button("Notes Settings…") { AppModel.shared.openSettings(.notes) }
         Divider()
-        Button("Close Drawer") { AppModel.shared.hideDrawer() }
+        Button("Close Transom") { AppModel.shared.hideDrawer() }
     }
 }
 
@@ -1212,7 +1212,7 @@ struct ClipCard: View {
 
 /// What gets dragged out of a card or row into another app: the text, the image, or the file itself.
 extension View {
-    /// Takes in a clipboard item dragged from Drawer's own cards or rows; anything else is ignored.
+    /// Takes in a clipboard item dragged from Transom's own cards or rows; anything else is ignored.
     func clipDrop(targeted: Binding<Bool>, perform: @escaping (Clip) -> Void) -> some View {
         onDrop(of: [.item], isTargeted: targeted) { _ in
             guard let clip = AppModel.shared.takeDragged() else { return false }

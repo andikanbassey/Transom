@@ -243,9 +243,9 @@ struct SettingsValues: Codable, Equatable {
     /// Looks for a new release on GitHub about once a day. Nothing is installed without a click.
     var checkForUpdates = true
 
-    // Automation: drawer:// links and AppleScript. Off until the user turns it on.
+    // Automation: transom:// links and AppleScript. Off until the user turns it on.
     var automationEnabled = false
-    /// Apps that may copy or paste through Drawer without being asked each time.
+    /// Apps that may copy or paste through Transom without being asked each time.
     var automationTrusted: [AppRef] = []
 
     // Storage. nil means the app's own folder.

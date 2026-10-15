@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import Combine
 
-final class DrawerPanel: NSPanel {
+final class TransomPanel: NSPanel {
     var onCancel: () -> Void = {}
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
@@ -10,8 +10,8 @@ final class DrawerPanel: NSPanel {
 }
 
 /// Owns the panel and decides when it opens and closes.
-final class DrawerController {
-    private let panel: DrawerPanel
+final class TransomController {
+    private let panel: TransomPanel
     private(set) var isVisible = false
     private var scrollAccum: CGFloat = 0
     private var lastScroll = Date.distantPast
@@ -21,11 +21,11 @@ final class DrawerController {
     private var needsLeave = false      // after closing, the pointer must leave the top edge before it can reopen
     private var cancellables = Set<AnyCancellable>()
     private var settings: SettingsValues { Settings.shared.v }
-    /// Debug aid: `Drawer --show` opens the drawer at launch and keeps it open.
+    /// Debug aid: `Transom --show` opens the drawer at launch and keeps it open.
     let stayOpen = CommandLine.arguments.contains("--show")
 
     init() {
-        panel = DrawerPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
+        panel = TransomPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         panel.isFloatingPanel = true
         panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
@@ -33,7 +33,7 @@ final class DrawerController {
         panel.isOpaque = false
         panel.hasShadow = true
         panel.hidesOnDeactivate = false
-        panel.contentView = NSHostingView(rootView: DrawerView())
+        panel.contentView = NSHostingView(rootView: TransomView())
         panel.onCancel = { [weak self] in self?.hide() }
         AppModel.shared.hideDrawer = { [weak self] in self?.hide() }
         AppModel.shared.hideDrawerThen = { [weak self] done in self?.hide(then: done) }
@@ -229,7 +229,7 @@ final class DrawerController {
         isVisible ? hide() : show(on: screenUnderMouse() ?? NSScreen.main!, focus: focus)
     }
 
-    /// Debug aid: `DRAWER_SNAPSHOT=/path.png Drawer --show` renders the drawer to a PNG, then quits.
+    /// Debug aid: `TRANSOM_SNAPSHOT=/path.png Transom --show` renders the drawer to a PNG, then quits.
     func snapshot(to path: String) {
         guard let view = panel.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
         view.cacheDisplay(in: view.bounds, to: rep)
@@ -253,10 +253,10 @@ final class DrawerController {
         panel.setFrame(NSRect(x: f.minX, y: f.maxY, width: f.width, height: h), display: false)
         panel.orderFrontRegardless()
         // Come to the front as the active app, so shortcuts and mouse mappings tied to the app underneath
-        // (Spotify, for instance) stop applying while the drawer is open.
+        // (Spotify, for instance) stop applying while Transom is open.
         NSApp.activate(ignoringOtherApps: true)
         // An offscreen render must not take the keyboard from whatever the user is typing in.
-        if ProcessInfo.processInfo.environment["DRAWER_SNAPSHOT"] == nil { panel.makeKey() }
+        if Env["SNAPSHOT"] == nil { panel.makeKey() }
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.24
             ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.25, 1)

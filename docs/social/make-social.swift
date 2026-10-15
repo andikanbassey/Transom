@@ -1,4 +1,4 @@
-// Draws the picture cards for announcing Drawer: X, LinkedIn and WhatsApp (square and status). Command Line Tools only.
+// Draws the picture cards for announcing Transom: X, LinkedIn and WhatsApp (square and status). Command Line Tools only.
 //   swift docs/social/make-social.swift
 // Reads docs/images/drawer.png, docs/images/onboarding-2.png and AppIcon.icns; writes the PNGs next to this script.
 import AppKit
@@ -58,7 +58,7 @@ func picture(_ img: NSImage, in rect: NSRect, from src: NSRect? = nil, radius: C
 
 func brand(x: CGFloat, y: CGFloat, size: CGFloat) {
     icon.draw(in: NSRect(x: x, y: y, width: size, height: size), from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
-    _ = text("Drawer", x: x + size * 1.18, y: y + size * 0.22, width: 600, size: size * 0.5, weight: .bold)
+    _ = text("Transom", x: x + size * 1.18, y: y + size * 0.22, width: 600, size: size * 0.5, weight: .bold)
 }
 
 func pill(_ s: String, x: CGFloat, y: CGFloat, size: CGFloat) -> CGFloat {
@@ -76,7 +76,7 @@ func pill(_ s: String, x: CGFloat, y: CGFloat, size: CGFloat) -> CGFloat {
 let cards = NSRect(x: 0, y: 0, width: 1300, height: 300)     // the left part of the drawer picture
 let aspect: CGFloat = 1300 / 300
 let headline = "Your clipboard,\none scroll away."
-let sub = "Clipboard history, notes and pinned files in a drawer at the top of your Mac."
+let sub = "Clipboard history, notes and pinned files in a window at the top of your Mac."
 
 card("x-1600x900.png", 1600, 900) { W, H in
     brand(x: 80, y: 60, size: 72)

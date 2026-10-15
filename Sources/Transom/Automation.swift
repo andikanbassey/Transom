@@ -1,12 +1,12 @@
 import AppKit
 
-/// What other apps and scripts can ask Drawer to do, through drawer:// links and AppleScript.
+/// What other apps and scripts can ask Transom to do, through transom:// links (drawer:// still works) and AppleScript.
 enum AutomationAction {
     case open, close, pause, resume, togglePause
     case search(String), newNote(String), pin(Int)
     case copy(Int, plain: Bool), paste(Int, plain: Bool)
 
-    /// Copying and pasting reach outside Drawer, so the sender has to be trusted. Everything else only changes Drawer.
+    /// Copying and pasting reach outside Transom, so the sender has to be trusted. Everything else only changes Transom.
     var actsOutside: Bool {
         switch self { case .copy, .paste: true; default: false }
     }
@@ -16,8 +16,8 @@ enum AutomationError: LocalizedError {
     case disabled, notAllowed, noItem(Int), bad(String)
     var errorDescription: String? {
         switch self {
-        case .disabled: "Automation is turned off. Turn it on in Drawer › Settings › Advanced › Automation."
-        case .notAllowed: "Drawer did not allow this app to copy or paste."
+        case .disabled: "Automation is turned off. Turn it on in Transom › Settings › Advanced › Automation."
+        case .notAllowed: "Transom did not allow this app to copy or paste."
         case .noItem(let i): "There is no clipboard item number \(i)."
         case .bad(let why): why
         }
@@ -40,7 +40,7 @@ struct AutomationSource {
 
 /// The one place automation requests are checked and carried out.
 ///
-/// Rules: off unless the user turns it on; links and scripts that only change Drawer always work once it is on;
+/// Rules: off unless the user turns it on; links and scripts that only change Transom always work once it is on;
 /// copying or pasting for another app needs that app to be trusted (asked the first time); clipboard content is only
 /// ever read out through AppleScript, never through a link.
 final class Automation {
@@ -51,9 +51,9 @@ final class Automation {
 
     // MARK: Links
 
-    /// drawer://open, close, pause, resume, toggle-pause, search?q=, note?text=, pin?index=, copy?index=&plain=1, paste?index=&plain=1
+    /// transom://open, close, pause, resume, toggle-pause, search?q=, note?text=, pin?index=, copy?index=&plain=1, paste?index=&plain=1
     static func parse(_ url: URL) -> AutomationAction? {
-        guard url.scheme?.lowercased() == "drawer", let command = url.host?.lowercased() else { return nil }
+        guard ["transom", "drawer"].contains(url.scheme?.lowercased() ?? ""), let command = url.host?.lowercased() else { return nil }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         func value(_ name: String) -> String? { items.first { $0.name == name }?.value }
         let index = Int(value("index") ?? "")
@@ -131,10 +131,10 @@ final class Automation {
         guard !asking else { throw AutomationError.notAllowed }
         asking = true
         defer { asking = false }
-        let who = source.name ?? "An app Drawer can't identify"
+        let who = source.name ?? "An app Transom can't identify"
         let alert = NSAlert()
-        alert.messageText = "Allow “\(who)” to copy or paste with Drawer?"
-        alert.informativeText = "It asked Drawer to put an item on the clipboard or paste it into the app in front. Only allow apps you trust."
+        alert.messageText = "Allow “\(who)” to copy or paste with Transom?"
+        alert.informativeText = "It asked Transom to put an item on the clipboard or paste it into the app in front. Only allow apps you trust."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Allow Once")
         if source.bundleID != nil { alert.addButton(withTitle: "Always Allow") }

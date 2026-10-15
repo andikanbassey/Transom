@@ -344,9 +344,9 @@ final class ClipboardStore: ObservableObject {
         let s = settings
         let app = NSWorkspace.shared.frontmostApplication
         let isSelf = app?.bundleIdentifier == Bundle.main.bundleIdentifier
-        let who = isSelf ? "Drawer" : (app?.localizedName ?? "Unknown app")
+        let who = isSelf ? "Transom" : (app?.localizedName ?? "Unknown app")
         let log = CaptureLog.shared
-        if AppModel.shared.standby { log.add(app: who, result: "Skipped: another Drawer is active"); return }
+        if AppModel.shared.standby { log.add(app: who, result: "Skipped: another Transom is active"); return }
         if s.paused { log.add(app: who, result: "Skipped: capture is paused"); return }
         let types = Set((pb.types ?? []).map(\.rawValue))
         if s.ignoreConfidential, !types.isDisjoint(with: confidentialTypes) { log.add(app: who, result: "Skipped: marked confidential"); return }
@@ -384,7 +384,7 @@ final class ClipboardStore: ObservableObject {
             }
             storeImage(data, alreadyPNG: pb.data(forType: .png) != nil, base: base, who: who)
         } else {
-            log.add(app: who, result: "Skipped: nothing Drawer can store (\(types.first ?? "empty"))")
+            log.add(app: who, result: "Skipped: nothing Transom can store (\(types.first ?? "empty"))")
         }
     }
 
@@ -456,7 +456,7 @@ final class ClipboardStore: ObservableObject {
 
     private func fetchPreview(id: UUID, url: URL) {
         var req = URLRequest(url: url, timeoutInterval: 8)
-        req.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Drawer", forHTTPHeaderField: "User-Agent")
+        req.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Transom", forHTTPHeaderField: "User-Agent")
         URLSession.shared.dataTask(with: req) { [weak self] data, _, _ in
             guard let self, let data else { return }
             let head = Data(data.prefix(300_000))
@@ -495,7 +495,7 @@ final class ClipboardStore: ObservableObject {
             guard let name = clip.linkImageFile, let text = clip.text,
                   let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)) else { continue }
             var req = URLRequest(url: url, timeoutInterval: 8)
-            req.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Drawer", forHTTPHeaderField: "User-Agent")
+            req.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Transom", forHTTPHeaderField: "User-Agent")
             URLSession.shared.dataTask(with: req) { data, _, _ in
                 guard let data else { return }
                 let head = Data(data.prefix(300_000))

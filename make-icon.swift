@@ -1,5 +1,5 @@
-// Renders the app icon set (needs only the Command Line Tools): a glass-look drawer holding a page of text, a picture
-// and a link, on a rounded tile. Run by build.sh when the .icns is missing.
+// Renders the app icon set (needs only the Command Line Tools): a window with a glass top pane (the transom), a bar under it,
+// and a page of text, a picture and a link below, on a rounded tile. Run by build.sh when the .icns is missing.
 //   swift make-icon.swift AppIcon
 // Colours and shapes are in BRANDING.md; change them there and here together.
 import AppKit
@@ -28,64 +28,78 @@ func shadowed(_ blur: CGFloat, _ alpha: CGFloat, _ body: () -> Void) {
     NSGraphicsContext.restoreGraphicsState()
 }
 
-/// The drawing, in the 1024 space, centred in the tile.
-func drawDrawer() {
-    let interior = NSColor(red: 0.09, green: 0.10, blue: 0.16, alpha: 1)
-    rounded(R(236, 212, 552, 300), 52, interior)
+/// Sketch units (a 200 x 200 tile whose rounded square runs 18 to 182) to the 1024 drawing.
+let k: CGFloat = 824 / 164
+func U(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) -> NSRect { R(100 + (x - 18) * k, 100 + (y - 18) * k, w * k, h * k) }
 
-    // A page of text.
-    shadowed(22, 0.28) {
-        let r = R(222, 150, 226, 322)
-        tilted(r, 6) {
-            rounded(r, 24, .white)
+/// A window seen from the front: a glass top pane (the transom), a bar under it, and the three kinds of item below.
+func drawTransom() {
+    let blue = NSColor(red: 0.26, green: 0.52, blue: 0.96, alpha: 1)
+    let frame = U(46, 44, 108, 112)
+    let radius = 14 * k
+    // The room behind the window.
+    rounded(frame, radius, NSColor(red: 0.09, green: 0.10, blue: 0.16, alpha: 1))
+    // A little light falling from the pane into the room.
+    NSGraphicsContext.saveGraphicsState()
+    NSBezierPath(roundedRect: frame, xRadius: radius, yRadius: radius).addClip()
+    NSGradient(colors: [NSColor(red: 0.56, green: 0.71, blue: 1.0, alpha: 0.40), NSColor(red: 0.56, green: 0.71, blue: 1.0, alpha: 0)])!
+        .draw(in: U(46, 78, 108, 70), angle: -90)
+    NSGraphicsContext.restoreGraphicsState()
+
+    // Items under the bar.
+    shadowed(18, 0.30) {
+        let page = U(60, 92, 26, 50)
+        tilted(page, -3) {
+            rounded(page, 5 * k, .white)
             NSColor(white: 0.62, alpha: 1).setFill()
-            for (i, w) in [160, 160, 160, 100].enumerated() {
-                NSBezierPath(roundedRect: R(248, 190 + CGFloat(i) * 42, CGFloat(w), 16), xRadius: 8, yRadius: 8).fill()
+            for (i, w) in [17, 17, 17, 10].enumerated() {
+                NSBezierPath(roundedRect: U(64, 98 + CGFloat(i) * 6.6, CGFloat(w), 2.6), xRadius: 1.3 * k, yRadius: 1.3 * k).fill()
             }
-            NSColor(red: 0.26, green: 0.52, blue: 0.96, alpha: 1).setFill()
-            NSBezierPath(roundedRect: R(248, 370, 70, 16), xRadius: 8, yRadius: 8).fill()
+            blue.setFill(); NSBezierPath(roundedRect: U(64, 125, 9, 2.6), xRadius: 1.3 * k, yRadius: 1.3 * k).fill()
         }
-    }
-    // A picture: sky, sun and hills.
-    shadowed(22, 0.28) {
-        let r = R(392, 168, 270, 262)
-        tilted(r, -4) {
-            let card = NSBezierPath(roundedRect: r, xRadius: 26, yRadius: 26)
-            NSGraphicsContext.saveGraphicsState(); card.addClip()
-            NSGradient(colors: [NSColor(red: 0.45, green: 0.78, blue: 1.0, alpha: 1), NSColor(red: 1.0, green: 0.82, blue: 0.62, alpha: 1)])!
-                .draw(in: r, angle: -90)
-            NSColor.white.setFill(); NSBezierPath(ovalIn: R(572, 200, 56, 56)).fill()
-            NSColor(red: 0.20, green: 0.55, blue: 0.40, alpha: 1).setFill()
-            let hill = NSBezierPath()
-            hill.move(to: NSPoint(x: 392, y: S - 430)); hill.line(to: NSPoint(x: 392, y: S - 350))
-            hill.curve(to: NSPoint(x: 520, y: S - 322), controlPoint1: NSPoint(x: 430, y: S - 330), controlPoint2: NSPoint(x: 480, y: S - 300))
-            hill.curve(to: NSPoint(x: 662, y: S - 372), controlPoint1: NSPoint(x: 570, y: S - 345), controlPoint2: NSPoint(x: 620, y: S - 340))
-            hill.line(to: NSPoint(x: 662, y: S - 430)); hill.close(); hill.fill()
-            NSGraphicsContext.restoreGraphicsState()
-        }
-    }
-    // Something else: a link.
-    shadowed(22, 0.28) {
-        let r = R(648, 228, 140, 140)
-        tilted(r, 9) {
-            rounded(r, 36, NSColor(red: 0.26, green: 0.52, blue: 0.96, alpha: 1))
-            let cfg = NSImage.SymbolConfiguration(pointSize: 76, weight: .bold).applying(.init(paletteColors: [.white]))
+        let pic = U(92, 92, 26, 40)
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(roundedRect: pic, xRadius: 5 * k, yRadius: 5 * k).addClip()
+        NSGradient(colors: [NSColor(red: 0.45, green: 0.78, blue: 1.0, alpha: 1), NSColor(red: 1.0, green: 0.82, blue: 0.62, alpha: 1)])!.draw(in: pic, angle: -90)
+        NSColor.white.setFill(); NSBezierPath(ovalIn: U(106, 96, 8, 8)).fill()
+        NSColor(red: 0.20, green: 0.55, blue: 0.40, alpha: 1).setFill()
+        let hill = NSBezierPath()
+        let p0 = U(92, 132, 0, 0).origin, p1 = U(92, 122, 0, 0).origin
+        hill.move(to: p0); hill.line(to: p1)
+        hill.curve(to: U(106, 116, 0, 0).origin, controlPoint1: U(96, 120, 0, 0).origin, controlPoint2: U(101, 114, 0, 0).origin)
+        hill.curve(to: U(118, 122, 0, 0).origin, controlPoint1: U(111, 118, 0, 0).origin, controlPoint2: U(115, 118, 0, 0).origin)
+        hill.line(to: U(118, 132, 0, 0).origin); hill.close(); hill.fill()
+        NSGraphicsContext.restoreGraphicsState()
+        let link = U(124, 102, 20, 20)
+        tilted(link, 6) {
+            rounded(link, 6 * k, blue)
+            let cfg = NSImage.SymbolConfiguration(pointSize: 14 * k, weight: .bold).applying(.init(paletteColors: [.white]))
             if let sym = NSImage(systemSymbolName: "link", accessibilityDescription: nil)?.withSymbolConfiguration(cfg) {
                 let g = sym.size
-                sym.draw(in: NSRect(x: r.midX - g.width / 2, y: r.midY - g.height / 2, width: g.width, height: g.height))
+                sym.draw(in: NSRect(x: link.midX - g.width / 2, y: link.midY - g.height / 2, width: g.width, height: g.height))
             }
         }
     }
-    // The drawer front: frosted, lighter at the top, with its pull.
-    shadowed(34, 0.35) {
-        let r = R(186, 420, 652, 424)
-        let p = NSBezierPath(roundedRect: r, xRadius: 84, yRadius: 84)
-        NSGradient(colors: [NSColor.white, NSColor(red: 0.90, green: 0.92, blue: 0.96, alpha: 1)])!.draw(in: p, angle: -90)
+
+    // The glass top pane (the transom), and the bar under it. The pane is drawn taller and cut off at the bar, so only its
+    // top corners are round.
+    let cut = U(46, 44, 108, 26)
+    shadowed(24, 0.28) {
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(rect: cut.insetBy(dx: -40, dy: 0).offsetBy(dx: 0, dy: 0)).addClip()
+        NSGradient(colors: [NSColor.white.withAlphaComponent(0.97), NSColor(red: 0.90, green: 0.92, blue: 0.96, alpha: 0.9)])!
+            .draw(in: NSBezierPath(roundedRect: U(46, 44, 108, 60), xRadius: radius, yRadius: radius), angle: -90)
+        NSGraphicsContext.restoreGraphicsState()
     }
+    NSColor(red: 0.90, green: 0.92, blue: 0.96, alpha: 1).setFill()
+    NSBezierPath(rect: U(46, 70, 108, 8)).fill()
+    NSGraphicsContext.saveGraphicsState()
+    NSBezierPath(rect: cut).addClip()
     NSColor(white: 1, alpha: 0.9).setStroke()
-    let rim = NSBezierPath(roundedRect: R(188, 422, 648, 420), xRadius: 82, yRadius: 82); rim.lineWidth = 3; rim.stroke()
-    NSColor(white: 0, alpha: 0.18).setFill()
-    NSBezierPath(roundedRect: R(392, 580, 240, 52), xRadius: 26, yRadius: 26).fill()
+    let rim = NSBezierPath(roundedRect: U(46.5, 44.5, 107, 59), xRadius: radius - 0.5 * k, yRadius: radius - 0.5 * k); rim.lineWidth = 3; rim.stroke()
+    NSGraphicsContext.restoreGraphicsState()
+    NSColor(white: 1, alpha: 0.22).setStroke()
+    let outline = NSBezierPath(roundedRect: frame.insetBy(dx: 1.5, dy: 1.5), xRadius: radius, yRadius: radius); outline.lineWidth = 3; outline.stroke()
 }
 
 func render(_ px: Int) -> Data {
@@ -102,11 +116,7 @@ func render(_ px: Int) -> Data {
     shadowed(24, 0.30) {
         NSGradient(colors: [top, bottom])!.draw(in: NSBezierPath(roundedRect: tile, xRadius: 185, yRadius: 185), angle: -90)
     }
-    // Content: scaled to sit inside the tile, nudged to its optical centre.
-    let t = NSAffineTransform()
-    t.translateX(by: 512, yBy: 512 - 14); t.scale(by: 0.84); t.translateX(by: -512, yBy: -512)
-    t.concat()
-    drawDrawer()
+    drawTransom()
     NSGraphicsContext.restoreGraphicsState()
     return rep.representation(using: .png, properties: [:])!
 }

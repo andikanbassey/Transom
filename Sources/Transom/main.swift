@@ -4,7 +4,7 @@ import Combine
 import ServiceManagement
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    var drawer: DrawerController!
+    var drawer: TransomController!
     var statusItem: NSStatusItem!
     var cancellable: AnyCancellable?
     let pauseItem = NSMenuItem(title: "Pause Clipboard Capture", action: #selector(togglePause), keyEquivalent: "")
@@ -14,7 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var updateCheckTimer: Timer?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
-        // drawer:// links. Registered this early so a link that launches Drawer is not lost.
+        // transom:// links. Registered this early so a link that launches Transom is not lost.
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleGetURL(_:withReplyEvent:)),
                                                      forEventClass: AEEventClass(kInternetEventClass), andEventID: AEEventID(kAEGetURL))
     }
@@ -27,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppModel.shared.standby = !InstanceGuard.resolveAtLaunch()
-        drawer = DrawerController()
+        drawer = TransomController()
         AppModel.shared.showDrawer = { [weak self] in self?.drawer.openIfClosed() }
         AppModel.shared.openSettings = { pane in
             AppModel.shared.hideDrawer()
@@ -59,7 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
             item.target = self
         }
-        add("Show Drawer", "rectangle.topthird.inset.filled", #selector(showDrawer))
+        add("Show Transom", "rectangle.topthird.inset.filled", #selector(showDrawer))
         add("Open Library…", "macwindow", #selector(openLibrary))
         installMainMenu()
         pauseItem.image = NSImage(systemSymbolName: "pause.circle", accessibilityDescription: nil)
@@ -78,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateCheckTimer = Timer.scheduledTimer(withTimeInterval: 4 * 3600, repeats: true) { _ in Updater.shared.checkIfDue() }
 
         if drawer.stayOpen { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.drawer.toggle() } }
-        if ProcessInfo.processInfo.environment["DRAWER_THEME_TEST"] != nil {
+        if Env["THEME_TEST"] != nil {
             // Debug aid: open the window, flip Theme to Light, then Dark, then System, and report the window's appearance.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 SettingsWindow.shared.show(tab: .settings)
@@ -90,19 +90,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         out += "\(a.rawValue) -> \(SettingsWindow.shared.appearanceName)\n"
                     }
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { try? out.write(toFile: "/tmp/drawer-theme-test.txt", atomically: true, encoding: .utf8); exit(0) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { try? out.write(toFile: "/tmp/transom-theme-test.txt", atomically: true, encoding: .utf8); exit(0) }
             }
         }
-        if let spec = ProcessInfo.processInfo.environment["DRAWER_SCROLL_TEST"] {
+        if let spec = Env["SCROLL_TEST"] {
             // Debug aid: post synthetic downward scrolls at the given heights below the top of the main screen (for
-            // example "1,12,300"), and write whether the drawer opened for each to /tmp/drawer-scroll-test.txt.
+            // example "1,12,300"), and write whether the drawer opened for each to /tmp/transom-scroll-test.txt.
             let ys = spec.split(separator: ",").compactMap { Double($0) }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 var report = "trusted: \(Paster.trusted)  bandSetting: \(Settings.shared.v.scrollZone.rawValue)\n"
                 let screen = NSScreen.screens[0]
                 report += "frame.maxY=\(screen.frame.maxY) visible.maxY=\(screen.visibleFrame.maxY)\n"
                 func run(_ i: Int) {
-                    guard i < ys.count else { try? report.write(toFile: "/tmp/drawer-scroll-test.txt", atomically: true, encoding: .utf8); exit(0) }
+                    guard i < ys.count else { try? report.write(toFile: "/tmp/transom-scroll-test.txt", atomically: true, encoding: .utf8); exit(0) }
                     let x = screen.frame.midX
                     CGWarpMouseCursorPosition(CGPoint(x: x, y: ys[i]))
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
@@ -126,8 +126,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 run(0)
             }
         }
-        if ProcessInfo.processInfo.environment["DRAWER_DROP_TEST"] != nil {
-            // Debug aid (run it with DRAWER_SUPPORT_DIR set to a scratch folder): drop a text, a link and a picture item on Notes and Quick Access.
+        if Env["DROP_TEST"] != nil {
+            // Debug aid (run it with TRANSOM_SUPPORT_DIR set to a scratch folder): drop a text, a link and a picture item on Notes and Quick Access.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 ClipboardFolder.prepare()
                 let png = NSImage(size: NSSize(width: 600, height: 380), flipped: false) { r in
@@ -149,7 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 print("notes: \(AppModel.shared.notes.notes.map(\.title))  files: \(AppModel.shared.files.paths.map { ($0 as NSString).lastPathComponent })")
             }
         }
-        if ProcessInfo.processInfo.environment["DRAWER_COPY_LATEST_IMAGE"] != nil {
+        if Env["COPY_LATEST_IMAGE"] != nil {
             // Debug aid: copy the newest image item, print the formats now on the clipboard, then quit.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 let store = AppModel.shared.clipboard
@@ -158,21 +158,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let types = NSPasteboard.general.types?.map(\.rawValue) ?? []
                 let size = NSPasteboard.general.data(forType: .png)?.count ?? 0
                 print("types: \(types.joined(separator: ", "))  png bytes: \(size)")
-                if ProcessInfo.processInfo.environment["DRAWER_PASTE"] != nil {
+                if Env["PASTE"] != nil {
                     print("accessibility: \(Paster.trusted)")
                     Paster.pasteNow()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { exit(0) }
                 } else { exit(0) }
             }
         }
-        if let path = ProcessInfo.processInfo.environment["DRAWER_SNAPSHOT"] {
+        if let path = Env["SNAPSHOT"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.drawer.snapshot(to: path); exit(0) }
         }
-        if let path = ProcessInfo.processInfo.environment["DRAWER_SNAPSHOT_VIEW"] {
+        if let path = Env["SNAPSHOT_VIEW"] {
             // Debug aid: render a view to a PNG. "settings" or "onboarding".
-            DispatchQueue.main.asyncAfter(deadline: .now() + (Double(ProcessInfo.processInfo.environment["DRAWER_SNAPSHOT_DELAY"] ?? "") ?? ((path.hasSuffix("desktop.png") || path.hasSuffix("palette.png")) ? 4 : 1))) {
-                if ProcessInfo.processInfo.environment["DRAWER_EDIT"] != nil { AppModel.shared.notes.showingList = false }
-                if let sec = ProcessInfo.processInfo.environment["DRAWER_SECTION"], let sc = DesktopSection(rawValue: sec) { MainNav.shared.section = sc }
+            DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Env["SNAPSHOT_DELAY"] ?? "") ?? ((path.hasSuffix("desktop.png") || path.hasSuffix("palette.png")) ? 4 : 1))) {
+                if Env["EDIT"] != nil { AppModel.shared.notes.showingList = false }
+                if let sec = Env["SECTION"], let sc = DesktopSection(rawValue: sec) { MainNav.shared.section = sc }
                 let view: NSView = path.hasSuffix("onboarding.png")
                     ? NSHostingView(rootView: OnboardingView(finish: {}))
                     : (path.hasSuffix("palette.png")
@@ -185,7 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         ? NSHostingView(rootView: FilesOptionsPopover(store: AppModel.shared.files, close: {}).padding(20).background(Color(white: 0.2)))
                         : NSHostingView(rootView: SettingsView()))
                 view.frame = NSRect(origin: .zero, size: view.fittingSize)
-                view.appearance = NSAppearance(named: ProcessInfo.processInfo.environment["DRAWER_LIGHT"] != nil ? .aqua : .darkAqua)
+                view.appearance = NSAppearance(named: Env["LIGHT"] != nil ? .aqua : .darkAqua)
                 if let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
                     view.cacheDisplay(in: view.bounds, to: rep)
                     try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
@@ -197,12 +197,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.statusItem.isVisible = v.showMenuBarIcon
             HotKeyCenter.shared.register(v.hotkeyEnabled && !AppModel.shared.standby ? v.hotkey : nil)
         }
-        // A waiting Drawer takes over by itself once the other one quits.
+        // A waiting Transom takes over by itself once the other one quits.
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
             if AppModel.shared.standby, InstanceGuard.others().isEmpty { self?.becomeActive() }
         }
 
-        if !Settings.shared.v.onboarded, !drawer.stayOpen, ProcessInfo.processInfo.environment["DRAWER_SNAPSHOT"] == nil {
+        // After the data folder moved from the old name: say so once.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { LegacyData.showNoticeIfNeeded() }
+        if !Settings.shared.v.onboarded, !drawer.stayOpen, Env["SNAPSHOT"] == nil {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { OnboardingWindow.shared.show() }
         }
     }
@@ -214,8 +216,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let appMenu = NSMenu(); appItem.submenu = appMenu
         appMenu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",").target = self
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Hide Drawer", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-        appMenu.addItem(withTitle: "Quit Drawer", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "Hide Transom", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(withTitle: "Quit Transom", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let goItem = NSMenuItem(title: "Go", action: nil, keyEquivalent: ""); main.addItem(goItem)
         let go = NSMenu(title: "Go"); goItem.submenu = go
         go.addItem(withTitle: "Search…", action: #selector(openSearch), keyEquivalent: "k").target = self
@@ -244,7 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         headerItem.toolTip = "Data: \(supportDir.path)"
         updateItem.isHidden = Updater.shared.available == nil
         if let r = Updater.shared.available { updateItem.title = "Update to \(Brand.name) \(r.version)…" }
-        activateItem.title = "Make \(Brand.name) the Active Drawer"
+        activateItem.title = "Make \(Brand.name) the Active Copy"
         activateItem.isHidden = !standby
         pauseItem.isEnabled = !standby
     }
