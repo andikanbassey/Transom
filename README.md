@@ -66,6 +66,7 @@ Drawer takes its layout from [Unclutter](https://unclutterapp.com) and its clipb
 - Menu bar icon with pause, settings and quit. First-launch welcome screen.
 
 ### iCloud
+- Pictures can be big: turn on **Keep pictures on this Mac** (Settings › Clipboard) and they never go into iCloud Drive. Other Macs keep the text and links, not the pictures. Clearing history deletes the pictures too.
 - Keep notes and files in iCloud Drive with one switch. macOS syncs the folders between your Macs.
 
 ## Install
