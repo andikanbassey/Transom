@@ -69,6 +69,7 @@ Drawer takes its layout from [Unclutter](https://unclutterapp.com) and its clipb
 - Drawer checks GitHub for a new release about once a day and tells you in the menu bar menu (and once in a dialog per version). **Update Now** downloads the DMG, checks it against the published checksum, replaces the app in place and reopens it. Your settings and Accessibility permission carry over. Turn the check off in Settings › General, or use **Check for Updates** in About any time.
 
 ### iCloud
+- Pictures can be big: turn on **Keep pictures on this Mac** (Settings › Clipboard) and they never go into iCloud Drive. Other Macs keep the text and links, not the pictures. Clearing history deletes the pictures too.
 - Keep notes and files in iCloud Drive with one switch. macOS syncs the folders between your Macs.
 
 ## Install
