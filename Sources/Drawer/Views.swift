@@ -345,20 +345,10 @@ struct ClipboardColumn: View {
                     settings.v.paused.toggle()
                 }
                 .help(settings.v.paused ? "Clipboard capture paused" : "Pause clipboard capture")
-                if cards {
-                    FilterPills(store: store)
-                } else {
-                Menu {
-                    ForEach(Category.Filter.allCases, id: \.self) { f in
-                        CheckButton(f.rawValue, store.filter == f) { store.filter = f }
-                    }
-                } label: {
-                    Image(systemName: "line.3.horizontal.decrease")
-                        .font(.system(size: fs(12), weight: .medium))
-                        .foregroundStyle(store.filter == .all ? Color.secondary : Color.accentColor)
-                }
-                .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 26, height: 26)
-                }
+                // Time, type and app: three small dropdowns that show their setting only once they filter.
+                TimeMenu(store: store, compact: true)
+                TypeMenu(store: store, compact: true)
+                AppMenu(store: store, compact: true)
                 HeaderIcon(symbol: store.pinnedOnly ? "star.fill" : "star", active: store.pinnedOnly) { store.pinnedOnly.toggle() }
                 HeaderIcon(symbol: "magnifyingglass", active: store.searching) {
                     store.searching.toggle()
@@ -477,10 +467,7 @@ extension ClipboardColumn {
 }
 
 /// Media type selector shown in the card drawer's header.
-struct FilterPills: View {
-    @ObservedObject var store: ClipboardStore
-    var window = false
-
+enum FilterIcon {
     static func symbol(_ f: Category.Filter) -> String {
         switch f {
         case .all: "square.grid.2x2"
@@ -491,34 +478,6 @@ struct FilterPills: View {
         case .video: "play.rectangle"
         case .files: "doc"
         }
-    }
-
-    var body: some View {
-        if window {
-            HStack(spacing: 8) {
-                ForEach(Category.Filter.allCases, id: \.self) { f in
-                    Chip(title: f.rawValue, symbol: Self.symbol(f), selected: store.filter == f) { store.filter = f }
-                }
-            }
-        } else {
-            drawerPills
-        }
-    }
-
-    private var drawerPills: some View {
-        HStack(spacing: 4) {
-            ForEach(Category.Filter.allCases, id: \.self) { f in
-                let on = store.filter == f
-                Text(f.rawValue)
-                    .font(.system(size: fs(11.5), weight: .semibold))
-                    .foregroundStyle(on ? Color.white : Color.secondary)
-                    .padding(.horizontal, 9).padding(.vertical, 3)
-                    .background(on ? Color.accentColor : Color.primary.opacity(0.08), in: Capsule())
-                    .contentShape(Capsule())
-                    .onTapGesture { store.filter = f }
-            }
-        }
-        .padding(.trailing, 6)
     }
 }
 

@@ -313,6 +313,8 @@ final class ClipboardStore: ObservableObject {
         let q = query.trimmingCharacters(in: .whitespaces)
         let filtered = clips.filter { clip in
             clip.category.matches(filter)
+                && time.includes(clip.date)
+                && (appFilter == nil || Self.appKey(clip) == appFilter)
                 && (!pinnedOnly || clip.pinned)
                 && (q.isEmpty || clip.title.localizedCaseInsensitiveContains(q)
                     || (clip.sourceApp ?? "").localizedCaseInsensitiveContains(q))

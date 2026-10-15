@@ -859,30 +859,34 @@ struct FilterMenuLabel: View {
     var image: NSImage?
     let value: String
     let active: Bool
+    /// The drawer's size: small, and only the icon until the filter is on.
+    var compact = false
 
     var body: some View {
-        HStack(spacing: 7) {
-            if let image { Image(nsImage: image).resizable().frame(width: 16, height: 16) }
-            else { Image(systemName: symbol).font(.system(size: 12, weight: .medium)) }
-            Text(value).font(.system(size: 13, weight: .medium)).lineLimit(1)
-            Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+        HStack(spacing: compact ? 4 : 7) {
+            if let image { Image(nsImage: image).resizable().frame(width: compact ? 14 : 16, height: compact ? 14 : 16) }
+            else { Image(systemName: symbol).font(.system(size: compact ? fs(10.5) : 12, weight: .medium)) }
+            if !compact || active { Text(value).font(.system(size: compact ? fs(11) : 13, weight: .medium)).lineLimit(1) }
+            Image(systemName: "chevron.down").font(.system(size: compact ? 7 : 9, weight: .semibold))
         }
         .foregroundStyle(active ? Color.accentColor : Color.secondary)
-        .padding(.horizontal, 14).frame(height: Look.controlHeight)
-        .background(active ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.horizontal, compact ? 7 : 14).frame(height: compact ? 24 : Look.controlHeight)
+        .background(active ? Color.accentColor.opacity(0.14) : Color.primary.opacity(compact ? 0.07 : 0.055),
+                    in: RoundedRectangle(cornerRadius: compact ? 7 : 10, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: compact ? 7 : 10, style: .continuous))
     }
 }
 
 /// When it was copied: Any time, Last hour, Today…
 struct TimeMenu: View {
     @ObservedObject var store: ClipboardStore
+    var compact = false
     var body: some View {
         Menu {
             Picker("", selection: Binding(get: { store.time }, set: { store.time = $0 })) {
                 ForEach(TimeFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }.pickerStyle(.inline)
-        } label: { FilterMenuLabel(symbol: "clock", value: store.time.rawValue, active: store.time != .any) }
+        } label: { FilterMenuLabel(symbol: "clock", value: store.time.rawValue, active: store.time != .any, compact: compact) }
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
     }
 }
@@ -890,16 +894,17 @@ struct TimeMenu: View {
 /// What kind of item: All types, Text, Links, Images…
 struct TypeMenu: View {
     @ObservedObject var store: ClipboardStore
+    var compact = false
     var body: some View {
         let current = store.filter
         Menu {
             Picker("", selection: Binding(get: { store.filter }, set: { store.filter = $0 })) {
                 ForEach(Category.Filter.allCases, id: \.self) { f in
-                    Label(f == .all ? "All types" : f.rawValue, systemImage: FilterPills.symbol(f)).tag(f)
+                    Label(f == .all ? "All types" : f.rawValue, systemImage: FilterIcon.symbol(f)).tag(f)
                 }
             }.pickerStyle(.inline)
         } label: {
-            FilterMenuLabel(symbol: FilterPills.symbol(current), value: current == .all ? "All types" : current.rawValue, active: current != .all)
+            FilterMenuLabel(symbol: FilterIcon.symbol(current), value: current == .all ? "All types" : current.rawValue, active: current != .all, compact: compact)
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
     }
@@ -908,6 +913,7 @@ struct TypeMenu: View {
 /// Which app it was copied from: All apps, or one of the apps in the history.
 struct AppMenu: View {
     @ObservedObject var store: ClipboardStore
+    var compact = false
 
     private func small(_ bundle: String?) -> NSImage? {
         guard let icon = AppIcons.icon(bundle) else { return nil }
@@ -930,7 +936,7 @@ struct AppMenu: View {
                 }
             }.pickerStyle(.inline)
         } label: {
-            FilterMenuLabel(symbol: "app.dashed", image: small(current?.bundle), value: current?.name ?? "All apps", active: current != nil)
+            FilterMenuLabel(symbol: "app.dashed", image: small(current?.bundle), value: current?.name ?? "All apps", active: current != nil, compact: compact)
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
     }
