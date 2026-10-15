@@ -154,6 +154,17 @@ security find-identity -v -p codesigning
 DRAWER_SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" ./build.sh install
 ```
 
+### First launch
+
+A short welcome explains how Drawer works and asks for the one permission it needs. You can change everything later in Settings.
+
+<p align="center">
+  <img src="docs/images/onboarding-1.png" width="24%" alt="Welcome">
+  <img src="docs/images/onboarding-2.png" width="24%" alt="How Drawer works">
+  <img src="docs/images/onboarding-3.png" width="24%" alt="Quick start">
+  <img src="docs/images/onboarding-4.png" width="24%" alt="Paste to any app">
+</p>
+
 ## Permissions
 
 | Permission | Why | Required |
