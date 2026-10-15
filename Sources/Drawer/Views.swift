@@ -330,6 +330,7 @@ struct ClipboardColumn: View {
     var cards = false
     @FocusState private var searchFocused: Bool
     @ObservedObject var settings = Settings.shared
+    @StateObject private var columnWidth = Box<CGFloat>(900)
 
     var body: some View {
         let visible = store.visible
@@ -345,10 +346,14 @@ struct ClipboardColumn: View {
                     settings.v.paused.toggle()
                 }
                 .help(settings.v.paused ? "Clipboard capture paused" : "Pause clipboard capture")
-                // Time, type and app: three small dropdowns that show their setting only once they filter.
-                TimeMenu(store: store, compact: true)
-                TypeMenu(store: store, compact: true)
-                AppMenu(store: store, compact: true)
+                // Time, type and app: three small dropdowns that say what they are set to; in a narrow column the
+                // words wait until a filter is on.
+                HStack(spacing: 6) {
+                    TimeMenu(store: store, compact: true, showsText: columnWidth.value > 600)
+                    TypeMenu(store: store, compact: true, showsText: columnWidth.value > 600)
+                    AppMenu(store: store, compact: true, showsText: columnWidth.value > 600)
+                }
+                .padding(.horizontal, 6)
                 HeaderIcon(symbol: store.pinnedOnly ? "star.fill" : "star", active: store.pinnedOnly) { store.pinnedOnly.toggle() }
                 HeaderIcon(symbol: "magnifyingglass", active: store.searching) {
                     store.searching.toggle()
@@ -363,6 +368,11 @@ struct ClipboardColumn: View {
                 }
                 if showsGear { HeaderIcon(symbol: "gearshape") { AppModel.shared.openSettings(nil) }.help("Settings") }
             }
+            .background(GeometryReader { geo in
+                Color.clear
+                    .onAppear { columnWidth.value = geo.size.width }
+                    .onChange(of: geo.size.width) { _, w in columnWidth.value = w }
+            })
             if store.expanded == nil, store.searching {
                 TextField("Search clipboard", text: $store.query)
                     .focused($searchFocused)

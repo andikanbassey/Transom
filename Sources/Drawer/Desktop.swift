@@ -461,7 +461,7 @@ struct DesktopView: View {
                 Divider()
                 Button("None") { picked.value = [] }
             } label: { SelectBarLabel(title: "Select", symbol: "checklist", chevron: true) }
-                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
             Spacer()
             if isClips {
                 let allPinned = n > 0 && picked.value.allSatisfy { id in clipboard.clips.first { $0.id.uuidString == id }?.pinned ?? false }
@@ -859,21 +859,23 @@ struct FilterMenuLabel: View {
     var image: NSImage?
     let value: String
     let active: Bool
-    /// The drawer's size: small, and only the icon until the filter is on.
+    /// The drawer's size and spacing; the Library's is larger.
     var compact = false
+    /// In a narrow drawer column the text is left off until the filter is on.
+    var showsText = true
 
     var body: some View {
-        HStack(spacing: compact ? 4 : 7) {
+        HStack(spacing: compact ? 5 : 7) {
             if let image { Image(nsImage: image).resizable().frame(width: compact ? 14 : 16, height: compact ? 14 : 16) }
             else { Image(systemName: symbol).font(.system(size: compact ? fs(10.5) : 12, weight: .medium)) }
-            if !compact || active { Text(value).font(.system(size: compact ? fs(11) : 13, weight: .medium)).lineLimit(1) }
+            if showsText || active || !compact { Text(value).font(.system(size: compact ? fs(11) : 13, weight: .medium)).lineLimit(1) }
             Image(systemName: "chevron.down").font(.system(size: compact ? 7 : 9, weight: .semibold))
         }
         .foregroundStyle(active ? Color.accentColor : Color.secondary)
-        .padding(.horizontal, compact ? 7 : 14).frame(height: compact ? 24 : Look.controlHeight)
+        .padding(.horizontal, compact ? 9 : 14).frame(height: compact ? 26 : Look.controlHeight)
         .background(active ? Color.accentColor.opacity(0.14) : Color.primary.opacity(compact ? 0.07 : 0.055),
-                    in: RoundedRectangle(cornerRadius: compact ? 7 : 10, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: compact ? 7 : 10, style: .continuous))
+                    in: RoundedRectangle(cornerRadius: compact ? 8 : 10, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: compact ? 8 : 10, style: .continuous))
     }
 }
 
@@ -881,13 +883,14 @@ struct FilterMenuLabel: View {
 struct TimeMenu: View {
     @ObservedObject var store: ClipboardStore
     var compact = false
+    var showsText = true
     var body: some View {
         Menu {
             Picker("", selection: Binding(get: { store.time }, set: { store.time = $0 })) {
                 ForEach(TimeFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }.pickerStyle(.inline)
-        } label: { FilterMenuLabel(symbol: "clock", value: store.time.rawValue, active: store.time != .any, compact: compact) }
-            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        } label: { FilterMenuLabel(symbol: "clock", value: store.time.rawValue, active: store.time != .any, compact: compact, showsText: showsText) }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
     }
 }
 
@@ -895,6 +898,7 @@ struct TimeMenu: View {
 struct TypeMenu: View {
     @ObservedObject var store: ClipboardStore
     var compact = false
+    var showsText = true
     var body: some View {
         let current = store.filter
         Menu {
@@ -904,9 +908,9 @@ struct TypeMenu: View {
                 }
             }.pickerStyle(.inline)
         } label: {
-            FilterMenuLabel(symbol: FilterIcon.symbol(current), value: current == .all ? "All types" : current.rawValue, active: current != .all, compact: compact)
+            FilterMenuLabel(symbol: FilterIcon.symbol(current), value: current == .all ? "All types" : current.rawValue, active: current != .all, compact: compact, showsText: showsText)
         }
-        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
     }
 }
 
@@ -914,6 +918,7 @@ struct TypeMenu: View {
 struct AppMenu: View {
     @ObservedObject var store: ClipboardStore
     var compact = false
+    var showsText = true
 
     private func small(_ bundle: String?) -> NSImage? {
         guard let icon = AppIcons.icon(bundle) else { return nil }
@@ -936,9 +941,9 @@ struct AppMenu: View {
                 }
             }.pickerStyle(.inline)
         } label: {
-            FilterMenuLabel(symbol: "app.dashed", image: small(current?.bundle), value: current?.name ?? "All apps", active: current != nil, compact: compact)
+            FilterMenuLabel(symbol: "app.dashed", image: small(current?.bundle), value: current?.name ?? "All apps", active: current != nil, compact: compact, showsText: showsText)
         }
-        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
     }
 }
 
