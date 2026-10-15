@@ -362,10 +362,7 @@ struct SettingsView: View {
             }
         }
         Section("About \(Brand.name)") {
-            Row("\(Brand.name) \(Brand.version)", subtitle: "A clipboard history, quick notes and pinned files in a drawer that opens at the top of your screen. Everything stays on your Mac."
-                + (isBeta ? " This is the preview build, with its own history, notes and settings, separate from the release app." : "")) {
-                if isBeta { BetaPill() } else { Text(Brand.channel).foregroundStyle(.secondary) }
-            }
+            Row("\(Brand.name) \(Brand.version)", subtitle: "A clipboard history, quick notes and pinned files in a drawer that opens at the top of your screen. Everything stays on your Mac.") { EmptyView() }
             RowDivider()
             Row("Source code", subtitle: "github.com/andikanbassey/Drawer") {
                 Button("Open on GitHub") { NSWorkspace.shared.open(Brand.repoURL) }

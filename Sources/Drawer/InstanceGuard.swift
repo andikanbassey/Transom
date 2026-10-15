@@ -1,11 +1,11 @@
 import AppKit
 
-/// Drawer and Drawer Beta (or two copies of either) watch the same shortcut, the same screen edge and the same
-/// clipboard, so running two at once makes both open the drawer and both save every copy. When a second one starts it
-/// asks which to keep. "Keep Both" leaves this one in standby: it does not capture the clipboard or answer the
+/// Two copies of Drawer (one in Applications and one somewhere else, say) watch the same shortcut, the same screen edge
+/// and the same clipboard, so running two at once makes both open the drawer and both save every copy. When a second
+/// one starts it asks which to keep. "Keep Both" leaves this one in standby: it does not capture the clipboard or answer the
 /// shortcut and edge until it is made the active one.
 enum InstanceGuard {
-    private static let bundleIDs = ["com.studioab.drawer", "com.studioab.drawer.beta"]
+    private static let bundleIDs = ["com.studioab.drawer"]
 
     static func others() -> [NSRunningApplication] {
         let me = ProcessInfo.processInfo.processIdentifier
@@ -36,16 +36,16 @@ enum InstanceGuard {
             }
         }
         let alert = NSAlert()
-        alert.messageText = sameName ? "\(Brand.name) is already running" : "\(other) is already running"
+        alert.messageText = "Another copy of \(Brand.name) is already running"
         alert.informativeText = """
-            \(Brand.name) and \(other) watch the same shortcut and screen edge, and each saves what you copy into its own \
-            history, so both would react at once. Keep one active so it is clear which one you are using.
+            Both copies watch the same shortcut, screen edge and clipboard, so both would react at once. \
+            Keep one active so it is clear which one you are using.
 
-            Keep Both leaves \(Brand.name) waiting in the menu bar: no shortcut, no edge swipe and no clipboard capture \
+            Keep Both leaves this copy waiting in the menu bar: no shortcut, no edge swipe and no clipboard capture \
             until you make it active.
             """
         alert.addButton(withTitle: "Use \(Brand.name)")
-        alert.addButton(withTitle: sameName ? "Quit This One" : "Use \(other)")
+        alert.addButton(withTitle: "Quit This One")
         alert.addButton(withTitle: "Keep Both")
         NSApp.activate(ignoringOtherApps: true)
         switch alert.runModal() {

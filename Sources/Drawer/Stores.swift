@@ -2,13 +2,14 @@ import AppKit
 import SwiftUI
 import Combine
 
-/// The preview build (`DRAWER_CHANNEL=beta ./build.sh`) has its own bundle id, data folder and link scheme, so it
-/// can be tried out beside the real app without touching its history, notes or settings.
-let isBeta = Bundle.main.bundleIdentifier?.hasSuffix(".beta") == true
-
+/// Where settings and app data live. `DRAWER_SUPPORT_DIR=/some/folder` points a run at a scratch folder instead, so a
+/// test build never touches the real history, notes or settings.
 let supportDir: URL = {
-    let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent(isBeta ? "Drawer Beta" : "Drawer", isDirectory: true)
+    let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+    var url = base.appendingPathComponent("Drawer", isDirectory: true)
+    if let override = ProcessInfo.processInfo.environment["DRAWER_SUPPORT_DIR"], !override.isEmpty {
+        url = URL(fileURLWithPath: override, isDirectory: true)
+    }
     try? FileManager.default.createDirectory(at: url.appendingPathComponent("images"), withIntermediateDirectories: true)
     return url
 }()
