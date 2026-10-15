@@ -207,6 +207,8 @@ struct CheckButton: View {
 struct HeaderIcon: View {
     let symbol: String
     var active = false
+    /// Sits on a soft background even at rest, so the main action stands out from its neighbours.
+    var filled = false
     let action: () -> Void
     @StateObject private var hovering = Box(false)
 
@@ -215,7 +217,8 @@ struct HeaderIcon: View {
             .font(.system(size: fs(12), weight: .medium))
             .foregroundStyle(active ? Color.accentColor : (hovering.value ? Color.primary : Color.secondary))
             .frame(width: 26, height: 26)
-            .background(hovering.value ? Color.primary.opacity(0.1) : .clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .background(hovering.value ? Color.primary.opacity(0.14) : (filled || active ? Color.primary.opacity(0.08) : .clear),
+                        in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             .contentShape(Rectangle())
             .onHover { hovering.value = $0 }
             .onTapGesture(perform: action)
@@ -341,33 +344,43 @@ struct ClipboardColumn: View {
             return items.isEmpty ? nil : (g, items)
         }
         VStack(spacing: 0) {
-            ColumnHeader(title: "Clipboard History") {
-                HeaderIcon(symbol: settings.v.paused ? "pause.circle.fill" : "record.circle", active: settings.v.paused) {
-                    settings.v.paused.toggle()
-                }
-                .help(settings.v.paused ? "Clipboard capture paused" : "Pause clipboard capture")
-                // Time, type and app: three small dropdowns that say what they are set to; in a narrow column the
-                // words wait until a filter is on.
+            // Title on the left, the three filters in the middle, the actions on the right: search first and filled so it
+            // stands out, then pinned-only, pause and the menu.
+            HStack(spacing: 0) {
+                Text("Clipboard History").font(.system(size: fs(13), weight: .semibold)).foregroundStyle(.primary.opacity(0.7)).lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 HStack(spacing: 6) {
                     TimeMenu(store: store, compact: true, showsText: columnWidth.value > 600)
                     TypeMenu(store: store, compact: true, showsText: columnWidth.value > 600)
                     AppMenu(store: store, compact: true, showsText: columnWidth.value > 600)
                 }
-                .padding(.horizontal, 6)
-                HeaderIcon(symbol: store.pinnedOnly ? "star.fill" : "star", active: store.pinnedOnly) { store.pinnedOnly.toggle() }
-                HeaderIcon(symbol: "magnifyingglass", active: store.searching) {
-                    store.searching.toggle()
-                    if !store.searching { store.query = "" }
+                .layoutPriority(1)
+                HStack(spacing: 2) {
+                    HeaderIcon(symbol: "magnifyingglass", active: store.searching, filled: true) {
+                        store.searching.toggle()
+                        if !store.searching { store.query = "" }
+                    }
+                    .help("Search clipboard (⌘F)")
+                    HeaderIcon(symbol: store.pinnedOnly ? "star.fill" : "star", active: store.pinnedOnly) { store.pinnedOnly.toggle() }
+                        .help("Pinned only")
+                    HeaderIcon(symbol: settings.v.paused ? "pause.circle.fill" : "record.circle", active: settings.v.paused) {
+                        settings.v.paused.toggle()
+                    }
+                    .help(settings.v.paused ? "Clipboard capture paused" : "Pause clipboard capture")
+                    PanelMenu {
+                        Button(settings.v.paused ? "Resume Capture" : "Pause Capture") { settings.v.paused.toggle() }
+                        Button("Clear Unpinned Items") { store.clearUnpinned() }
+                        Divider()
+                        Button("Clipboard Settings…") { AppModel.shared.openSettings(.clipboard) }
+                        Button("Hide Clipboard Panel") { settings.v.showClipboard = false }
+                    }
+                    if showsGear { HeaderIcon(symbol: "gearshape") { AppModel.shared.openSettings(nil) }.help("Settings") }
                 }
-                PanelMenu {
-                    Button(settings.v.paused ? "Resume Capture" : "Pause Capture") { settings.v.paused.toggle() }
-                    Button("Clear Unpinned Items") { store.clearUnpinned() }
-                    Divider()
-                    Button("Clipboard Settings…") { AppModel.shared.openSettings(.clipboard) }
-                    Button("Hide Clipboard Panel") { settings.v.showClipboard = false }
-                }
-                if showsGear { HeaderIcon(symbol: "gearshape") { AppModel.shared.openSettings(nil) }.help("Settings") }
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
+            .padding(.horizontal, 14)
+            .frame(height: 40)
+            .contentShape(Rectangle())
             .background(GeometryReader { geo in
                 Color.clear
                     .onAppear { columnWidth.value = geo.size.width }
