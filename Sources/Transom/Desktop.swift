@@ -322,39 +322,26 @@ struct DesktopView: View {
         }
     }
 
-    /// Title with a round "+" where adding makes sense, and the filter chips on the clipboard page.
+    /// The shared page header: title with a round "+" where adding makes sense, then this page's filters (clipboard pages) or the
+    /// selection bar while selecting, with Select and Search on the right.
     private var header: some View {
         let isClips = nav.section == .clipboard || nav.section == .pinned
-        // On the clipboard pages the search and Select sit in the toolbar row with the filters, all one height.
-        return VStack(alignment: .leading, spacing: 18) {
-            PageHeader(title: nav.section.title, plus: plusAction, showsSearch: !isClips || selecting.value) {
-                if !selecting.value && !isClips && !visibleIDs().isEmpty { selectButton }
-            }
+        return PageHeader(title: nav.section.title, plus: plusAction,
+                          onSelect: !selecting.value && !visibleIDs().isEmpty ? { selecting.value = true } : nil) {
             if selecting.value {
                 selectionBar
             } else if isClips {
-                HStack(spacing: 10) {
-                    TimeMenu(store: clipboard)
-                    TypeMenu(store: clipboard)
-                    AppMenu(store: clipboard)
-                    if clipboard.filter != .all || clipboard.time != .any || clipboard.appFilter != nil {
-                        Button("Clear") { clipboard.filter = .all; clipboard.time = .any; clipboard.appFilter = nil }
-                            .buttonStyle(.plain).font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
-                            .padding(.leading, 4)
-                    }
-                    Spacer(minLength: 12)
-                    if !visibleIDs().isEmpty { selectButton }
-                    SearchBarButton(width: 260)
+                TimeMenu(store: clipboard)
+                TypeMenu(store: clipboard)
+                AppMenu(store: clipboard)
+                if clipboard.filter != .all || clipboard.time != .any || clipboard.appFilter != nil {
+                    Button("Clear") { clipboard.filter = .all; clipboard.time = .any; clipboard.appFilter = nil }
+                        .buttonStyle(.plain).font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+                        .padding(.leading, 4)
                 }
             }
         }
-        .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, Look.headerGap - 6)
-        .zIndex(10)
-    }
-
-    private var selectButton: some View {
-        Button { selecting.value = true } label: { HeaderButtonLabel(title: "Select", symbol: "checkmark.circle") }
-            .buttonStyle(.plain)
+        .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, Look.headerGap)
     }
 
     private var plusAction: (() -> Void)? {

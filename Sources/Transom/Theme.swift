@@ -60,6 +60,10 @@ enum Look {
     static let controlHeight: CGFloat = 34
     /// Space between a page heading (title, subtitle, chips) and the content under it, the same on every page.
     static let headerGap: CGFloat = 26
+    /// Between a page's heading row and its controls row (filters, Select, Search).
+    static let toolbarGap: CGFloat = 18
+    /// The search field on every Library and Settings page.
+    static let searchWidth: CGFloat = 260
     static let sidebarWidth: CGFloat = 230
 }
 
@@ -140,35 +144,48 @@ struct SidebarBrand: View {
     }
 }
 
-/// Page title with Craft's round "+" button beside it.
-struct PageHeader<Trailing: View>: View {
+/// The header of every Library and Settings page, so the same controls always sit in the same place:
+///
+///     [+]  Title                                  <- row 1: the primary action (if any) and the heading
+///     filters, or the selection bar    [Select] [Search <page>  ⌘K]   <- row 2: this page's own controls on the left, then Select and Search
+///
+/// The search field has one width, height, radius and ⌘K hint everywhere and stays on the right of row 2 even when a page has
+/// no filters. `onSelect` is nil when there is nothing to select (the Select button is left out; Search does not move).
+struct PageHeader<Filters: View>: View {
     let title: String
     var subtitle: String?
     var plus: (() -> Void)?
-    /// Pages with their own toolbar row put the search field there instead.
-    var showsSearch = true
-    @ViewBuilder var trailing: () -> Trailing
+    var onSelect: (() -> Void)?
+    @ViewBuilder var filters: () -> Filters
 
     var body: some View {
-        HStack(spacing: 14) {
-            if let plus {
-                Image(systemName: "plus").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.primary)
-                    .frame(width: 40, height: 40)
-                    .background(Look.card, in: Circle())
-                    .overlay(Circle().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.10), radius: 6, y: 2)
-                    .contentShape(Circle())
-                    .onTapGesture(perform: plus)
+        VStack(alignment: .leading, spacing: Look.toolbarGap) {
+            HStack(spacing: 14) {
+                if let plus {
+                    Image(systemName: "plus").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.primary)
+                        .frame(width: 40, height: 40)
+                        .background(Look.card, in: Circle())
+                        .overlay(Circle().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.10), radius: 6, y: 2)
+                        .contentShape(Circle())
+                        .onTapGesture(perform: plus)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(Look.pageTitle)
+                    if let subtitle { Text(subtitle).font(Look.body).foregroundStyle(.secondary) }
+                }
+                Spacer(minLength: 0)
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(Look.pageTitle)
-                if let subtitle { Text(subtitle).font(Look.body).foregroundStyle(.secondary) }
-            }
-            Spacer()
+            .frame(minHeight: 40)
             HStack(spacing: 10) {
-                trailing()
-                if showsSearch { SearchBarButton() }
+                filters()
+                Spacer(minLength: 12)
+                if let onSelect {
+                    Button(action: onSelect) { HeaderButtonLabel(title: "Select", symbol: "checkmark.circle") }.buttonStyle(.plain)
+                }
+                SearchBarButton()
             }
+            .frame(minHeight: Look.controlHeight)
         }
         .zIndex(10)
     }
@@ -207,29 +224,18 @@ struct PillButtonStyle: ButtonStyle {
 // MARK: - Menu bar icon
 
 enum MenuBarIcon {
-    /// A window: a glass top pane (the transom) over a bar, with three small items below. Drawn as a template so macOS tints it
-    /// for light and dark bars; the pane is a lighter tone of the same tint.
+    /// A screen edge with a drawer pulled down from it. Drawn as a template so macOS tints it for light and dark bars.
     static func image() -> NSImage {
-        let img = NSImage(size: NSSize(width: 20, height: 16), flipped: true) { _ in
-            // Top-down coordinates (the image is flipped).
-            let frame = NSRect(x: 2, y: 1.5, width: 16, height: 13)
+        let img = NSImage(size: NSSize(width: 20, height: 16), flipped: false) { _ in
             NSColor.black.setStroke()
-            let outline = NSBezierPath(roundedRect: frame, xRadius: 3.2, yRadius: 3.2)
-            outline.lineWidth = 1.4
-            // The pane: a lighter fill under the frame's top.
-            NSGraphicsContext.saveGraphicsState()
-            outline.addClip()
-            NSColor.black.withAlphaComponent(0.38).setFill()
-            NSRect(x: 2, y: 1.5, width: 16, height: 4.9).fill()
-            NSGraphicsContext.restoreGraphicsState()
-            outline.stroke()
-            // The transom bar.
             NSColor.black.setFill()
-            NSRect(x: 2.4, y: 5.9, width: 15.2, height: 1.5).fill()
-            // Page, picture and link.
-            NSBezierPath(roundedRect: NSRect(x: 4.4, y: 9, width: 2.8, height: 3.6), xRadius: 0.7, yRadius: 0.7).fill()
-            NSBezierPath(roundedRect: NSRect(x: 8.6, y: 9, width: 2.8, height: 3.0), xRadius: 0.7, yRadius: 0.7).fill()
-            NSBezierPath(roundedRect: NSRect(x: 12.8, y: 9, width: 2.8, height: 2.8), xRadius: 1.0, yRadius: 1.0).fill()
+            let frame = NSBezierPath(roundedRect: NSRect(x: 2, y: 1.5, width: 16, height: 13), xRadius: 3.6, yRadius: 3.6)
+            frame.lineWidth = 1.4
+            frame.stroke()
+            let drawer = NSBezierPath(roundedRect: NSRect(x: 4.6, y: 6.2, width: 10.8, height: 5.6), xRadius: 1.8, yRadius: 1.8)
+            drawer.fill()
+            let handle = NSBezierPath(roundedRect: NSRect(x: 8, y: 4.1, width: 4, height: 1.3), xRadius: 0.65, yRadius: 0.65)
+            handle.fill()
             return true
         }
         img.isTemplate = true
