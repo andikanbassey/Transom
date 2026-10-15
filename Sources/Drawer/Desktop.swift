@@ -257,7 +257,7 @@ struct DesktopView: View {
     // MARK: Sidebar
 
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 4) {
             SidebarBrand()
             SidebarAction(title: "New Note", symbol: "square.and.pencil") {
                 nav.section = .notes; notes.add(); notes.showingList = false
@@ -324,24 +324,37 @@ struct DesktopView: View {
 
     /// Title with a round "+" where adding makes sense, and the filter chips on the clipboard page.
     private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            PageHeader(title: nav.section.title, plus: plusAction) {
-                if !selecting.value && !visibleIDs().isEmpty {
-                    Button { selecting.value = true } label: { Label("Select", systemImage: "checkmark.circle") }
-                        .buttonStyle(.borderless).foregroundStyle(.secondary)
-                }
+        let isClips = nav.section == .clipboard || nav.section == .pinned
+        // On the clipboard pages the search and Select sit in the toolbar row with the filters, all one height.
+        return VStack(alignment: .leading, spacing: 18) {
+            PageHeader(title: nav.section.title, plus: plusAction, showsSearch: !isClips || selecting.value) {
+                if !selecting.value && !isClips && !visibleIDs().isEmpty { selectButton }
             }
             if selecting.value {
                 selectionBar
-            } else if nav.section == .clipboard || nav.section == .pinned {
-                HStack(spacing: 8) {
-                    FilterPills(store: clipboard, window: true)
-                    TimeChip(store: clipboard)
+            } else if isClips {
+                HStack(spacing: 10) {
+                    TimeMenu(store: clipboard)
+                    TypeMenu(store: clipboard)
+                    AppMenu(store: clipboard)
+                    if clipboard.filter != .all || clipboard.time != .any || clipboard.appFilter != nil {
+                        Button("Clear") { clipboard.filter = .all; clipboard.time = .any; clipboard.appFilter = nil }
+                            .buttonStyle(.plain).font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+                            .padding(.leading, 4)
+                    }
+                    Spacer(minLength: 12)
+                    if !visibleIDs().isEmpty { selectButton }
+                    SearchBarButton(width: 260)
                 }
             }
         }
         .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, Look.headerGap - 6)
         .zIndex(10)
+    }
+
+    private var selectButton: some View {
+        Button { selecting.value = true } label: { HeaderButtonLabel(title: "Select", symbol: "checkmark.circle") }
+            .buttonStyle(.plain)
     }
 
     private var plusAction: (() -> Void)? {
@@ -448,7 +461,7 @@ struct DesktopView: View {
                 Divider()
                 Button("None") { picked.value = [] }
             } label: { SelectBarLabel(title: "Select", symbol: "checklist", chevron: true) }
-                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
             Spacer()
             if isClips {
                 let allPinned = n > 0 && picked.value.allSatisfy { id in clipboard.clips.first { $0.id.uuidString == id }?.pinned ?? false }
@@ -584,7 +597,10 @@ struct DesktopView: View {
     // MARK: Data
 
     private func clips() -> [Clip] {
-        let list = clipboard.clips.filter { $0.category.matches(clipboard.filter) && clipboard.time.includes($0.date) }
+        let list = clipboard.clips.filter {
+            $0.category.matches(clipboard.filter) && clipboard.time.includes($0.date)
+                && (clipboard.appFilter == nil || ClipboardStore.appKey($0) == clipboard.appFilter)
+        }
         return list.filter(\.pinned) + list.filter { !$0.pinned }
     }
 
@@ -662,6 +678,26 @@ struct DesktopView: View {
 }
 
 // MARK: - Selection
+
+/// A button in a page header, the same height and outline as the search field beside it.
+struct HeaderButtonLabel: View {
+    let title: String
+    let symbol: String
+    @StateObject private var hovering = Box(false)
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: symbol).font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+            Text(title).font(.system(size: 13.5, weight: .medium)).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+        }
+        .padding(.horizontal, 14)
+        .frame(height: Look.controlHeight)
+        .background(Look.card.opacity(hovering.value ? 1 : 0.85), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.09), lineWidth: 1))
+        .contentShape(Rectangle())
+        .onHover { hovering.value = $0 }
+    }
+}
 
 /// The same pill for every action in the selection bar: 30 pt tall, 13 pt medium, icon and text 6 pt apart.
 struct SelectBarLabel: View {
@@ -816,28 +852,98 @@ struct LibraryClipCard: View {
     }
 }
 
-/// "Any time", "Last hour", "Today"…: a chip with a menu, next to the type chips.
-struct TimeChip: View {
+/// A dropdown in the filter row: an icon, the value it is set to now, and a chevron. Grey while it is on its default,
+/// accent-coloured once it filters something.
+struct FilterMenuLabel: View {
+    let symbol: String
+    var image: NSImage?
+    let value: String
+    let active: Bool
+    /// The drawer's size and spacing; the Library's is larger.
+    var compact = false
+    /// In a narrow drawer column the text is left off until the filter is on.
+    var showsText = true
+
+    var body: some View {
+        HStack(spacing: compact ? 5 : 7) {
+            if let image { Image(nsImage: image).resizable().frame(width: compact ? 14 : 16, height: compact ? 14 : 16) }
+            else { Image(systemName: symbol).font(.system(size: compact ? fs(10.5) : 12, weight: .medium)) }
+            if showsText || active || !compact { Text(value).font(.system(size: compact ? fs(11) : 13, weight: .medium)).lineLimit(1) }
+            Image(systemName: "chevron.down").font(.system(size: compact ? 7 : 9, weight: .semibold))
+        }
+        .foregroundStyle(active ? Color.accentColor : Color.secondary)
+        .padding(.horizontal, compact ? 9 : 14).frame(height: compact ? 26 : Look.controlHeight)
+        .background(active ? Color.accentColor.opacity(0.14) : Color.primary.opacity(compact ? 0.07 : 0.055),
+                    in: RoundedRectangle(cornerRadius: compact ? 8 : 10, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: compact ? 8 : 10, style: .continuous))
+    }
+}
+
+/// When it was copied: Any time, Last hour, Today…
+struct TimeMenu: View {
     @ObservedObject var store: ClipboardStore
+    var compact = false
+    var showsText = true
     var body: some View {
         Menu {
-            ForEach(TimeFilter.allCases, id: \.self) { t in
-                Button { store.time = t } label: {
-                    if store.time == t { Label(t.rawValue, systemImage: "checkmark") } else { Text(t.rawValue) }
+            Picker("", selection: Binding(get: { store.time }, set: { store.time = $0 })) {
+                ForEach(TimeFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }.pickerStyle(.inline)
+        } label: { FilterMenuLabel(symbol: "clock", value: store.time.rawValue, active: store.time != .any, compact: compact, showsText: showsText) }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
+    }
+}
+
+/// What kind of item: All types, Text, Links, Images…
+struct TypeMenu: View {
+    @ObservedObject var store: ClipboardStore
+    var compact = false
+    var showsText = true
+    var body: some View {
+        let current = store.filter
+        Menu {
+            Picker("", selection: Binding(get: { store.filter }, set: { store.filter = $0 })) {
+                ForEach(Category.Filter.allCases, id: \.self) { f in
+                    Label(f == .all ? "All types" : f.rawValue, systemImage: FilterIcon.symbol(f)).tag(f)
                 }
-            }
+            }.pickerStyle(.inline)
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "clock").font(.system(size: 12, weight: .medium))
-                Text(store.time.rawValue).font(.system(size: 13, weight: .medium))
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
-            }
-            .foregroundStyle(store.time == .any ? Color.secondary : Color.accentColor)
-            .padding(.horizontal, 12).padding(.vertical, 7)
-            .background(store.time == .any ? Color.primary.opacity(0.055) : Color.accentColor.opacity(0.14),
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            FilterMenuLabel(symbol: FilterIcon.symbol(current), value: current == .all ? "All types" : current.rawValue, active: current != .all, compact: compact, showsText: showsText)
         }
-        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
+    }
+}
+
+/// Which app it was copied from: All apps, or one of the apps in the history.
+struct AppMenu: View {
+    @ObservedObject var store: ClipboardStore
+    var compact = false
+    var showsText = true
+
+    private func small(_ bundle: String?) -> NSImage? {
+        guard let icon = AppIcons.icon(bundle) else { return nil }
+        let img = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { r in icon.draw(in: r); return true }
+        return img
+    }
+
+    var body: some View {
+        let apps = store.appsInHistory
+        let current = apps.first { $0.key == store.appFilter }
+        Menu {
+            Picker("", selection: Binding(get: { store.appFilter ?? "" }, set: { store.appFilter = $0.isEmpty ? nil : $0 })) {
+                Label("All apps", systemImage: "square.grid.2x2").tag("")
+                ForEach(apps, id: \.key) { app in
+                    if let icon = small(app.bundle) {
+                        Label { Text("\(app.name) (\(app.count))") } icon: { Image(nsImage: icon) }.tag(app.key)
+                    } else {
+                        Text("\(app.name) (\(app.count))").tag(app.key)
+                    }
+                }
+            }.pickerStyle(.inline)
+        } label: {
+            FilterMenuLabel(symbol: "app.dashed", image: small(current?.bundle), value: current?.name ?? "All apps", active: current != nil, compact: compact, showsText: showsText)
+        }
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
     }
 }
 

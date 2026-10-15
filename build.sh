@@ -7,18 +7,14 @@
 #   ./build.sh dmg      build and write build/Drawer.dmg (and its SHA-256) for sharing
 #   ./build.sh dev      fast debug build (a few seconds after the first), then launch; for trying changes. It is
 #                       unoptimised, so judge smoothness with a normal build, and never release a dev build.
-# Preview channel: DRAWER_CHANNEL=beta ./build.sh [run|install] builds "Drawer Beta" (own bundle id, data folder and
-# drawer-beta:// scheme), so changes can be tried out beside the real app. Only the real app is ever released.
+# To try a build without touching your real history, notes and settings, run it with DRAWER_SUPPORT_DIR set to a
+# scratch folder (see CLAUDE.md).
 set -euo pipefail
 cd "$(dirname "$0")"
 CONFIG=release
 [ "${1:-}" = "dev" ] && CONFIG=debug
 swift build -c "$CONFIG"
-if [ "${DRAWER_CHANNEL:-}" = "beta" ]; then
-  NAME="Drawer Beta"; BUNDLE_ID="com.studioab.drawer.beta"; SCHEME="drawer-beta"
-else
-  NAME="Drawer"; BUNDLE_ID="com.studioab.drawer"; SCHEME="drawer"
-fi
+NAME="Drawer"; BUNDLE_ID="com.studioab.drawer"; SCHEME="drawer"
 APP="build/$NAME.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
@@ -29,12 +25,12 @@ SDK_VERSION="$(xcrun --show-sdk-version 2>/dev/null || echo 26.0)"
 vtool -set-build-version macos 14.0 "$SDK_VERSION" -replace -output "$APP/Contents/MacOS/$NAME" "$APP/Contents/MacOS/$NAME"
 mkdir -p "$APP/Contents/Resources"
 # The icon is drawn by make-icon.swift (Command Line Tools only) the first time and kept as an .icns.
-if [ "${DRAWER_CHANNEL:-}" = "beta" ]; then ICON=AppIcon-beta; ICON_ARGS="beta"; else ICON=AppIcon; ICON_ARGS=""; fi
-if [ ! -f "$ICON.icns" ]; then
-  swift make-icon.swift "$ICON" $ICON_ARGS && iconutil -c icns "$ICON.iconset" -o "$ICON.icns" && rm -rf "$ICON.iconset"
+if [ ! -f AppIcon.icns ]; then
+  swift make-icon.swift AppIcon && iconutil -c icns AppIcon.iconset -o AppIcon.icns && rm -rf AppIcon.iconset
 fi
-cp "$ICON.icns" "$APP/Contents/Resources/AppIcon.icns"
+cp AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp Drawer.sdef "$APP/Contents/Resources/Drawer.sdef"
+cp LICENSE "$APP/Contents/Resources/LICENSE"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

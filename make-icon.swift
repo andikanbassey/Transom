@@ -1,12 +1,10 @@
 // Renders the app icon set (needs only the Command Line Tools): a glass-look drawer holding a page of text, a picture
 // and a link, on a rounded tile. Run by build.sh when the .icns is missing.
-//   swift make-icon.swift AppIcon          release: slate tile
-//   swift make-icon.swift AppIcon-beta beta   Beta: amber tile, same drawing
+//   swift make-icon.swift AppIcon
 // Colours and shapes are in BRANDING.md; change them there and here together.
 import AppKit
 
 let out = CommandLine.arguments[1]
-let beta = CommandLine.arguments.count > 2 && CommandLine.arguments[2] == "beta"
 let iconset = out + ".iconset"
 try? FileManager.default.removeItem(atPath: iconset)
 try! FileManager.default.createDirectory(atPath: iconset, withIntermediateDirectories: true)
@@ -32,7 +30,7 @@ func shadowed(_ blur: CGFloat, _ alpha: CGFloat, _ body: () -> Void) {
 
 /// The drawing, in the 1024 space, centred in the tile.
 func drawDrawer() {
-    let interior = beta ? NSColor(red: 0.28, green: 0.14, blue: 0.04, alpha: 1) : NSColor(red: 0.09, green: 0.10, blue: 0.16, alpha: 1)
+    let interior = NSColor(red: 0.09, green: 0.10, blue: 0.16, alpha: 1)
     rounded(R(236, 212, 552, 300), 52, interior)
 
     // A page of text.
@@ -99,8 +97,8 @@ func render(_ px: Int) -> Data {
     let scale = NSAffineTransform(); scale.scale(by: k); scale.concat()
     // Tile: 824 of 1024, centred, with a soft shadow.
     let tile = R(100, 100, 824, 824)
-    let top = beta ? NSColor(red: 1.00, green: 0.72, blue: 0.20, alpha: 1) : NSColor(red: 0.227, green: 0.255, blue: 0.337, alpha: 1)
-    let bottom = beta ? NSColor(red: 0.94, green: 0.42, blue: 0.10, alpha: 1) : NSColor(red: 0.071, green: 0.078, blue: 0.122, alpha: 1)
+    let top = NSColor(red: 0.227, green: 0.255, blue: 0.337, alpha: 1)
+    let bottom = NSColor(red: 0.071, green: 0.078, blue: 0.122, alpha: 1)
     shadowed(24, 0.30) {
         NSGradient(colors: [top, bottom])!.draw(in: NSBezierPath(roundedRect: tile, xRadius: 185, yRadius: 185), angle: -90)
     }

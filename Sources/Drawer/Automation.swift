@@ -53,7 +53,7 @@ final class Automation {
 
     /// drawer://open, close, pause, resume, toggle-pause, search?q=, note?text=, pin?index=, copy?index=&plain=1, paste?index=&plain=1
     static func parse(_ url: URL) -> AutomationAction? {
-        guard url.scheme?.lowercased() == (isBeta ? "drawer-beta" : "drawer"), let command = url.host?.lowercased() else { return nil }
+        guard url.scheme?.lowercased() == "drawer", let command = url.host?.lowercased() else { return nil }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         func value(_ name: String) -> String? { items.first { $0.name == name }?.value }
         let index = Int(value("index") ?? "")

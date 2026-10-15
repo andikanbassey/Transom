@@ -117,7 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         if ProcessInfo.processInfo.environment["DRAWER_DROP_TEST"] != nil {
-            // Debug aid (use with the Beta build): drop a text, a link and a picture item on Notes and Quick Access.
+            // Debug aid (run it with DRAWER_SUPPORT_DIR set to a scratch folder): drop a text, a link and a picture item on Notes and Quick Access.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 ClipboardFolder.prepare()
                 let png = NSImage(size: NSSize(width: 600, height: 380), flipped: false) { r in
@@ -230,7 +230,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pauseItem.state = Settings.shared.v.paused ? .on : .off
         let standby = AppModel.shared.standby
         let version = Brand.version.isEmpty ? "" : " \(Brand.version)"
-        headerItem.title = standby ? "\(Brand.name)\(version) · waiting, not capturing" : "\(Brand.name)\(version) · \(Brand.channel)"
+        headerItem.title = standby ? "\(Brand.name)\(version) · waiting, not capturing" : "\(Brand.name)\(version)"
         headerItem.toolTip = "Data: \(supportDir.path)"
         activateItem.title = "Make \(Brand.name) the Active Drawer"
         activateItem.isHidden = !standby

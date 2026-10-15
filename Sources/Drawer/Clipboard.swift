@@ -26,7 +26,12 @@ struct Clip: Codable, Identifiable, Equatable {
         case id, kind, text, markdown, imageFile, paths, sourceApp, sourceBundleID, linkTitle, linkImageFile, date, pinned
     }
 
-    var linkImageURL: URL? { linkImageFile.map { ClipboardFolder.images.appendingPathComponent($0) } }
+    /// The saved cover image of a link, if it is on this Mac (see `LinkPreviews`).
+    var linkImageURL: URL? {
+        guard let name = linkImageFile else { return nil }
+        let url = LinkPreviews.folder.appendingPathComponent(name)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
     var imageURL: URL? { imageFile.map { ClipboardFolder.images.appendingPathComponent($0) } }
     var fileURLs: [URL] { (paths ?? []).map { URL(fileURLWithPath: $0) } }
     /// The file used for the card's cover art.
@@ -177,6 +182,8 @@ final class ClipboardStore: ObservableObject {
     @Published var searching = false
     @Published var pinnedOnly = false
     @Published var filter = Category.Filter.all
+    /// Library only: show clips copied from one app (see `appKey`). Nil shows every app.
+    @Published var appFilter: String?
     /// Narrow the Library's clipboard page to a window of time.
     @Published var time = TimeFilter.any
     /// The item the keyboard has selected in the drawer (arrows move it, Return pastes it).
@@ -252,6 +259,9 @@ final class ClipboardStore: ObservableObject {
                     self.isLoaded = true
                     self.migrateLegacyHistory()
                     self.trim()
+                    let snapshot = self.clips
+                    self.diskQueue.async { LinkPreviews.tidy(clips: snapshot) }
+                    self.refetchMissingPreviews()
                 }
             }
         }
@@ -311,6 +321,8 @@ final class ClipboardStore: ObservableObject {
         let q = query.trimmingCharacters(in: .whitespaces)
         let filtered = clips.filter { clip in
             clip.category.matches(filter)
+                && time.includes(clip.date)
+                && (appFilter == nil || Self.appKey(clip) == appFilter)
                 && (!pinnedOnly || clip.pinned)
                 && (q.isEmpty || clip.title.localizedCaseInsensitiveContains(q)
                     || (clip.sourceApp ?? "").localizedCaseInsensitiveContains(q))
@@ -445,12 +457,38 @@ final class ClipboardStore: ObservableObject {
                 var name: String?
                 if let imgData, let png = NSBitmapImageRep(data: imgData)?.representation(using: .png, properties: [:]) {
                     let n = UUID().uuidString + ".png"
-                    ClipboardFolder.prepare()
-                    if (try? png.write(to: ClipboardFolder.images.appendingPathComponent(n))) != nil { name = n }
+                    LinkPreviews.prepare()
+                    if (try? png.write(to: LinkPreviews.folder.appendingPathComponent(n))) != nil { name = n }
                 }
                 finish(name)
             }.resume()
         }.resume()
+    }
+
+    /// Covers are not synced, so a link copied on another Mac has none here yet: fetch the newest few again, under the
+    /// same file names, without touching the history.
+    private func refetchMissingPreviews() {
+        guard settings.linkPreviews else { return }
+        let missing = clips.filter { $0.category == .link && $0.linkImageFile != nil && $0.linkImageURL == nil }.prefix(30)
+        for clip in missing {
+            guard let name = clip.linkImageFile, let text = clip.text,
+                  let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)) else { continue }
+            var req = URLRequest(url: url, timeoutInterval: 8)
+            req.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Drawer", forHTTPHeaderField: "User-Agent")
+            URLSession.shared.dataTask(with: req) { data, _, _ in
+                guard let data else { return }
+                let head = Data(data.prefix(300_000))
+                guard let html = String(data: head, encoding: .utf8) ?? String(data: head, encoding: .isoLatin1),
+                      let ref = Self.meta(html, "og:image"),
+                      let imgURL = URL(string: Self.decodeEntities(ref), relativeTo: url)?.absoluteURL else { return }
+                URLSession.shared.dataTask(with: imgURL) { imgData, _, _ in
+                    guard let imgData, let png = NSBitmapImageRep(data: imgData)?.representation(using: .png, properties: [:]) else { return }
+                    LinkPreviews.prepare()
+                    try? png.write(to: LinkPreviews.folder.appendingPathComponent(name))
+                    DispatchQueue.main.async { self.objectWillChange.send() }
+                }.resume()
+            }.resume()
+        }
     }
 
     private static func meta(_ html: String, _ key: String) -> String? {
@@ -543,9 +581,8 @@ final class ClipboardStore: ObservableObject {
 
     private func remove(at i: Int, tombstone: Bool = false) {
         if tombstone { ClipboardFolder.addTombstone(clips[i].id) }
-        for file in [clips[i].imageFile, clips[i].linkImageFile].compactMap({ $0 }) {
-            try? FileManager.default.removeItem(at: ClipboardFolder.images.appendingPathComponent(file))
-        }
+        if let file = clips[i].imageFile { try? FileManager.default.removeItem(at: ClipboardFolder.images.appendingPathComponent(file)) }
+        if let file = clips[i].linkImageFile { try? FileManager.default.removeItem(at: LinkPreviews.folder.appendingPathComponent(file)) }
         dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
         clips.remove(at: i)
     }
@@ -637,6 +674,51 @@ enum Thumbs {
         let s = "\(w) × \(h)"
         dimensionCache[url.path] = s
         return s
+    }
+}
+
+/// Cover images of copied links. They live on this Mac only (Application Support), not in the synced clipboard folder:
+/// they can be fetched again, and keeping them out of iCloud means a deleted link leaves nothing behind to sync.
+enum LinkPreviews {
+    static var folder: URL { supportDir.appendingPathComponent("LinkPreviews", isDirectory: true) }
+
+    static func prepare() { try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
+
+    /// Runs on the disk queue after the history is loaded: moves covers an earlier version left in the clipboard folder
+    /// into the local folder, and deletes covers no link refers to any more.
+    static func tidy(clips: [Clip]) {
+        let fm = FileManager.default
+        prepare()
+        let wanted = Set(clips.compactMap(\.linkImageFile))
+        for name in wanted {
+            let old = ClipboardFolder.images.appendingPathComponent(name)
+            let new = folder.appendingPathComponent(name)
+            if fm.fileExists(atPath: old.path), !fm.fileExists(atPath: new.path) { try? fm.moveItem(at: old, to: new) }
+            else if fm.fileExists(atPath: old.path) { try? fm.removeItem(at: old) }
+        }
+        // An empty history may only mean it could not be read yet: never sweep on that.
+        guard !clips.isEmpty else { return }
+        for name in (try? fm.contentsOfDirectory(atPath: folder.path)) ?? [] where !wanted.contains(name) && !name.hasPrefix(".") {
+            try? fm.removeItem(at: folder.appendingPathComponent(name))
+        }
+    }
+}
+
+extension ClipboardStore {
+    /// What identifies the app a clip came from: its bundle id, or its name when there is none.
+    static func appKey(_ clip: Clip) -> String? { clip.sourceBundleID ?? clip.sourceApp }
+
+    /// The apps in the history, most used first, with a name, an icon key and a count, for the Library's App filter.
+    var appsInHistory: [(key: String, name: String, bundle: String?, count: Int)] {
+        var seen: [String: (name: String, bundle: String?, count: Int)] = [:]
+        for c in clips {
+            guard let key = Self.appKey(c) else { continue }
+            var entry = seen[key] ?? (c.sourceApp ?? key, c.sourceBundleID, 0)
+            entry.count += 1
+            seen[key] = entry
+        }
+        return seen.map { (key: $0.key, name: $0.value.name, bundle: $0.value.bundle, count: $0.value.count) }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 }
 

@@ -330,6 +330,7 @@ struct ClipboardColumn: View {
     var cards = false
     @FocusState private var searchFocused: Bool
     @ObservedObject var settings = Settings.shared
+    @StateObject private var columnWidth = Box<CGFloat>(900)
 
     var body: some View {
         let visible = store.visible
@@ -345,20 +346,14 @@ struct ClipboardColumn: View {
                     settings.v.paused.toggle()
                 }
                 .help(settings.v.paused ? "Clipboard capture paused" : "Pause clipboard capture")
-                if cards {
-                    FilterPills(store: store)
-                } else {
-                Menu {
-                    ForEach(Category.Filter.allCases, id: \.self) { f in
-                        CheckButton(f.rawValue, store.filter == f) { store.filter = f }
-                    }
-                } label: {
-                    Image(systemName: "line.3.horizontal.decrease")
-                        .font(.system(size: fs(12), weight: .medium))
-                        .foregroundStyle(store.filter == .all ? Color.secondary : Color.accentColor)
+                // Time, type and app: three small dropdowns that say what they are set to; in a narrow column the
+                // words wait until a filter is on.
+                HStack(spacing: 6) {
+                    TimeMenu(store: store, compact: true, showsText: columnWidth.value > 600)
+                    TypeMenu(store: store, compact: true, showsText: columnWidth.value > 600)
+                    AppMenu(store: store, compact: true, showsText: columnWidth.value > 600)
                 }
-                .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 26, height: 26)
-                }
+                .padding(.horizontal, 6)
                 HeaderIcon(symbol: store.pinnedOnly ? "star.fill" : "star", active: store.pinnedOnly) { store.pinnedOnly.toggle() }
                 HeaderIcon(symbol: "magnifyingglass", active: store.searching) {
                     store.searching.toggle()
@@ -373,6 +368,11 @@ struct ClipboardColumn: View {
                 }
                 if showsGear { HeaderIcon(symbol: "gearshape") { AppModel.shared.openSettings(nil) }.help("Settings") }
             }
+            .background(GeometryReader { geo in
+                Color.clear
+                    .onAppear { columnWidth.value = geo.size.width }
+                    .onChange(of: geo.size.width) { _, w in columnWidth.value = w }
+            })
             if store.expanded == nil, store.searching {
                 TextField("Search clipboard", text: $store.query)
                     .focused($searchFocused)
@@ -477,11 +477,8 @@ extension ClipboardColumn {
 }
 
 /// Media type selector shown in the card drawer's header.
-struct FilterPills: View {
-    @ObservedObject var store: ClipboardStore
-    var window = false
-
-    private func symbol(_ f: Category.Filter) -> String {
+enum FilterIcon {
+    static func symbol(_ f: Category.Filter) -> String {
         switch f {
         case .all: "square.grid.2x2"
         case .text: "text.alignleft"
@@ -491,34 +488,6 @@ struct FilterPills: View {
         case .video: "play.rectangle"
         case .files: "doc"
         }
-    }
-
-    var body: some View {
-        if window {
-            HStack(spacing: 8) {
-                ForEach(Category.Filter.allCases, id: \.self) { f in
-                    Chip(title: f.rawValue, symbol: symbol(f), selected: store.filter == f) { store.filter = f }
-                }
-            }
-        } else {
-            drawerPills
-        }
-    }
-
-    private var drawerPills: some View {
-        HStack(spacing: 4) {
-            ForEach(Category.Filter.allCases, id: \.self) { f in
-                let on = store.filter == f
-                Text(f.rawValue)
-                    .font(.system(size: fs(11.5), weight: .semibold))
-                    .foregroundStyle(on ? Color.white : Color.secondary)
-                    .padding(.horizontal, 9).padding(.vertical, 3)
-                    .background(on ? Color.accentColor : Color.primary.opacity(0.08), in: Capsule())
-                    .contentShape(Capsule())
-                    .onTapGesture { store.filter = f }
-            }
-        }
-        .padding(.trailing, 6)
     }
 }
 
@@ -830,6 +799,7 @@ struct NoteRow: View {
     let store: NotesStore
     var inWindow = false
     @StateObject private var hovering = Box(false)
+    @StateObject private var confirming = Box(false)
 
     var body: some View {
         HStack {
@@ -839,15 +809,28 @@ struct NoteRow: View {
                     .font(.system(size: fs(12))).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
-            if hovering.value {
+            if confirming.value {
+                // The first click on the x only asks; this red button is the one that deletes.
+                Text("Delete").font(.system(size: fs(11), weight: .semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 9).frame(height: 22)
+                    .background(Color.red, in: Capsule())
+                    .contentShape(Capsule())
+                    .onTapGesture { store.delete(note) }
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            } else if hovering.value {
                 Image(systemName: "xmark").font(.system(size: fs(10), weight: .semibold)).foregroundStyle(.secondary)
                     .frame(width: 22, height: 22).contentShape(Rectangle())
-                    .onTapGesture { store.delete(note) }
+                    .onTapGesture {
+                        confirming.value = true
+                        // Not confirmed in a few seconds: back to the x.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { confirming.value = false }
+                    }
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .background(hovering.value || note.id == store.selectedID ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .contentShape(Rectangle())
+        .animation(.easeOut(duration: 0.15), value: confirming.value)
         .onHover { hovering.value = $0 }
         .onTapGesture { store.select(note) }
         .contextMenu {

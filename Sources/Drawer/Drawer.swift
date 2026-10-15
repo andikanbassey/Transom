@@ -255,7 +255,8 @@ final class DrawerController {
         // Come to the front as the active app, so shortcuts and mouse mappings tied to the app underneath
         // (Spotify, for instance) stop applying while the drawer is open.
         NSApp.activate(ignoringOtherApps: true)
-        panel.makeKey()
+        // An offscreen render must not take the keyboard from whatever the user is typing in.
+        if ProcessInfo.processInfo.environment["DRAWER_SNAPSHOT"] == nil { panel.makeKey() }
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.24
             ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.25, 1)
