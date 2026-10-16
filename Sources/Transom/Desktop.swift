@@ -100,7 +100,7 @@ struct MainWindowView: View {
                 if nav.paletteOpen, let anchor {
                     let r = geo[anchor]
                     ZStack(alignment: .topLeading) {
-                        Color.black.opacity(0.14).contentShape(Rectangle()).onTapGesture { nav.paletteOpen = false }
+                        Color.black.opacity(0.14).contentShape(Rectangle()).onTapGesture { nav.paletteOpen = false }.accessibilityHidden(true)
                         SearchPalette().fixedSize().offset(x: r.maxX - SearchPalette.width, y: r.minY)
                     }
                     .frame(width: geo.size.width, height: geo.size.height)
@@ -136,7 +136,7 @@ struct SidebarAction: View {
         .background(hovering.value ? Look.selection.opacity(0.55) : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .contentShape(Rectangle())
         .onHover { hovering.value = $0 }
-        .onTapGesture(perform: action)
+        .accessibleTap(title, action)
     }
 }
 
@@ -166,7 +166,7 @@ struct ModeSwitch: View {
         .background(on ? Look.card : .clear, in: Capsule())
         .shadow(color: .black.opacity(on ? 0.12 : 0), radius: 2, y: 1)
         .contentShape(Capsule())
-        .onTapGesture { nav.tab = tab }
+        .accessibleTap(title, selected: on) { nav.tab = tab }
     }
 }
 
@@ -285,7 +285,7 @@ struct DesktopView: View {
 
     private func sidebarRow(_ s: DesktopSection) -> some View {
         SidebarRow(title: s.title, symbol: s.symbol, color: s.color, selected: nav.section == s, trailing: count(s).map { "\($0)" })
-            .onTapGesture { go(s) }
+            .accessibleTap(s.title, selected: nav.section == s) { go(s) }
             .modifier(SidebarDrop(section: s, notes: notes, files: files))
     }
 
@@ -352,7 +352,7 @@ struct DesktopView: View {
     /// selection bar while selecting, with Select and Search on the right.
     private var header: some View {
         let isClips = nav.section == .clipboard || nav.section == .pinned
-        return PageHeader(title: nav.section.title, plus: plusAction,
+        return PageHeader(title: nav.section.title, plus: plusAction, plusLabel: nav.section == .notes ? "New note" : "Add files",
                           onSelect: !selecting.value && !visibleIDs().isEmpty ? { selecting.value = true } : nil) {
             if selecting.value {
                 selectionBar
@@ -519,7 +519,7 @@ struct DesktopView: View {
                 Image(systemName: "xmark").font(.system(size: 10.5, weight: .bold)).foregroundStyle(.secondary)
                     .frame(width: 28, height: 28).background(Color.primary.opacity(0.07), in: Circle())
             }
-            .buttonStyle(.plain).help("Clear selection").opacity(n == 0 ? 0.4 : 1).disabled(n == 0)
+            .buttonStyle(.plain).help("Clear selection").accessibilityLabel("Clear selection").opacity(n == 0 ? 0.4 : 1).disabled(n == 0)
             Text(n == 0 ? "Select items" : "\(n) selected").font(.system(size: 13, weight: .medium)).padding(.leading, 2)
             Menu {
                 Button("All \(ids.count) items") { picked.value = Set(ids) }.keyboardShortcut("a", modifiers: .command)
@@ -633,7 +633,7 @@ struct DesktopView: View {
                     Text("\(count)").font(Look.meta).foregroundStyle(.tertiary)
                 }
                 .contentShape(Rectangle())
-                .onTapGesture {
+                .accessibleTap("\(title), \(count) items, \(isOpen ? "expanded" : "collapsed")", hint: "Shows or hides the section", combine: false) {
                     withAnimation(.easeOut(duration: 0.18)) {
                         if isOpen { collapsed.value.insert(title) } else { collapsed.value.remove(title) }
                     }
@@ -644,7 +644,7 @@ struct DesktopView: View {
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(Color.primary.opacity(0.06), in: Capsule())
                         .contentShape(Capsule())
-                        .onTapGesture { go(target) }
+                        .accessibleTap("See all \(title)", combine: false) { go(target) }
                 }
             }
             if isOpen {
@@ -694,7 +694,7 @@ struct DesktopView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(14)
         }
         .frame(height: cardHeight)
-        .onTapGesture { nav.section = .notes; notes.select(n) }
+        .accessibleTap(n.title) { nav.section = .notes; notes.select(n) }
         .onDrag { NSItemProvider(object: n.text as NSString) }
         .contextMenu { NoteMenu(note: n, store: notes) }
     }
@@ -709,7 +709,7 @@ struct DesktopView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.primary.opacity(0.03))
         }
         .frame(height: cardHeight)
-        .onTapGesture { NSWorkspace.shared.open(url) }
+        .accessibleTap(url.lastPathComponent, hint: "Opens the file") { NSWorkspace.shared.open(url) }
         .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider(object: url.lastPathComponent as NSString) }
         .contextMenu { fileMenu(path: p, store: files) }
     }
@@ -821,7 +821,7 @@ struct SelectChrome: View {
             .allowsHitTesting(false)
         }
         .onHover { hovering.value = $0 }
-        .onTapGesture(perform: toggle)
+        .accessibleTap("Select item", selected: on, combine: false, toggle)
         .animation(.easeOut(duration: 0.14), value: show)
         .animation(.easeOut(duration: 0.14), value: on)
     }
@@ -911,7 +911,7 @@ struct LibraryClipCard: View {
                     .frame(width: 22, height: 22).background(cat.tint, in: Circle()).offset(x: 4, y: -4)
             }
         }
-        .onTapGesture {
+        .accessibleTap(hint: "Copies the item") {
             if Settings.shared.v.pasteMode == .expand { store.expanded = clip; return }
             store.copy(clip)
             if Settings.shared.v.sounds { NSSound(named: "Pop")?.play() }

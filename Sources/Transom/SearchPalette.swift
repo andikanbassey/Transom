@@ -57,7 +57,7 @@ struct SearchPalette: View {
                             }
                             row(item, on: i == selected.value)
                                 .id(item.id)
-                                .onTapGesture { selected.value = i; run(items) }
+                                .accessibleTap { selected.value = i; run(items) }
                         }
                     }
                     .padding(.vertical, 8)
@@ -215,7 +215,7 @@ struct SearchBarButton: View {
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.09), lineWidth: 1))
         .contentShape(Rectangle())
         .onHover { hovering.value = $0 }
-        .onTapGesture { nav.paletteOpen = true }
+        .accessibleTap("Search", hint: "Opens search") { nav.paletteOpen = true }
         .anchorPreference(key: SearchAnchorKey.self, value: .bounds) { $0 }
     }
 }

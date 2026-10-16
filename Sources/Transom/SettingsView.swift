@@ -248,7 +248,7 @@ struct FolderRow: View {
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             .contentShape(Rectangle())
-            .onTapGesture { NSWorkspace.shared.open(URL(fileURLWithPath: current)) }
+            .accessibleTap("Show folder in Finder", hint: friendly) { NSWorkspace.shared.open(URL(fileURLWithPath: current)) }
             .help("Show in Finder")
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
@@ -296,7 +296,7 @@ struct SettingsView: View {
                 SidebarHeader(title: group.0)
                 ForEach(group.1) { p in
                     SidebarRow(title: p.title, symbol: p.symbol, color: p.color, selected: pane.pane == p)
-                        .onTapGesture { pane.pane = p }
+                        .accessibleTap(p.title, selected: pane.pane == p) { pane.pane = p }
                 }
             }
             Spacer()
