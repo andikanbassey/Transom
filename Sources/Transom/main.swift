@@ -183,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         ? NSHostingView(rootView: DesktopView().frame(width: 1120, height: 740))
                     : path.hasSuffix("files-options.png")
                         ? NSHostingView(rootView: FilesOptionsPopover(store: AppModel.shared.files, close: {}).padding(20).background(Color(white: 0.2)))
-                        : NSHostingView(rootView: SettingsView()))
+                        : { MainNav.shared.tab = .settings; return NSHostingView(rootView: SettingsView()) }())
                 view.frame = NSRect(origin: .zero, size: view.fittingSize)
                 view.appearance = NSAppearance(named: Env["LIGHT"] != nil ? .aqua : .darkAqua)
                 if let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {

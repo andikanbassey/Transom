@@ -1,7 +1,7 @@
-# This workflow will build a Swift project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-swift
+# Builds Transom the same way a release is built (./build.sh), checks the app bundle, and keeps the zip as a downloadable artifact.
+# The project has no unit tests; its checks are offscreen renders that need a display, so they are run by hand (see CLAUDE.md).
 
-name: Swift
+name: Build
 
 on:
   push:
@@ -11,12 +11,22 @@ on:
 
 jobs:
   build:
-
     runs-on: macos-latest
 
     steps:
     - uses: actions/checkout@v4
-    - name: Build
-      run: swift build -v
-    - name: Run tests
-      run: swift test -v
+    - name: Build the app and the zip
+      run: ./build.sh zip
+    - name: Check the bundle
+      run: |
+        codesign --verify --deep --strict build/Transom.app
+        test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' build/Transom.app/Contents/Info.plist)" = "Transom"
+        test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/Transom.app/Contents/Info.plist)" = "com.studioab.drawer"
+        test -f build/Transom.app/Contents/Resources/Transom.sdef
+    - name: Keep the zip
+      uses: actions/upload-artifact@v4
+      with:
+        name: Transom-${{ github.sha }}
+        path: |
+          build/Transom.zip
+          build/Transom.zip.sha256

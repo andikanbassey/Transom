@@ -1,0 +1,48 @@
+name: Bug report
+description: Something in Transom does not work the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. The more exact the steps, the faster it gets fixed. Please do not paste anything private from your clipboard.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Copy an image in Preview
+        2. Scroll down on the menu bar to open Transom
+        3. …
+  - type: input
+    id: version
+    attributes:
+      label: Transom version
+      description: Settings › General › About, or the first line of the menu bar menu.
+      placeholder: "0.7.0"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "macOS 26.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: sync
+    attributes:
+      label: Is iCloud Drive sync on for your clipboard, notes or files?
+      options: [No, Yes, Not sure]
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: A screenshot helps. Settings › Advanced › Capture log shows what Transom saw on the clipboard.

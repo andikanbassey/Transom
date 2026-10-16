@@ -235,6 +235,8 @@ struct DesktopView: View {
     @StateObject private var editor = NoteEditorController()
     @StateObject private var selecting = Box(false)
     @StateObject private var picked = Box(Set<String>())
+    /// Zero-based page of the long list on show; goes back to the first page when the list or its filters change.
+    @StateObject private var page = Box(0)
 
     private let grid = [GridItem(.adaptive(minimum: 250, maximum: 340), spacing: 18, alignment: .top)]
     private let cardHeight: CGFloat = 250
@@ -251,7 +253,10 @@ struct DesktopView: View {
                 picked.value = Set(visibleIDs().prefix(2))
             }
         }
-        .onChange(of: nav.section) { _, _ in endSelecting() }
+        .onChange(of: nav.section) { _, _ in endSelecting(); page.value = 0 }
+        .onChange(of: clipboard.filter) { _, _ in page.value = 0 }
+        .onChange(of: clipboard.time) { _, _ in page.value = 0 }
+        .onChange(of: clipboard.appFilter) { _, _ in page.value = 0 }
     }
 
     // MARK: Sidebar
@@ -295,10 +300,13 @@ struct DesktopView: View {
         case .all: nil
         case .clipboard: clipboard.clips.count
         case .pinned: clipboard.clips.filter(\.pinned).count
-        case .notes: notes.notes.count
+        case .notes: savedNotes.count
         case .files: files.paths.count
         }
     }
+
+    /// Notes with something in them. The store always keeps one blank note ready to type into; the Library does not list it.
+    private var savedNotes: [Note] { notes.notes.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } }
 
     // MARK: Content
 
@@ -315,9 +323,27 @@ struct DesktopView: View {
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 header
-                ScrollView {
-                    cards.padding(.horizontal, 32).padding(.bottom, 32).padding(.top, 6)
+                if totalItems == 0 {
+                    emptyState
+                } else {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(spacing: 0) {
+                                Color.clear.frame(height: 0).id("top")
+                                cards
+                                if pageCount > 1 { PaginationBar(page: pageBinding, pageCount: pageCount, total: totalItems) }
+                            }
+                            .padding(.horizontal, 32).padding(.bottom, 32).padding(.top, 6)
+                        }
+                        .onChange(of: currentPage) { _, _ in proxy.scrollTo("top", anchor: .top) }
+                    }
                 }
+            }
+            // Files dragged in from Finder go into Quick Access; the other pages do not take drops from Finder.
+            .dropDestination(for: URL.self) { urls, _ in
+                guard nav.section == .files, !urls.isEmpty else { return false }
+                urls.forEach(files.add)
+                return true
             }
         }
     }
@@ -354,15 +380,73 @@ struct DesktopView: View {
 
     @ViewBuilder private var cards: some View {
         switch nav.section {
-        case .clipboard: clipboardItems(clips())
-        case .pinned: clipboardItems(clips().filter(\.pinned))
-        case .notes: notesItems(notes.notes)
-        case .files: filesItems(files.paths)
+        case .clipboard: clipboardItems(slice(clips()))
+        case .pinned: clipboardItems(slice(clips().filter(\.pinned)))
+        case .notes: notesItems(slice(savedNotes))
+        case .files: filesItems(slice(files.paths))
         case .all: EmptyView()
         }
     }
 
-    // MARK: Cards or lists, per kind (Settings › Appearance › Items)
+    // MARK: Pages and empty states
+
+    /// How many items the current page has in all, across its pages.
+    private var totalItems: Int {
+        switch nav.section {
+        case .clipboard: clips().count
+        case .pinned: clips().filter(\.pinned).count
+        case .notes: savedNotes.count
+        case .files: files.paths.count
+        case .all: 0
+        }
+    }
+    private var pageCount: Int { max(1, (totalItems + Look.pageSize - 1) / Look.pageSize) }
+    private var currentPage: Int { min(page.value, pageCount - 1) }
+    private var pageBinding: Binding<Int> { Binding(get: { currentPage }, set: { page.value = $0 }) }
+    private func slice<T>(_ items: [T]) -> [T] {
+        let start = min(currentPage * Look.pageSize, items.count)
+        return Array(items[start..<min(items.count, start + Look.pageSize)])
+    }
+
+    /// What each page says when it has nothing to list, with the one action that fills it.
+    @ViewBuilder private var emptyState: some View {
+        switch nav.section {
+        case .clipboard where !clipboard.clips.isEmpty:
+            EmptyState(symbol: "line.3.horizontal.decrease.circle", tint: .secondary, title: "No matches",
+                       message: "Nothing in your history fits these filters.",
+                       actionTitle: "Clear filters", actionSymbol: "xmark.circle") {
+                clipboard.filter = .all; clipboard.time = .any; clipboard.appFilter = nil
+            }
+        case .clipboard:
+            EmptyState(symbol: "doc.on.clipboard", tint: .blue, title: "Nothing copied yet",
+                       message: "Everything you copy lands here, with previews for text, links, pictures and files. Copy something, then click it to paste.",
+                       hint: "Scroll down on the menu bar to open Transom from any app.")
+        case .pinned where clipboard.clips.contains(where: \.pinned):
+            EmptyState(symbol: "line.3.horizontal.decrease.circle", tint: .secondary, title: "No matches",
+                       message: "None of your pinned clips fit these filters.",
+                       actionTitle: "Clear filters", actionSymbol: "xmark.circle") {
+                clipboard.filter = .all; clipboard.time = .any; clipboard.appFilter = nil
+            }
+        case .pinned where !clipboard.clips.isEmpty:
+            EmptyState(symbol: "pin", tint: .orange, title: "Nothing pinned",
+                       message: "Pinned clips stay at the top and are never cleared. Right-click a clip and choose Pin, or select several and pin them together.",
+                       actionTitle: "Go to Clipboard", actionSymbol: "doc.on.clipboard") { nav.section = .clipboard }
+        case .pinned:
+            EmptyState(symbol: "pin", tint: .orange, title: "Nothing pinned",
+                       message: "Pinned clips stay at the top and are never cleared. Copy something first, then pin it from the Clipboard page.")
+        case .notes:
+            EmptyState(symbol: "square.and.pencil", tint: .yellow, title: "No notes yet",
+                       message: "Jot things down as Markdown. Notes are plain files, so they work in any editor and can live in iCloud Drive.",
+                       actionTitle: "New Note", actionSymbol: "plus") { notes.add(); notes.showingList = false }
+        case .files:
+            EmptyState(symbol: "folder", tint: .blue, title: "Nothing in Quick Access",
+                       message: "Keep the files and folders you reach for most one click away. Add them here, or drag them in from Finder.",
+                       actionTitle: "Add Files…", actionSymbol: "plus", action: addFiles,
+                       hint: "You can also drop files onto this page.")
+        case .all:
+            EmptyView()
+        }
+    }
 
     @ViewBuilder private func clipboardItems(_ list: [Clip]) -> some View {
         if settings.v.clipboardCards {
@@ -403,7 +487,7 @@ struct DesktopView: View {
         switch nav.section {
         case .clipboard: clips().map { $0.id.uuidString }
         case .pinned: clips().filter(\.pinned).map { $0.id.uuidString }
-        case .notes: notes.notes.map { $0.id.uuidString }
+        case .notes: savedNotes.map { $0.id.uuidString }
         case .files: files.paths
         case .all: []
         }
@@ -438,7 +522,7 @@ struct DesktopView: View {
             .buttonStyle(.plain).help("Clear selection").opacity(n == 0 ? 0.4 : 1).disabled(n == 0)
             Text(n == 0 ? "Select items" : "\(n) selected").font(.system(size: 13, weight: .medium)).padding(.leading, 2)
             Menu {
-                Button("All \(ids.count) shown") { picked.value = Set(ids) }.keyboardShortcut("a", modifiers: .command)
+                Button("All \(ids.count) items") { picked.value = Set(ids) }.keyboardShortcut("a", modifiers: .command)
                 if isClips {
                     Divider()
                     Button("Last 5 minutes") { pickRecent(300) }
@@ -529,7 +613,7 @@ struct DesktopView: View {
                         section("Pinned", target: .pinned, count: pinned.count) { clipboardItems(Array(pinned.prefix(6))) }
                     }
                     section("Clipboard", target: .clipboard, count: recent.count) { clipboardItems(Array(recent.prefix(6))) }
-                    section("Notes", target: .notes, count: notes.notes.count) { notesItems(Array(notes.notes.prefix(6))) }
+                    section("Notes", target: .notes, count: savedNotes.count) { notesItems(Array(savedNotes.prefix(6))) }
                     section("Quick Access", target: .files, count: files.paths.count) { filesItems(Array(files.paths.prefix(6))) }
                 }
                 .padding(.horizontal, 32).padding(.bottom, 36)
