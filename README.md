@@ -254,8 +254,8 @@ Clipboard content can be read out only with AppleScript, never through a link.
 
 ## Roadmap
 
-The full plan, with the reasoning, is in [ROADMAP.md](ROADMAP.md); what is left before a public release is in
-[RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md). In short:
+The full plan is in [ROADMAP.md](ROADMAP.md), and how releases are made is in [docs/releasing.md](docs/releasing.md).
+In short:
 
 **Now:** make the core trustworthy (capture hardening, speed at any history size, tests, a refactor) and add keyboard
 navigation in Transom.
