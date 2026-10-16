@@ -62,6 +62,8 @@ enum Look {
     static let headerGap: CGFloat = 26
     /// Between a page's heading row and its controls row (filters, Select, Search).
     static let toolbarGap: CGFloat = 18
+    /// Items on one page of a Library list. Longer lists get a pagination bar under them.
+    static let pageSize = Int(Env["PAGE_SIZE"] ?? "") ?? 48   // TRANSOM_PAGE_SIZE=4 makes the pagination bar easy to test
     /// The search field on every Library and Settings page.
     static let searchWidth: CGFloat = 260
     static let sidebarWidth: CGFloat = 230
@@ -188,6 +190,79 @@ struct PageHeader<Filters: View>: View {
             .frame(minHeight: Look.controlHeight)
         }
         .zIndex(10)
+    }
+}
+
+/// What a page shows when it has nothing to list: an icon tile, a title, one or two lines about what belongs here, and the one
+/// action that fills it. Centred in the space under the header, a little above the middle.
+struct EmptyState: View {
+    let symbol: String
+    var tint: Color = .accentColor
+    let title: String
+    let message: String
+    var actionTitle: String?
+    var actionSymbol: String?
+    var action: (() -> Void)?
+    /// A quiet line under the button, for the other way in ("or drag files here").
+    var hint: String?
+    @StateObject private var hovering = Box(false)
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Image(systemName: symbol).font(.system(size: 24, weight: .medium)).foregroundStyle(tint)
+                .frame(width: 64, height: 64)
+                .background(Look.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
+                .shadow(color: .black.opacity(0.10), radius: 8, y: 3)
+            Text(title).font(Look.sectionTitle).padding(.top, 18)
+            Text(message).font(Look.body).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .lineSpacing(2).fixedSize(horizontal: false, vertical: true).frame(maxWidth: 380).padding(.top, 6)
+            if let actionTitle, let action {
+                Button(action: action) {
+                    HStack(spacing: 7) {
+                        if let actionSymbol { Image(systemName: actionSymbol).font(.system(size: 12.5, weight: .semibold)) }
+                        Text(actionTitle).font(.system(size: 13.5, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18).frame(height: Look.controlHeight)
+                    .background(Color.accentColor.opacity(hovering.value ? 0.92 : 1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).onHover { hovering.value = $0 }.padding(.top, 20)
+            }
+            if let hint { Text(hint).font(Look.meta).foregroundStyle(.tertiary).padding(.top, 12) }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, 70).padding(.horizontal, 32)
+    }
+}
+
+/// "49–96 of 213" with Previous and Next, under a long list.
+struct PaginationBar: View {
+    @Binding var page: Int
+    let pageCount: Int
+    let total: Int
+
+    var body: some View {
+        let first = page * Look.pageSize + 1
+        let last = min(total, (page + 1) * Look.pageSize)
+        HStack(spacing: 10) {
+            Text("\(first)–\(last) of \(total)").font(Look.meta).foregroundStyle(.secondary)
+            Spacer()
+            step("chevron.left", enabled: page > 0, help: "Previous page") { page -= 1 }
+            Text("Page \(page + 1) of \(pageCount)").font(.system(size: 12.5, weight: .medium)).foregroundStyle(.secondary)
+                .frame(minWidth: 86)
+            step("chevron.right", enabled: page < pageCount - 1, help: "Next page") { page += 1 }
+        }
+        .padding(.top, 8)
+    }
+
+    private func step(_ symbol: String, enabled: Bool, help: String, _ go: @escaping () -> Void) -> some View {
+        Button(action: go) {
+            Image(systemName: symbol).font(.system(size: 11, weight: .bold)).foregroundStyle(.secondary)
+                .frame(width: 30, height: 28).background(Color.primary.opacity(0.07), in: Capsule()).contentShape(Capsule())
+        }
+        .buttonStyle(.plain).disabled(!enabled).opacity(enabled ? 1 : 0.35).help(help)
     }
 }
 

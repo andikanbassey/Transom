@@ -1,0 +1,21 @@
+name: Feature request
+description: Suggest something Transom should do. Bigger ideas are welcome in Discussions too.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the situation, not the solution. What is annoying or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Transom to do?
+      description: Transom is meant to stay simple and light, so small, focused ideas land best.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: How do you cope today?
+      description: Other apps or workarounds you use, and what they get right.

@@ -15,6 +15,11 @@ Each release is written as what you can now do.
 - Test and debug switches are now `TRANSOM_*` (`TRANSOM_SUPPORT_DIR`, `TRANSOM_SNAPSHOT` and so on); the old `DRAWER_*` names are still read.
 - The download is `Transom.dmg` (and `Transom.zip`) and the app inside is `Transom.app`.
 
+**Library**
+- Every Library page now explains itself when it is empty and offers the one action that fills it: **Add Files…** on Quick Access (you can also drop files from Finder onto the page), **New Note** on Notes, a pointer to the Clipboard page when nothing is pinned, and **Clear filters** when filters hide everything.
+- Long lists are paged, 48 items at a time, with Previous and Next and "49–96 of 213" under the list. Select still picks across all pages.
+- The Library no longer lists the blank note that is kept ready for typing.
+
 **Updates**
 - ✨ Transom now **checks for updates** (about once a day, switchable in Settings › General) and can **install them for you**: it downloads the release from GitHub, verifies its checksum, swaps the app and reopens. A new version shows in the menu bar menu and under Settings › General › About › Updates.
 

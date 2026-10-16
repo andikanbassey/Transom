@@ -54,6 +54,11 @@ Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clip
 - **Select** several items to pin or delete them together, or pick "last 5 minutes", "last hour" or "today" and clear them in one go.
 - Cards or lists, for everything or per kind. Settings sit one click away, behind the same window.
 
+<p align="center">
+  <img src="docs/images/library-clipboard.png" width="49%" alt="The Library on the Clipboard page, with the time, type and app filters, Select and search">
+  <img src="docs/images/library-notes.png" width="49%" alt="The Library on the Notes page">
+</p>
+
 ### Privacy
 - Skips passwords and other items that apps flag as concealed or transient.
 - Allow list and block list for the apps Transom records from.
@@ -245,7 +250,7 @@ Clipboard content can be read out only with AppleScript, never through a link.
 
 **How do I remove it?** Delete Transom from Applications, then delete `~/Library/Application Support/Transom` (and the iCloud Drive `Transom` folder, or `Drawer` if you set sync up before the rename).
 
-**I found a bug or have an idea.** Open an [issue](../../issues) or use *Settings › General › About*.
+**I found a bug or have an idea.** Open an [issue](../../issues/new/choose) for a bug or a focused feature request, or start a [discussion](../../discussions/categories/ideas) for a rough idea or a question. *Settings › General › About* links to both.
 
 ## Roadmap
 
