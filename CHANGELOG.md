@@ -2,6 +2,15 @@
 
 Each release is written as what you can now do.
 
+## Unreleased
+
+**Accessibility**
+- ✨ **VoiceOver** can now find and press the clickable parts of Transom: the Library sidebar and Library | Settings switch, the round "+" button, cards and rows, the pin and delete buttons, the header icons, search, and the page controls. Icon-only controls have labels, and selected items are announced.
+
+**Under the hood**
+- Unit tests for the Markdown history format and version comparison run in CI.
+- The updater's test switches are only read by debug builds.
+
 ## 0.7 (2026-10-16): Drawer is now Transom
 
 **The new name**

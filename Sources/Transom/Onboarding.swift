@@ -92,14 +92,14 @@ struct OnboardingView: View {
             .padding(.horizontal, 30).padding(.vertical, 12)
             .glassSurface(Capsule(), tint: Color.accentColor.opacity(0.85), interactive: true)
             .background(Color.accentColor.opacity(0.0001), in: Capsule())
-            .contentShape(Capsule()).onTapGesture(perform: action)
+            .contentShape(Capsule()).accessibleTap(title, action)
     }
 
     private func secondary(_ title: String, action: @escaping () -> Void) -> some View {
         Text(title).font(.system(size: 14.5, weight: .medium)).foregroundStyle(.white.opacity(0.9))
             .padding(.horizontal, 26).padding(.vertical, 12)
             .glassSurface(Capsule(), interactive: true)
-            .contentShape(Capsule()).onTapGesture(perform: action)
+            .contentShape(Capsule()).accessibleTap(title, action)
     }
 
     private var welcome: some View {

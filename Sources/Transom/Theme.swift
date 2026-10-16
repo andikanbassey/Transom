@@ -97,7 +97,7 @@ struct Chip: View {
                     in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .contentShape(Rectangle())
         .onHover { hovering.value = $0 }
-        .onTapGesture(perform: action)
+        .accessibleTap(title, selected: selected, action)
     }
 }
 
@@ -157,6 +157,8 @@ struct PageHeader<Filters: View>: View {
     let title: String
     var subtitle: String?
     var plus: (() -> Void)?
+    /// What VoiceOver calls the round plus button.
+    var plusLabel = "Add"
     var onSelect: (() -> Void)?
     @ViewBuilder var filters: () -> Filters
 
@@ -170,7 +172,7 @@ struct PageHeader<Filters: View>: View {
                         .overlay(Circle().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
                         .shadow(color: .black.opacity(0.10), radius: 6, y: 2)
                         .contentShape(Circle())
-                        .onTapGesture(perform: plus)
+                        .accessibleTap(plusLabel, combine: false, plus)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(Look.pageTitle)
@@ -209,7 +211,7 @@ struct EmptyState: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Image(systemName: symbol).font(.system(size: 24, weight: .medium)).foregroundStyle(tint)
+            Image(systemName: symbol).font(.system(size: 24, weight: .medium)).foregroundStyle(tint).accessibilityHidden(true)
                 .frame(width: 64, height: 64)
                 .background(Look.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
@@ -262,7 +264,7 @@ struct PaginationBar: View {
             Image(systemName: symbol).font(.system(size: 11, weight: .bold)).foregroundStyle(.secondary)
                 .frame(width: 30, height: 28).background(Color.primary.opacity(0.07), in: Capsule()).contentShape(Capsule())
         }
-        .buttonStyle(.plain).disabled(!enabled).opacity(enabled ? 1 : 0.35).help(help)
+        .buttonStyle(.plain).disabled(!enabled).opacity(enabled ? 1 : 0.35).help(help).accessibilityLabel(help)
     }
 }
 
@@ -315,5 +317,52 @@ enum MenuBarIcon {
         }
         img.isTemplate = true
         return img
+    }
+}
+
+// MARK: - Accessibility
+
+extension View {
+    /// A click target that VoiceOver can find and press. `onTapGesture` alone is invisible to it, so this adds the button trait,
+    /// an optional label and hint, the selected state, and the same action as a VoiceOver activation.
+    /// `combine: true` reads the text inside the view; `false` reads only `label` (for icon-only controls).
+    func accessibleTap(_ label: String? = nil, hint: String? = nil, selected: Bool = false, combine: Bool = true,
+                       _ action: @escaping () -> Void) -> some View {
+        self.onTapGesture(perform: action)
+            .accessibilityElement(children: combine ? .combine : .ignore)
+            .modifier(A11yText(label: label, hint: hint))
+            .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+            .accessibilityAction(.default, action)
+    }
+}
+
+/// Sets a label and hint only when given, so a view that combines its children keeps reading their text.
+private struct A11yText: ViewModifier {
+    let label: String?
+    let hint: String?
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if let label, let hint { content.accessibilityLabel(label).accessibilityHint(hint) }
+        else if let label { content.accessibilityLabel(label) }
+        else if let hint { content.accessibilityHint(hint) }
+        else { content }
+    }
+}
+
+/// What VoiceOver should call an icon-only control, from its SF Symbol.
+func symbolLabel(_ symbol: String) -> String {
+    switch symbol {
+    case "magnifyingglass": "Search"
+    case "star", "star.fill": "Pinned only"
+    case "pause.circle.fill": "Resume recording"
+    case "record.circle": "Pause recording"
+    case "gearshape": "Settings"
+    case "plus": "Add"
+    case "ellipsis": "More options"
+    case "list.bullet": "All notes"
+    case "pin": "Pin"
+    case "pin.fill": "Unpin"
+    case "trash": "Delete"
+    default: symbol
     }
 }

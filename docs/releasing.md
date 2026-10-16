@@ -28,9 +28,24 @@ notarized release needs a paid Apple Developer membership: a Developer ID Applic
 
 ## Checks before a public release
 
+- `swift test` passes (CI runs it on every pull request).
 - Drag, Select and delete, scrolling on the menu bar, keyboard navigation, two copies running together, and the Library | Settings switch, all tried by hand.
 - Upgrade from the previous version with data kept.
 - VoiceOver over the drawer and the Library; contrast on glass at low opacity.
 - Sync between two Macs, including pictures arriving after their history entry.
 - Idle CPU and memory with a long history; launch with the network off.
 - macOS 14, 15 and 26; a notched MacBook; two displays; a full-screen app in front.
+
+## Performance budget
+
+Measured on 2026-10-16 with the release build on an Apple silicon Mac (macOS 27 beta SDK), drawer closed, capture paused, sampling the
+process with `ps` after launch. Re-measure before a release and update the numbers.
+
+| | Budget | Sample data (9 items) | 5,000 items over 3 months |
+|---|---|---|---|
+| Launch peak memory (3 s) | under 150 MB | 91 MB | 102 MB |
+| Memory once settled (30 s on) | under 40 MB | 19 MB, 16 MB at 90 s | 19 MB, 16 MB at 90 s |
+| Idle CPU once settled (30 s on) | under 1% | 0.0% | 0.0% |
+| Launch with the network off | opens immediately | not yet measured | not yet measured |
+
+Not covered yet: memory with a year of history including pictures, and CPU while Transom is open and scrolling.

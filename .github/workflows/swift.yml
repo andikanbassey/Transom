@@ -1,5 +1,6 @@
-# Builds Transom the same way a release is built (./build.sh), checks the app bundle, and keeps the zip as a downloadable artifact.
-# The project has no unit tests; its checks are offscreen renders that need a display, so they are run by hand (see CLAUDE.md).
+# Runs the unit tests (history format, version comparison), builds Transom the way a release is built (./build.sh), checks the app
+# bundle, and keeps the zip as a downloadable artifact. UI checks are offscreen renders that need a display, so they are run by hand
+# (see CLAUDE.md).
 
 name: Build
 
@@ -15,6 +16,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Unit tests
+      run: swift test
     - name: Build the app and the zip
       run: ./build.sh zip
     - name: Check the bundle

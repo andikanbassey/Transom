@@ -42,7 +42,12 @@ final class Updater: ObservableObject {
     /// Called at launch and then every few hours: asks GitHub at most once a day, and only if the user allows it.
     func checkIfDue() {
         guard Settings.shared.v.checkForUpdates, !AppModel.shared.standby else { return }
-        if Self.isTestRun { if Env["UPDATE_FILE"] != nil { check(manual: true) }; return }
+        if Self.isTestRun {
+            #if DEBUG
+            if Env["UPDATE_FILE"] != nil { check(manual: true) }
+            #endif
+            return
+        }
         if Date().timeIntervalSince(lastAutoCheck) > 24 * 3600 { check(manual: false) }
     }
 
@@ -50,12 +55,15 @@ final class Updater: ObservableObject {
 
     func check(manual: Bool) {
         switch state { case .checking, .downloading, .installing: return; default: break }
-        // Debug aid: TRANSOM_UPDATE_FILE=/path/Transom.dmg offers that file as version 99 (and TRANSOM_UPDATE_INSTALL=1 installs it).
+        // Debug aid, debug builds only (`./build.sh dev`): TRANSOM_UPDATE_FILE=/path/Transom.dmg offers that file as version 99,
+        // and TRANSOM_UPDATE_INSTALL=1 installs it. A release build never reads these.
+        #if DEBUG
         if let file = Env["UPDATE_FILE"] {
             state = .available(Release(version: "99", notes: "", dmg: URL(fileURLWithPath: file), checksum: nil, page: Brand.repoURL))
             if Env["UPDATE_INSTALL"] != nil { install() }
             return
         }
+        #endif
         state = .checking
         var request = URLRequest(url: URL(string: "https://api.github.com/repos/andikanbassey/Transom/releases/latest")!)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")

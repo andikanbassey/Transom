@@ -221,7 +221,7 @@ struct HeaderIcon: View {
                         in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             .contentShape(Rectangle())
             .onHover { hovering.value = $0 }
-            .onTapGesture(perform: action)
+            .accessibleTap(symbolLabel(symbol), selected: active, combine: false, action)
     }
 }
 
@@ -521,7 +521,7 @@ struct ClipRow: View {
                 .foregroundStyle(clip.pinned ? Color.yellow : Color.secondary.opacity(hovering.value ? 0.8 : 0))
                 .frame(width: 14)
                 .contentShape(Rectangle())
-                .onTapGesture { store.togglePin(clip) }
+                .accessibleTap(clip.pinned ? "Unpin" : "Pin", combine: false) { store.togglePin(clip) }
             coverArt(cat)
                 .frame(width: cover, height: cover)
                 .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
@@ -538,7 +538,7 @@ struct ClipRow: View {
                 if hovering.value {
                     Image(systemName: "xmark").font(.system(size: fs(10), weight: .semibold)).foregroundStyle(.secondary)
                         .frame(width: 22, height: 22).contentShape(Rectangle())
-                        .onTapGesture { store.delete(clip) }
+                        .accessibleTap("Delete", combine: false) { store.delete(clip) }
                 } else {
                     HStack(spacing: 6) {
                         if let icon = AppIcons.icon(clip.sourceBundleID) {
@@ -557,7 +557,7 @@ struct ClipRow: View {
                     in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .contentShape(Rectangle())
         .onHover { hovering.value = $0 }
-        .onTapGesture {
+        .accessibleTap(hint: "Pastes or copies the item") {
             if Settings.shared.v.pasteMode == .expand { store.expanded = clip }
             else if inWindow { store.copy(clip); if Settings.shared.v.sounds { NSSound(named: "Pop")?.play() } }
             else { AppModel.shared.use(clip) }
@@ -706,7 +706,7 @@ struct FileTile: View {
         .background(hovering.value ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .opacity(FileManager.default.fileExists(atPath: path) ? 1 : 0.4)
         .onHover { hovering.value = $0 }
-        .onTapGesture { NSWorkspace.shared.open(url) }
+        .accessibleTap(url.lastPathComponent, hint: "Opens the file") { NSWorkspace.shared.open(url) }
         .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
         .contextMenu { fileMenu(path: path, store: store) }
     }
@@ -730,7 +730,7 @@ struct FileListRow: View {
         .contentShape(Rectangle())
         .opacity(FileManager.default.fileExists(atPath: path) ? 1 : 0.4)
         .onHover { hovering.value = $0 }
-        .onTapGesture { NSWorkspace.shared.open(url) }
+        .accessibleTap(url.lastPathComponent, hint: "Opens the file") { NSWorkspace.shared.open(url) }
         .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
         .contextMenu { fileMenu(path: path, store: store) }
     }
@@ -828,12 +828,12 @@ struct NoteRow: View {
                     .padding(.horizontal, 9).frame(height: 22)
                     .background(Color.red, in: Capsule())
                     .contentShape(Capsule())
-                    .onTapGesture { store.delete(note) }
+                    .accessibleTap("Confirm delete note", combine: false) { store.delete(note) }
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
             } else if hovering.value {
                 Image(systemName: "xmark").font(.system(size: fs(10), weight: .semibold)).foregroundStyle(.secondary)
                     .frame(width: 22, height: 22).contentShape(Rectangle())
-                    .onTapGesture {
+                    .accessibleTap("Delete note", combine: false) {
                         confirming.value = true
                         // Not confirmed in a few seconds: back to the x.
                         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { confirming.value = false }
@@ -845,7 +845,7 @@ struct NoteRow: View {
         .contentShape(Rectangle())
         .animation(.easeOut(duration: 0.15), value: confirming.value)
         .onHover { hovering.value = $0 }
-        .onTapGesture { store.select(note) }
+        .accessibleTap(note.title, selected: note.id == store.selectedID) { store.select(note) }
         .contextMenu {
             NoteMenu(note: note, store: store)
             if !inWindow { Divider(); AppMenuItems() }
@@ -998,7 +998,7 @@ private struct OptionRow: View {
         .background(hovering.value ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
         .contentShape(Rectangle())
         .onHover { hovering.value = $0 }
-        .onTapGesture(perform: action)
+        .accessibleTap(title, selected: checked, action)
     }
 }
 
@@ -1169,7 +1169,7 @@ struct ClipCard: View {
                     .transition(.opacity)
             }
         }
-        .onTapGesture {
+        .accessibleTap(hint: "Copies the item") {
             if Settings.shared.v.pasteMode == .expand { store.expanded = clip; return }
             if inWindow {
                 store.copy(clip)
@@ -1187,7 +1187,7 @@ struct ClipCard: View {
     private func cardButton(_ symbol: String, action: @escaping () -> Void) -> some View {
         Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
             .frame(width: 24, height: 24).background(.black.opacity(0.55), in: Circle())
-            .contentShape(Circle()).onTapGesture(perform: action)
+            .contentShape(Circle()).accessibleTap(symbolLabel(symbol), combine: false, action)
     }
 
     private var host: String {

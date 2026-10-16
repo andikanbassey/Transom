@@ -401,7 +401,7 @@ private struct ToolButton: View {
             .background(hovering.value ? Look.selection : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .contentShape(Rectangle())
             .onHover { hovering.value = $0 }
-            .onTapGesture(perform: action)
+            .accessibleTap(help, combine: false, action)
             .help(help)
     }
 }

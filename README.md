@@ -81,7 +81,7 @@ Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clip
 
 ## Install
 
-Transom needs **macOS 14 or later**.
+Transom needs **macOS 14 or later** on a Mac with Apple silicon (the download is built for arm64).
 
 ### Download
 
@@ -146,6 +146,7 @@ cd <this repository>
 Other targets:
 
 ```bash
+swift test             # unit tests (history format, version comparison)
 ./build.sh             # build only: build/Transom.app
 ./build.sh run         # build and launch from build/
 ./build.sh dev         # fast debug build and launch, for trying changes
@@ -249,6 +250,8 @@ Clipboard content can be read out only with AppleScript, never through a link.
 **How do I use it on two Macs?** Turn on iCloud Drive in Settings. Notes, Quick Access and clipboard history then sync through the folders themselves.
 
 **How do I remove it?** Delete Transom from Applications, then delete `~/Library/Application Support/Transom` (and the iCloud Drive `Transom` folder, or `Drawer` if you set sync up before the rename).
+
+**How do I reset Transom?** Quit it, then delete `~/Library/Application Support/Transom` (your history, notes and settings) and run `defaults delete com.studioab.drawer` in Terminal (its preferences; the identifier is kept from the app's earlier name). Opening Transom again starts fresh with the welcome screen.
 
 **I found a bug or have an idea.** Open an [issue](../../issues/new/choose) for a bug or a focused feature request, or start a [discussion](../../discussions/categories/ideas) for a rough idea or a question. *Settings › General › About* links to both.
 
