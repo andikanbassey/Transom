@@ -10,3 +10,8 @@ DerivedData/
 
 # macOS
 .DS_Store
+
+# Local only: the unredacted working notes, personal Claude instructions, QC reports
+.private/
+CLAUDE.local.md
+qc-report-*.md
