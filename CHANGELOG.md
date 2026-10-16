@@ -2,7 +2,7 @@
 
 Each release is written as what you can now do.
 
-## Unreleased: Drawer is now Transom
+## 0.7 (2026-10-16): Drawer is now Transom
 
 **The new name**
 - ✨ **Drawer is now Transom.** A transom is the small window above a door, hinged at the top so you can open it a little and see through without opening the door. That is how the app opens at the top of your screen. The icon and the menu bar glyph are redrawn as a window with a glass top pane, a bar under it and a page, a picture and a link below.
@@ -22,6 +22,11 @@ Each release is written as what you can now do.
 
 **Updates**
 - ✨ Transom now **checks for updates** (about once a day, switchable in Settings › General) and can **install them for you**: it downloads the release from GitHub, verifies its checksum, swaps the app and reopens. A new version shows in the menu bar menu and under Settings › General › About › Updates.
+
+**Good to know**
+- SHA-256 of `Transom.dmg`: `c64d19c8b38f6ae8e767f61ed63786f437d8c179f9eed19f3e0c70261bbd9e76`
+- Not notarized yet, so macOS asks you to confirm opening it the first time. See [Install](README.md#install).
+- Coming from Drawer: quit Drawer, drag Transom into Applications (it can replace Drawer.app) and open it. Your data moves across by itself.
 
 ## 0.6 (2026-10-15)
 

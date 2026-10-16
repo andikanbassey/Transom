@@ -11,7 +11,7 @@ Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clip
 
 > **Transom was called Drawer until 0.7.** Your history, notes and settings move across by themselves the first time the new app starts, and `drawer://` links keep working for a few releases.
 
-> **Status:** early (v0.6). It is a native Swift app with no third-party dependencies.
+> **Status:** early (v0.7). It is a native Swift app with no third-party dependencies.
 
 ## Features
 
@@ -64,7 +64,7 @@ Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clip
 - Allow list and block list for the apps Transom records from.
 - Optionally hide Transom from screen sharing.
 - Link previews can be switched off. They download the page to get a title and image.
-- Everything is stored locally. Nothing is sent anywhere: no accounts, no analytics. The only network use is link previews (off if you like) and the iCloud Drive sync you turn on yourself.
+- Everything is stored locally. No accounts, no analytics. The only network use is link previews (off if you like), a once-a-day check for a new version on GitHub (off if you like; it sends only a request for the latest release) and the iCloud Drive sync you turn on yourself.
 - Link cover images are kept on your Mac only, never in the synced folder.
 
 ### Look and feel
