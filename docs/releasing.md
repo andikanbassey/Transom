@@ -38,14 +38,14 @@ notarized release needs a paid Apple Developer membership: a Developer ID Applic
 
 ## Performance budget
 
-Measured on 2026-10-16 with the release build on an Apple silicon Mac (macOS 27 beta SDK), drawer closed, capture paused, sampling the
-process with `ps` after launch. Re-measure before a release and update the numbers.
+Measured on 2026-10-17 with the release build from a fresh clone, on an Apple silicon Mac (macOS 27 beta SDK), drawer closed, capture paused, a history of 5,000 items over three months. Re-measure before a release and update the numbers.
 
-| | Budget | Sample data (9 items) | 5,000 items over 3 months |
-|---|---|---|---|
-| Launch peak memory (3 s) | under 150 MB | 91 MB | 102 MB |
-| Memory once settled (30 s on) | under 40 MB | 19 MB, 16 MB at 90 s | 19 MB, 16 MB at 90 s |
-| Idle CPU once settled (30 s on) | under 1% | 0.0% | 0.0% |
-| Launch with the network off | opens immediately | not yet measured | not yet measured |
+| | Budget | Measured |
+|---|---|---|
+| Build from a fresh clone (`./build.sh dmg`) | under 3 minutes | 77 s |
+| Launch peak memory (first seconds) | under 150 MB | about 100 MB |
+| Memory once settled | under 40 MB | 10 to 18 MB over 5 minutes |
+| Idle CPU, averaged over 5 minutes | under 1% | 0.4% (1.2 s of CPU in 290 s) |
+| Launch with the network off | opens, no crash, no dialog | opens at 38 MB; the update check fails silently; no crash report |
 
 Not covered yet: memory with a year of history including pictures, and CPU while Transom is open and scrolling.
