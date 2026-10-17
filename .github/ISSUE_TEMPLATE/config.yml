@@ -3,3 +3,6 @@ contact_links:
   - name: Ideas and questions
     url: https://github.com/andikanbassey/Transom/discussions/categories/ideas
     about: Share a rough idea, ask how something works, or vote on what comes next.
+  - name: Report a security problem privately
+    url: https://github.com/andikanbassey/Transom/security/advisories/new
+    about: Please do not open a public issue for a security problem. This opens a private report.
