@@ -50,27 +50,60 @@ Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clip
 - Icon or list view, three item sizes, sort by name, kind, date added or date modified.
 - Drag files back out to any app.
 
-<p>
-  <img src="docs/images/drawer-quick-access.png" width="46%" alt="The Quick Access panel with four pinned files">
-</p>
-
 ### Notes
 - Notes are plain **Markdown files** in a folder you choose; pictures sit in an `Attachments` folder beside them.
 - Opens on the list of your notes with a preview line each, remembers the note you were editing.
 
-<p>
-  <img src="docs/images/drawer-notes.png" width="46%" alt="The Notes panel listing three notes">
-</p>
+<table>
+<tr>
+<td width="50%" valign="top">
+
+#### Quick Access
+
+<img src="docs/images/drawer-quick-access.png" width="100%" alt="The Quick Access panel with four pinned files">
+
+The files and folders you reach for most, one click away.
+
+</td>
+<td width="50%" valign="top">
+
+#### Notes
+
+<img src="docs/images/drawer-notes.png" width="100%" alt="The Notes panel listing three notes">
+
+Plain Markdown notes right beside your clipboard.
+
+</td>
+</tr>
+</table>
 
 ### Library
 - A bigger window for everything, opened from the menu bar: clipboard, pinned, notes and Quick Access, with search (⌘K) for the page you are on.
 - **Select** several items to pin or delete them together, or pick "last 5 minutes", "last hour" or "today" and clear them in one go.
 - Cards or lists, for everything or per kind. Settings sit one click away, behind the same window.
 
-<p>
-  <img src="docs/images/library-clipboard.png" width="49%" alt="The Library on the Clipboard page, with the time, type and app filters, Select and search">
-  <img src="docs/images/library-notes.png" width="49%" alt="The Library on the Notes page">
-</p>
+<table>
+<tr>
+<td width="50%" valign="top">
+
+#### Library · Clipboard
+
+<img src="docs/images/library-clipboard.png" width="100%" alt="The Library on the Clipboard page, with the time, type and app filters, Select and search">
+
+Filter by time, type and app, then Select several items at once.
+
+</td>
+<td width="50%" valign="top">
+
+#### Library · Notes
+
+<img src="docs/images/library-notes.png" width="100%" alt="The Library on the Notes page">
+
+The same header and search on every page.
+
+</td>
+</tr>
+</table>
 
 ### Privacy
 - **Sensitive items stay hidden.** Passwords from password managers and secret keys (API tokens, private keys) still show up in the list so you can copy or paste them, but as scrambled text, never as the real thing. They are kept in memory only, never saved to disk or synced, and removed after 15 minutes. Turn this off to skip them entirely.
