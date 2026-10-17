@@ -1,5 +1,11 @@
 # Transom
 
+[![Latest release](https://img.shields.io/github/v/release/andikanbassey/Transom?label=release)](https://github.com/andikanbassey/Transom/releases/latest)
+[![Build](https://img.shields.io/github/actions/workflow/status/andikanbassey/Transom/swift.yml?branch=main&label=build)](https://github.com/andikanbassey/Transom/actions/workflows/swift.yml)
+[![License: MIT](https://img.shields.io/github/license/andikanbassey/Transom)](LICENSE)
+![macOS 14 or later](https://img.shields.io/badge/macOS-14%2B-blue)
+![Apple silicon](https://img.shields.io/badge/Apple%20silicon-supported-lightgrey)
+
 A clipboard history, quick notes and pinned files, tucked behind the top edge of your screen on macOS.
 Scroll at the top of the screen and Transom opens. Everything you copied is a click away, with real cover
 images for pictures, videos, links and files.

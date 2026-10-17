@@ -1,0 +1,11 @@
+# Groups the notes GitHub generates for a release. The hand-written changelog stays the main record.
+changelog:
+  categories:
+    - title: New
+      labels: [enhancement]
+    - title: Fixed
+      labels: [bug]
+    - title: Accessibility and privacy
+      labels: [accessibility, privacy]
+    - title: Everything else
+      labels: ["*"]

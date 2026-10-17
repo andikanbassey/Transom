@@ -1,0 +1,7 @@
+# Transom has no dependencies of its own; this keeps the GitHub Actions in the build workflow current.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"

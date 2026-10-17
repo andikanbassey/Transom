@@ -1,0 +1,50 @@
+name: Compatibility report
+description: Tell us how Transom runs on your Mac, working or not. Reports for macOS 14, 15 and Intel Macs are especially useful.
+labels: [compatibility]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Transom is built for macOS 14 and later on Apple silicon, and has mostly been tried on the newest macOS. A short report helps
+        decide what to test and support next. A working report is as useful as a broken one.
+  - type: dropdown
+    id: result
+    attributes:
+      label: How does it run?
+      options:
+        - Works well
+        - Works, with problems
+        - Opens but a feature fails
+        - Does not open
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "macOS 15.4"
+    validations:
+      required: true
+  - type: dropdown
+    id: chip
+    attributes:
+      label: Mac
+      options:
+        - Apple silicon (M1 or later)
+        - Intel
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Transom version
+      description: Settings › General › About.
+      placeholder: "0.7.0"
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Details
+      description: What you tried, what worked and what did not. Mention a notched MacBook, several displays, or a full-screen app if they matter.
