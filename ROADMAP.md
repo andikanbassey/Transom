@@ -16,27 +16,38 @@ This is a plan, not a promise. Priorities move with what people actually use. To
 - **No AI features for now.** On-device suggestions may come later, but only as an optional, off-by-default extra that
   does not slow anything down.
 
+## Shipped
+
+- **Clipboard history** with real previews, pinning, and search and filters by time, type and app. Stored as plain Markdown files.
+- **Quick Access, Notes and the Library**, with Select for bulk actions, paged lists and empty pages that explain themselves.
+- **Keyboard navigation.** Arrow keys to move, Return to paste, ⌥Return to paste as plain text, Space for a preview, ⌘F to search, ⌘1 to ⌘9 for quick paste.
+- **Sensitive items stay hidden** (0.7). Passwords from password managers and secret keys appear as masked text you can still copy or paste, are kept in memory only and expire after 15 minutes.
+- **iCloud Drive sync** for notes, files and history, and a switch to keep copied pictures on one Mac so they do not use iCloud storage.
+- **Updates from GitHub** (0.7): a daily check you can switch off, and one-click install with a checksum.
+- **Automation.** `transom://` links and AppleScript, off until you turn them on.
+- **Capture hardening.** Size limits for stored items, saving off the main thread, and a capture log under Advanced for missed copies.
+- **VoiceOver labels** on the controls (0.7), with unit tests for the history format running in CI.
+
 ## Now: make the core trustworthy
 
-- **Capture hardening.** Limit the size of a stored item, skip pathological pasteboards, never block the main thread while saving.
 - **Fast at any history size.** Read recent months at launch and older months only when searched or scrolled to, so memory
   stays flat even with history kept forever.
-- **Tests** for the parts that must not break: the Markdown history format, two-way sync merge and deletions.
+- **More tests** for the parts that must not break: two-way sync merge and deletions.
 - **A cleaner codebase.** Split the largest view file into one file per area and keep sizes and colours in one place.
-- **Keyboard navigation.** Arrow keys to move, Return to paste, ⌘F to search, Space for a preview.
-- **Live-checked behaviour.** Scroll-to-open and swipe-to-close on trackpads and mice, haptics, and Transom in front of
-  full-screen apps, checked on real hardware and more than one macOS version.
+- **Checked on more setups.** Scroll-to-open and swipe-to-close on trackpads and mice, Transom in front of full-screen apps,
+  macOS 14 and 15, Intel Macs (the download is Apple silicon only for now), and a listening pass with VoiceOver.
 
 ## Next: small features that earn their place
 
-- **Plain-text paste**, with a modifier key while choosing an item and an "always plain text" option.
-- **Better search.** Filter by app and date as well as type, and optionally find text inside screenshots using on-device
-  recognition. Recognition runs in the background, can be paused or turned off, and Settings will say what it costs.
+- **Plain-text paste everywhere**, a modifier while clicking an item, and an "always plain text" option.
+- **Better search.** Optionally find text inside screenshots using on-device recognition. Recognition runs in the background,
+  can be paused or turned off, and Settings will say what it costs.
 - **Pinboards.** Split Pinned into named groups (replies, code, addresses) with a quiet board switcher.
 - **Paste stack.** Collect several items, then paste them one after another, with a clear indicator while it is active.
 - **A few text transforms on paste.** Trim, change case, strip formatting, join lines: instant and deterministic.
-- **Sensitive-item handling.** Blur previews of items that look like secrets and expire one-time codes after a few minutes.
-- **Per-app rules.** One place to record or hide, paste plain or formatted, and auto-delete after a day, per app.
+- **More for sensitive items.** Recognise one-time codes and expire them after a few minutes, and let you choose how long
+  sensitive items stay.
+- **Per-app rules.** The allow and block lists exist; add paste plain or formatted, and auto-delete after a day, per app.
 - **Export and import** of your history as a zip of Markdown files.
 - **Shortcuts and launcher integration** on top of the existing `transom://` links and AppleScript.
 
