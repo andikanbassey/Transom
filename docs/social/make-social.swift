@@ -1,12 +1,10 @@
-// Draws the picture cards for announcing Transom: X, LinkedIn and WhatsApp (square and status). Command Line Tools only.
+// Draws the picture cards for announcing Transom on X and LinkedIn. Command Line Tools only.
 //   swift docs/social/make-social.swift
 // Reads docs/images/drawer.png, docs/images/onboarding-2.png and AppIcon.icns; writes the PNGs next to this script.
 import AppKit
 
 let root = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 let outDir = root.appendingPathComponent("docs/social")
-let drawer = NSImage(contentsOf: root.appendingPathComponent("docs/images/drawer.png"))!
-let welcome = NSImage(contentsOf: root.appendingPathComponent("docs/images/onboarding-2.png"))!
 let icon = NSImage(contentsOf: root.appendingPathComponent("AppIcon.icns"))!
 
 func color(_ hex: UInt32, _ a: CGFloat = 1) -> NSColor {
@@ -73,62 +71,16 @@ func pill(_ s: String, x: CGFloat, y: CGFloat, size: CGFloat) -> CGFloat {
     return w
 }
 
-let cards = NSRect(x: 0, y: 0, width: 1300, height: 300)     // the left part of the drawer picture
-let aspect: CGFloat = 1300 / 300
-let headline = "Your clipboard,\none scroll away."
-let sub = "Clipboard history, notes and pinned files in a window at the top of your Mac."
-
-card("x-1600x900.png", 1600, 900) { W, H in
-    brand(x: 80, y: 60, size: 72)
-    var y: CGFloat = 170
-    y += text(headline, x: 80, y: y, width: 1440, size: 84, weight: .bold, line: 1.0) + 20
-    _ = text(sub, x: 80, y: y, width: 1440, size: 30, color: color(0xFFFFFF, 0.72), line: 1.2)
-    picture(drawer, in: NSRect(x: 80, y: 470, width: W - 160, height: (W - 160) / aspect), from: cards, radius: 28)
-    _ = pill("Free and open source", x: 80, y: 842, size: 20)
-}
-
-card("linkedin-1200x627.png", 1200, 627) { W, H in
-    brand(x: 60, y: 40, size: 52)
-    var y: CGFloat = 112
-    y += text(headline, x: 60, y: y, width: 1080, size: 58, weight: .bold, line: 1.0) + 12
-    _ = text(sub, x: 60, y: y, width: 1080, size: 22, color: color(0xFFFFFF, 0.72), line: 1.2)
-    picture(drawer, in: NSRect(x: 60, y: 340, width: W - 120, height: (W - 120) / aspect), from: cards, radius: 22)
-}
-
-card("whatsapp-square-1080x1080.png", 1080, 1080) { W, H in
-    brand(x: 70, y: 70, size: 76)
-    var y: CGFloat = 190
-    y += text(headline, x: 70, y: y, width: 940, size: 86, weight: .bold, line: 1.0) + 20
-    _ = text(sub, x: 70, y: y, width: 900, size: 30, color: color(0xFFFFFF, 0.72), line: 1.2)
-    picture(drawer, in: NSRect(x: 70, y: 540, width: W - 140, height: (W - 140) / aspect), from: cards, radius: 24)
-    var px: CGFloat = 70, py: CGFloat = 790
-    for (i, item) in ["Filter by time, type and app", "Drag items into notes", "Select and delete in bulk", "Syncs through iCloud Drive"].enumerated() {
-        let w = pill(item, x: px, y: py, size: 25)
-        px += w + 14
-        if i == 1 { px = 70; py += 74 }
-    }
-}
-
-card("whatsapp-status-1080x1920.png", 1080, 1920) { W, H in
-    brand(x: 90, y: 120, size: 88)
-    var y: CGFloat = 270
-    y += text(headline, x: 90, y: y, width: 920, size: 100, weight: .bold, line: 1.0) + 24
-    _ = text(sub, x: 90, y: y, width: 880, size: 36, color: color(0xFFFFFF, 0.72), line: 1.2)
-    let pw: CGFloat = 700, ph = pw * 923 / 760
-    picture(welcome, in: NSRect(x: (W - pw) / 2, y: 720, width: pw, height: ph), radius: 36)
-    _ = pill("Free and open source  ·  macOS 14+", x: 90, y: 1790, size: 28)
-}
-
 let library = NSImage(contentsOf: root.appendingPathComponent("docs/images/library-clipboard.png"))!
 let libNotes = NSImage(contentsOf: root.appendingPathComponent("docs/images/library-notes.png"))!
 
 /// A card with one picture under a title: `src` is a rect in the picture, as a fraction of its size (origin top-left).
-func feature(_ name: String, _ w: Int, _ h: Int, _ title: String, _ sub: String, _ img: NSImage, _ f: NSRect, radius: CGFloat = 26) {
+func feature(_ name: String, _ w: Int, _ h: Int, _ title: String, _ sub: String, _ img: NSImage, _ f: NSRect, second: NSImage? = nil, radius: CGFloat = 26) {
     card(name, w, h) { W, H in
         let m = W * 0.06, ts = min(W, 1000) * 0.062
         let sz = img.size
         let src = NSRect(x: f.minX * sz.width, y: (1 - f.maxY) * sz.height, width: f.width * sz.width, height: f.height * sz.height)
-        if W > H && src.width / src.height < 2.2 {
+        if second == nil && W > H && src.width / src.height < 2.2 {
             // Text on the left, tall picture on the right.
             let colW = W * 0.34
             brand(x: m, y: m * 0.8, size: ts * 0.9)
@@ -146,20 +98,36 @@ func feature(_ name: String, _ w: Int, _ h: Int, _ title: String, _ sub: String,
         y += text(title, x: m, y: y, width: W - 2 * m, size: ts, weight: .bold, line: 1.0) + ts * 0.25
         y += text(sub, x: m, y: y, width: W - 2 * m, size: ts * 0.4, color: color(0xFFFFFF, 0.72), line: 1.2) + ts * 0.5
         let availW = W - 2 * m, availH = H - y - m
+        if let second {
+            // Two pictures of the same size side by side.
+            let gap = W * 0.03
+            var pw = (availW - gap) / 2, ph = pw * src.height / src.width
+            if ph > availH { ph = availH; pw = ph * src.width / src.height }
+            let x0 = (W - (2 * pw + gap)) / 2, y0 = y + (availH - ph) / 2
+            picture(img, in: NSRect(x: x0, y: y0, width: pw, height: ph), from: src, radius: radius)
+            picture(second, in: NSRect(x: x0 + pw + gap, y: y0, width: pw, height: ph), radius: radius)
+            return
+        }
         var pw = availW, ph = pw * src.height / src.width
         if ph > availH { ph = availH; pw = ph * src.width / src.height }
         picture(img, in: NSRect(x: (W - pw) / 2, y: y + (availH - ph) / 2, width: pw, height: ph), from: src, radius: radius)
     }
 }
-let dw: CGFloat = 1920
-let sets: [(String, String, String, NSImage, NSRect)] = [
-    ("clipboard", "Everything you copy,\nready to paste.", "Text, links, images and colours, with previews.", drawer, NSRect(x: 391 / dw, y: 0, width: 830 / dw, height: 1)),
-    ("quick-access", "Your files,\none flick away.", "Pin the files and folders you reach for most.", drawer, NSRect(x: 8 / dw, y: 0, width: 372 / dw, height: 0.62)),
-    ("library", "A Library for\neverything you copied.", "Filter by time, type and app. Search with ⌘K.", library, NSRect(x: 0, y: 0, width: 1, height: 0.935)),
-    ("notes", "Notes that live\nright beside it.", "Plain Markdown files you can keep in iCloud Drive.", libNotes, NSRect(x: 0.208, y: 0.06, width: 0.792, height: 0.47)),
+let live = NSImage(contentsOf: root.appendingPathComponent("docs/images/live/drawer-open.jpg"))!
+let panelClipboard = NSImage(contentsOf: root.appendingPathComponent("docs/images/drawer-clipboard.png"))!
+let panelQuickAccess = NSImage(contentsOf: root.appendingPathComponent("docs/images/drawer-quick-access.png"))!
+let panelNotes = NSImage(contentsOf: root.appendingPathComponent("docs/images/drawer-notes.png"))!
+
+let full = NSRect(x: 0, y: 0, width: 1, height: 1)
+// The launch set: one card per message, each at the sizes X (1600 x 900) and LinkedIn (1200 x 627) use.
+let launch: [(String, String, String, NSImage, NSRect, NSImage?)] = [
+    ("1-hero", "Your clipboard,\none scroll away.", "A free, open source clipboard manager that opens at the top of your Mac.", live, NSRect(x: 0.04, y: 0.12, width: 0.92, height: 0.72), nil),
+    ("2-privacy", "Passwords stay\nhidden.", "Masked on screen, never saved to disk, gone after 15 minutes.", panelClipboard, full, nil),
+    ("3-library", "A Library for\neverything you copied.", "Filter by time, type and app. Search with ⌘K.", library, NSRect(x: 0, y: 0, width: 1, height: 0.935), nil),
+    ("4-notes-and-files", "Notes and files,\nright beside it.", "Plain Markdown notes and pinned files, one click away.", panelQuickAccess, full, panelNotes),
 ]
-for (n, t, sb, img, f) in sets {
-    feature("\(n)-1600x900.png", 1600, 900, t, sb, img, f)
-    feature("\(n)-square-1080x1080.png", 1080, 1080, t, sb, img, f)
+for (n, t, sb, img, f, second) in launch {
+    feature("post-\(n)-x-1600x900.png", 1600, 900, t, sb, img, f, second: second)
+    feature("post-\(n)-linkedin-1200x627.png", 1200, 627, t, sb, img, f, second: second)
 }
 print("done")
