@@ -5,7 +5,7 @@ Each release is written as what you can now do.
 ## 0.7 (2026-10-17): Drawer is now Transom
 
 **The new name**
-- ✨ **Drawer is now Transom.** A transom is the small window above a door, hinged at the top so you can open it a little and see through without opening the door. That is how the app opens at the top of your screen. The icon and the menu bar glyph are redrawn as a window with a glass top pane, a bar under it and a page, a picture and a link below.
+- ✨ **Drawer is now Transom.** A transom is the small window above a door, hinged at the top so you can open it a little and see through without opening the door. That is how the app opens at the top of your screen. The drawer icon stays as it was.
 - Your **history, notes, Quick Access files and settings are unchanged.** The first time Transom starts it moves `Application Support/Drawer` to `Application Support/Transom` before anything reads it, and says so once. Folders you pointed at iCloud Drive keep their paths.
 - The **bundle identifier is unchanged** (`com.studioab.drawer`), so macOS keeps your Accessibility permission, the Open at login item and your preferences. Drag Transom into Applications over, or next to, Drawer and quit Drawer; if both run, Transom asks which to keep.
 
