@@ -2,22 +2,7 @@
 
 Each release is written as what you can now do.
 
-## Unreleased
-
-**Privacy**
-- ✨ **Sensitive items stay hidden.** A password copied from a password manager, or a secret key (API token, private key), now appears in the Clipboard as a masked item: scrambled characters that animate when you point at them, with a lock and "Sensitive" instead of the text. You can still copy or paste it. It is kept in memory only, never written to disk or synced, can't be pinned, saved to Notes or Quick Access, or found by search, and is removed after 15 minutes. Settings › Privacy has a switch; off, such items are skipped as before.
-
-**Fixed**
-- Saving the clipboard history could delete the month's file instead of rewriting it when the Clipboard folder was reached through a symbolic link (for example a folder under `/tmp`). The history is now always written safely.
-
-**Accessibility**
-- ✨ **VoiceOver** can now find and press the clickable parts of Transom: the Library sidebar and Library | Settings switch, the round "+" button, cards and rows, the pin and delete buttons, the header icons, search, and the page controls. Icon-only controls have labels, and selected items are announced.
-
-**Under the hood**
-- Unit tests for the Markdown history format and version comparison run in CI.
-- The updater's test switches are only read by debug builds.
-
-## 0.7 (2026-10-16): Drawer is now Transom
+## 0.7 (2026-10-17): Drawer is now Transom
 
 **The new name**
 - ✨ **Drawer is now Transom.** A transom is the small window above a door, hinged at the top so you can open it a little and see through without opening the door. That is how the app opens at the top of your screen. The icon and the menu bar glyph are redrawn as a window with a glass top pane, a bar under it and a page, a picture and a link below.
@@ -38,8 +23,21 @@ Each release is written as what you can now do.
 **Updates**
 - ✨ Transom now **checks for updates** (about once a day, switchable in Settings › General) and can **install them for you**: it downloads the release from GitHub, verifies its checksum, swaps the app and reopens. A new version shows in the menu bar menu and under Settings › General › About › Updates.
 
+**Privacy**
+- ✨ **Sensitive items stay hidden.** A password copied from a password manager, or a secret key (API token, private key), now appears in the Clipboard as a masked item: scrambled characters that animate when you point at them, with a lock and "Sensitive" instead of the text. You can still copy or paste it. It is kept in memory only, never written to disk or synced, can't be pinned, saved to Notes or Quick Access, or found by search, and is removed after 15 minutes. Settings › Privacy has a switch; off, such items are skipped as before.
+
+**Fixed**
+- Saving the clipboard history could delete the month's file instead of rewriting it when the Clipboard folder was reached through a symbolic link (for example a folder under `/tmp`). The history is now always written safely.
+
+**Accessibility**
+- ✨ **VoiceOver** can now find and press the clickable parts of Transom: the Library sidebar and Library | Settings switch, the round "+" button, cards and rows, the pin and delete buttons, the header icons, search, and the page controls. Icon-only controls have labels, and selected items are announced.
+
+**Under the hood**
+- Unit tests for the Markdown history format, version comparison, secret detection and folder paths run in CI.
+- The updater's test switches are only read by debug builds.
+
 **Good to know**
-- SHA-256 of `Transom.dmg`: `c64d19c8b38f6ae8e767f61ed63786f437d8c179f9eed19f3e0c70261bbd9e76`
+- SHA-256 of `Transom.dmg`: `a6fe8863a45dd7911a39c4d3ff7634bec94b14f681df1e8616f1e632c9fa346c`
 - Not notarized yet, so macOS asks you to confirm opening it the first time. See [Install](README.md#install).
 - Coming from Drawer: quit Drawer, drag Transom into Applications (it can replace Drawer.app) and open it. Your data moves across by itself.
 
