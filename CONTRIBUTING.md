@@ -33,6 +33,11 @@ dependencies, native controls, one shared look for the Library and Settings).
 - Check the UI with an offscreen render before and after (`TRANSOM_SNAPSHOT_VIEW`, see `CLAUDE.md`).
 - Update the changelog for anything people will notice.
 
+## Conduct and security
+
+Please be kind: the [Code of Conduct](.github/CODE_OF_CONDUCT.md) applies everywhere in this project. For a security problem, report it
+privately as described in [SECURITY.md](.github/SECURITY.md) instead of opening a public issue.
+
 ## Releases
 
 See [docs/releasing.md](docs/releasing.md).
