@@ -42,7 +42,7 @@ Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clip
 - **Passwords and secret keys are masked** (scrambled text, a lock and "Sensitive"): still there to copy or paste, never shown, never saved.
 
 <p>
-  <img src="docs/images/drawer-clipboard.png" width="88%" alt="The Clipboard panel: two masked sensitive items, a text item and a link, with the time, type and app filters">
+  <img src="docs/images/drawer-clipboard.png" width="100%" alt="The Clipboard panel: two masked sensitive items, a text item and a link, with the time, type and app filters">
 </p>
 
 ### Quick Access
