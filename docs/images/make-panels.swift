@@ -4,11 +4,11 @@ import AppKit
 
 let root = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
 let source = NSBitmapImageRep(data: try! Data(contentsOf: root.appendingPathComponent("drawer.png")))!
-// Pixel rectangles in the 3840 x 600 render (the drawer is 1920 pt wide at 2x).
+// Pixel rectangles in the 3840 x 600 render (the drawer is 1920 pt wide at 2x). Quick Access and Notes share one size so they sit evenly side by side in the README table.
 let panels: [(String, CGRect)] = [
-    ("drawer-quick-access.png", CGRect(x: 0, y: 0, width: 778, height: 600)),
+    ("drawer-quick-access.png", CGRect(x: 0, y: 0, width: 768, height: 460)),
     ("drawer-clipboard.png", CGRect(x: 790, y: 0, width: 1500, height: 600)),
-    ("drawer-notes.png", CGRect(x: 3100, y: 0, width: 740, height: 600)),
+    ("drawer-notes.png", CGRect(x: 3072, y: 0, width: 768, height: 460)),
 ]
 for (name, r) in panels {
     let w = Int(r.width), h = Int(r.height)
