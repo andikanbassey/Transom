@@ -41,7 +41,7 @@ Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clip
 - Stored as one Markdown file per month, with formatting kept as Markdown, in the Clipboard folder.
 - **Passwords and secret keys are masked** (scrambled text, a lock and "Sensitive"): still there to copy or paste, never shown, never saved.
 
-<p align="center">
+<p>
   <img src="docs/images/drawer-clipboard.png" width="88%" alt="The Clipboard panel: two masked sensitive items, a text item and a link, with the time, type and app filters">
 </p>
 
@@ -50,7 +50,7 @@ Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clip
 - Icon or list view, three item sizes, sort by name, kind, date added or date modified.
 - Drag files back out to any app.
 
-<p align="center">
+<p>
   <img src="docs/images/drawer-quick-access.png" width="46%" alt="The Quick Access panel with four pinned files">
 </p>
 
@@ -58,7 +58,7 @@ Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clip
 - Notes are plain **Markdown files** in a folder you choose; pictures sit in an `Attachments` folder beside them.
 - Opens on the list of your notes with a preview line each, remembers the note you were editing.
 
-<p align="center">
+<p>
   <img src="docs/images/drawer-notes.png" width="46%" alt="The Notes panel listing three notes">
 </p>
 
@@ -67,7 +67,7 @@ Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clip
 - **Select** several items to pin or delete them together, or pick "last 5 minutes", "last hour" or "today" and clear them in one go.
 - Cards or lists, for everything or per kind. Settings sit one click away, behind the same window.
 
-<p align="center">
+<p>
   <img src="docs/images/library-clipboard.png" width="49%" alt="The Library on the Clipboard page, with the time, type and app filters, Select and search">
   <img src="docs/images/library-notes.png" width="49%" alt="The Library on the Notes page">
 </p>
@@ -185,7 +185,7 @@ TRANSOM_SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" ./build.sh install
 
 A short welcome explains how Transom works and asks for the one permission it needs. You can change everything later in Settings.
 
-<p align="center">
+<p>
   <img src="docs/images/onboarding-1.png" width="24%" alt="Welcome">
   <img src="docs/images/onboarding-2.png" width="24%" alt="How Transom works">
   <img src="docs/images/onboarding-3.png" width="24%" alt="Quick start">
