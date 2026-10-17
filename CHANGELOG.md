@@ -2,6 +2,11 @@
 
 Each release is written as what you can now do.
 
+## Unreleased
+
+**Fixed**
+- The daily update check no longer uses up its day when it fails (you were offline, or GitHub did not answer): it tries again within the hour.
+
 ## 0.7 (2026-10-17): Drawer is now Transom
 
 **The new name**

@@ -79,7 +79,12 @@ final class Updater: ObservableObject {
                 result = .idle
             }
             DispatchQueue.main.async {
-                self.lastAutoCheck = Date()
+                // A check that worked counts for a day. One that failed (offline, GitHub down, no release yet) is tried again in an hour,
+                // instead of waiting until tomorrow.
+                switch result {
+                case .available, .upToDate: self.lastAutoCheck = Date()
+                default: self.lastAutoCheck = Date().addingTimeInterval(-23 * 3600)
+                }
                 self.state = result
                 if !manual, let r = self.available { self.announce(r) }
             }
