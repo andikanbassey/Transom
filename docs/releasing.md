@@ -38,7 +38,7 @@ notarized release needs a paid Apple Developer membership: a Developer ID Applic
 
 ## Performance budget
 
-Measured on 2026-10-17 with the release build from a fresh clone, on an Apple silicon Mac (macOS 27 beta SDK), drawer closed, capture paused, a history of 5,000 items over three months. Re-measure before a release and update the numbers.
+Measured on 2026-10-17 with the release build from a fresh clone, on an Apple silicon Mac running macOS 27.0.1 (built against the macOS 27 SDK, minimum macOS 14), drawer closed, capture paused, a history of 5,000 items over three months. Re-measure before a release and update the numbers.
 
 | | Budget | Measured |
 |---|---|---|

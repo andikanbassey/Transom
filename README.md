@@ -7,7 +7,7 @@ images for pictures, videos, links and files.
 Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clipboard feature set from
 [Paste](https://pasteapp.io). It is an independent project and is not affiliated with either.
 
-![Transom, with Quick Access, Clipboard History and Notes side by side](docs/images/drawer.png)
+![Transom open at the top of the screen, with Quick Access, Clipboard History and Notes side by side, over a colourful wallpaper](docs/images/live/drawer-open.jpg)
 
 > **Transom was called Drawer until 0.7.** Your history, notes and settings move across by themselves the first time the new app starts, and `drawer://` links keep working for a few releases.
 
