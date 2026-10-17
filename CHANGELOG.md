@@ -4,6 +4,12 @@ Each release is written as what you can now do.
 
 ## Unreleased
 
+**Privacy**
+- ✨ **Sensitive items stay hidden.** A password copied from a password manager, or a secret key (API token, private key), now appears in the Clipboard as a masked item: scrambled characters that animate when you point at them, with a lock and "Sensitive" instead of the text. You can still copy or paste it. It is kept in memory only, never written to disk or synced, can't be pinned, saved to Notes or Quick Access, or found by search, and is removed after 15 minutes. Settings › Privacy has a switch; off, such items are skipped as before.
+
+**Fixed**
+- Saving the clipboard history could delete the month's file instead of rewriting it when the Clipboard folder was reached through a symbolic link (for example a folder under `/tmp`). The history is now always written safely.
+
 **Accessibility**
 - ✨ **VoiceOver** can now find and press the clickable parts of Transom: the Library sidebar and Library | Settings switch, the round "+" button, cards and rows, the pin and delete buttons, the header icons, search, and the page controls. Icon-only controls have labels, and selected items are announced.
 

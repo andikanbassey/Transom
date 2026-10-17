@@ -21,6 +21,8 @@ struct Clip: Codable, Identifiable, Equatable {
     var pinned = false
     /// When this item last changed (copied again, pinned, preview fetched). Newest wins when two Macs disagree.
     var modified = Date()
+    /// A password or secret: shown masked, never written to disk or synced, and removed after `ClipboardStore.sensitiveLifetime`.
+    var sensitive = false
 
     private enum CodingKeys: String, CodingKey {
         case id, kind, text, markdown, imageFile, paths, sourceApp, sourceBundleID, linkTitle, linkImageFile, date, pinned
@@ -34,6 +36,9 @@ struct Clip: Codable, Identifiable, Equatable {
     }
     var imageURL: URL? { imageFile.map { ClipboardFolder.imageURL($0) } }
     var fileURLs: [URL] { (paths ?? []).map { URL(fileURLWithPath: $0) } }
+    /// What a card says its kind is: a sensitive item says so instead of "Text".
+    var kindLabel: String { sensitive ? "Sensitive" : category.label }
+    var kindSymbol: String { sensitive ? "lock.fill" : category.symbol }
     /// The file used for the card's cover art.
     var previewURL: URL? { imageURL ?? linkImageURL ?? fileURLs.first }
 }
@@ -109,6 +114,7 @@ extension Clip {
         switch kind {
         case .image: return .image
         case .text:
+            if sensitive { return .text }
             let t = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if Clip.hexColor(t) != nil { return .color }
             if !t.contains(where: \.isWhitespace), let u = URL(string: t), u.host != nil,
@@ -133,6 +139,7 @@ extension Clip {
     var title: String {
         switch kind {
         case .text:
+            if sensitive { return "Sensitive item" }
             let t = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             switch category {
             case .link:
@@ -213,6 +220,14 @@ final class ClipboardStore: ObservableObject {
         Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in self?.trim() }
         // History changed on another Mac arrives as a changed file: pick it up within seconds.
         Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in self?.refreshIfChanged() }
+        Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in self?.expireSensitive() }
+    }
+
+    /// Sensitive items are removed once they are old enough. They were never on disk, so there is nothing else to delete.
+    func expireSensitive() {
+        let cutoff = Date().addingTimeInterval(-Self.sensitiveLifetime)
+        guard clips.contains(where: { $0.sensitive && $0.date < cutoff }) else { return }
+        clips.removeAll { $0.sensitive && $0.date < cutoff }
     }
 
     // MARK: Storage
@@ -248,7 +263,7 @@ final class ClipboardStore: ObservableObject {
                 guard let self, generation == self.loadGeneration else { return }
                 // Keep anything copied or changed while the files were being read.
                 let known = Set(loaded.map(\.id))
-                let recent = self.clips.filter { !known.contains($0.id) && $0.modified >= started }
+                let recent = self.clips.filter { !known.contains($0.id) && ($0.modified >= started || $0.sensitive) }
                 self.clips = (recent + loaded).sorted { $0.date > $1.date }
                 // A month with more than one file has sync conflict copies: saving merges them into one.
                 self.dirtyMonths.formUnion(fileCount.filter { $0.value > 1 }.keys)
@@ -331,6 +346,9 @@ final class ClipboardStore: ObservableObject {
         return filtered.filter(\.pinned) + filtered.filter { !$0.pinned }
     }
 
+    /// How long a sensitive item stays in the list. It lives in memory only: it is never written to disk or synced.
+    static let sensitiveLifetime: TimeInterval = 15 * 60
+
     /// Items bigger than this are not stored: they would bloat the history and slow every launch.
     static let maxTextBytes = 5_000_000
     static let maxImageBytes = 60_000_000
@@ -349,7 +367,10 @@ final class ClipboardStore: ObservableObject {
         if AppModel.shared.standby { log.add(app: who, result: "Skipped: another Transom is active"); return }
         if s.paused { log.add(app: who, result: "Skipped: capture is paused"); return }
         let types = Set((pb.types ?? []).map(\.rawValue))
-        if s.ignoreConfidential, !types.isDisjoint(with: confidentialTypes) { log.add(app: who, result: "Skipped: marked confidential"); return }
+        let concealed = !types.isDisjoint(with: confidentialTypes)
+        // Concealed text can be kept, masked; anything else a password manager hides is skipped as before.
+        let keepsAsSensitive = s.keepSensitiveMasked && pb.string(forType: .string) != nil
+        if s.ignoreConfidential, concealed, !keepsAsSensitive { log.add(app: who, result: "Skipped: marked confidential"); return }
         if s.ignoreTransient, !types.isDisjoint(with: transientTypes) { log.add(app: who, result: "Skipped: marked transient"); return }
         if !isSelf, !Settings.shared.allows(bundleID: app?.bundleIdentifier) { log.add(app: who, result: "Skipped: app is not allowed"); return }
         var base = Clip(kind: .text)
@@ -370,9 +391,10 @@ final class ClipboardStore: ObservableObject {
             }
             var clip = base
             clip.text = str
-            clip.markdown = Self.richMarkdown(pb)
+            clip.sensitive = s.keepSensitiveMasked && (concealed || SecretPatterns.looksSecret(str))
+            clip.markdown = clip.sensitive ? nil : Self.richMarkdown(pb)
             insert(clip, replacing: { $0.kind == .text && $0.text == str })
-            log.add(app: who, result: "Stored: text (\(str.count) characters)")
+            log.add(app: who, result: clip.sensitive ? "Stored: sensitive text, masked and kept in memory only" : "Stored: text (\(str.count) characters)")
             if s.linkPreviews, clips.first?.category == .link, clips.first?.linkTitle == nil,
                let url = URL(string: str.trimmingCharacters(in: .whitespacesAndNewlines)), let id = clips.first?.id {
                 fetchPreview(id: id, url: url)
@@ -439,7 +461,7 @@ final class ClipboardStore: ObservableObject {
             clips.remove(at: i)
         }
         clips.insert(clip, at: 0)
-        dirtyMonths.insert(ClipboardFolder.monthKey(clip.date))
+        if !clip.sensitive { dirtyMonths.insert(ClipboardFolder.monthKey(clip.date)) }
         trim()
     }
 
@@ -538,7 +560,7 @@ final class ClipboardStore: ObservableObject {
         pb.clearContents()
         switch clip.kind {
         case .text:
-            if let md = clip.markdown, !plain {
+            if let md = clip.markdown, !plain, !clip.sensitive {
                 pb.writeObjects([RichText.attributed(fromMarkdown: md)])
             } else {
                 pb.setString(clip.text ?? "", forType: .string)
@@ -549,10 +571,12 @@ final class ClipboardStore: ObservableObject {
             // so Finder pasted a 27 MB .tiff for a 2 MB screenshot.
             if let url = clip.imageURL, let data = try? Data(contentsOf: url) { pb.setData(data, forType: .png) }
         }
+        // Tells other clipboard managers (and Transom itself) not to record the copy again.
+        if clip.sensitive { pb.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")) }
         lastCount = pb.changeCount
         if let i = clips.firstIndex(of: clip) {
             var moved = clips.remove(at: i)
-            dirtyMonths.insert(ClipboardFolder.monthKey(moved.date))
+            if !moved.sensitive { dirtyMonths.insert(ClipboardFolder.monthKey(moved.date)) }
             moved.date = Date()
             moved.modified = Date()
             dirtyMonths.insert(ClipboardFolder.monthKey(moved.date))
@@ -562,7 +586,7 @@ final class ClipboardStore: ObservableObject {
     }
 
     func togglePin(_ clip: Clip) {
-        guard let i = clips.firstIndex(of: clip) else { return }
+        guard let i = clips.firstIndex(of: clip), !clip.sensitive else { return }
         clips[i].pinned.toggle()
         clips[i].modified = Date()
         dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
@@ -621,7 +645,7 @@ final class ClipboardStore: ObservableObject {
     private func save() {
         guard !dirtyMonths.isEmpty else { return }
         let months = dirtyMonths
-        let snapshot = clips
+        let snapshot = clips.filter { !$0.sensitive }
         dirtyMonths = []
         diskQueue.async { [weak self] in
             Self.write(months: months, clips: snapshot)
@@ -658,7 +682,9 @@ final class ClipboardStore: ObservableObject {
                 for f in files { try? FileManager.default.removeItem(at: f) }
             } else {
                 try? ClipHistoryFile.render(month: month, clips: Array(items)).write(to: canonical, atomically: true, encoding: .utf8)
-                for f in files where f != canonical { try? FileManager.default.removeItem(at: f) }
+                // Compared by real location: a folder reached through a symlink (such as /tmp) lists its files under the resolved path,
+                // and deleting what looks like another copy would delete the file just written.
+                for f in files where !ClipboardFolder.sameFile(f, canonical) { try? FileManager.default.removeItem(at: f) }
             }
         }
     }
@@ -785,4 +811,56 @@ final class CaptureLog: ObservableObject {
         if entries.count > 40 { entries.removeLast(entries.count - 40) }
     }
     func clear() { entries = [] }
+}
+
+// MARK: - Sensitive items
+
+/// Text that is a secret even when the app that copied it did not say so: API keys, tokens and private keys.
+enum SecretPatterns {
+    private static let patterns: [NSRegularExpression] = [
+        #"^(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}$"#, #"^github_pat_[A-Za-z0-9_]{40,}$"#,
+        #"^sk-[A-Za-z0-9_\-]{20,}$"#, #"^AKIA[0-9A-Z]{16}$"#, #"^xox[abprs]-[A-Za-z0-9\-]{10,}$"#,
+        #"^AIza[0-9A-Za-z_\-]{35}$"#, #"^[sr]k_(live|test)_[0-9A-Za-z]{16,}$"#,
+        #"^eyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}$"#,
+        #"-----BEGIN [A-Z ]*PRIVATE KEY-----"#,
+    ].compactMap { try? NSRegularExpression(pattern: $0) }
+
+    static func looksSecret(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, t.count < 10_000 else { return false }
+        let range = NSRange(t.startIndex..., in: t)
+        return patterns.contains { $0.firstMatch(in: t, range: range) != nil }
+    }
+}
+
+/// A sensitive item's stand-in text: block and symbol characters, at rest a quiet pattern and while the pointer is over it a
+/// scramble that keeps changing. It never shows the real text; copying or pasting the item still uses it.
+struct SensitiveText: View {
+    let length: Int
+    var active = false
+    var size: CGFloat = 13
+
+    private static let rest: [Character] = Array("▒")
+    private static let scramble: [Character] = Array("░▒▓█#%&@$*+=?/\\<>")
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.07, paused: !active)) { context in
+            let tick = active ? Int(context.date.timeIntervalSinceReferenceDate * 14) : 0
+            Text(glyphs(tick))
+                .font(.system(size: size, weight: .medium, design: .monospaced))
+                .foregroundStyle(active ? Color.primary.opacity(0.75) : Color.secondary.opacity(0.7))
+        }
+        .lineLimit(3)
+        .accessibilityLabel("Sensitive item, hidden")
+    }
+
+    private func glyphs(_ tick: Int) -> String {
+        let n = min(max(length, 8), 36)
+        guard active else { return String(repeating: Self.rest[0], count: n) }
+        var seed = UInt64(truncatingIfNeeded: tick &* 2_654_435_761)
+        return String((0..<n).map { _ in
+            seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return Self.scramble[Int((seed >> 33) % UInt64(Self.scramble.count))]
+        })
+    }
 }

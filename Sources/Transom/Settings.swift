@@ -227,6 +227,8 @@ struct SettingsValues: Codable, Equatable {
 
     // Privacy
     var ignoreConfidential = true
+    /// Keep passwords and secrets in the list, masked, in memory only (see `Clip.sensitive`). Off: they are not recorded.
+    var keepSensitiveMasked = true
     var ignoreTransient = true
     var linkPreviews = true
     var showDuringScreenSharing = true

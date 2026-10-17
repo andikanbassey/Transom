@@ -41,6 +41,11 @@ enum ClipboardFolder {
         }
     }
 
+    /// True when two URLs are the same file, even if one is written through a symlink (/tmp and /private/tmp, say).
+    static func sameFile(_ a: URL, _ b: URL) -> Bool {
+        a.resolvingSymlinksInPath().standardizedFileURL == b.resolvingSymlinksInPath().standardizedFileURL
+    }
+
     /// False for a file iCloud has moved off this Mac, so reading it would wait for a download.
     static func isOnThisMac(_ url: URL) -> Bool {
         guard let status = try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]).ubiquitousItemDownloadingStatus else { return true }
@@ -94,7 +99,7 @@ enum ClipboardFolder {
         let kept = tombstones().filter { $0.value > cutoff }
         let text = kept.map { "\($0.key.uuidString)\t\($0.value.timeIntervalSince1970)\n" }.joined()
         try? text.write(to: deletedFile, atomically: true, encoding: .utf8)
-        for f in files where f != deletedFile { try? FileManager.default.removeItem(at: f) }
+        for f in files where !sameFile(f, deletedFile) { try? FileManager.default.removeItem(at: f) }
     }
 
     static func monthKey(_ date: Date) -> String { monthFormatter.string(from: date) }

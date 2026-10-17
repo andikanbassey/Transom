@@ -72,3 +72,46 @@ import Testing
         #expect(!Updater.isNewer("0.7.0", than: "0.7.1"))
     }
 }
+
+/// Secrets are masked even when the app that copied them did not flag them.
+@Suite struct SecretTests {
+    @Test func recognisesCommonSecrets() {
+        #expect(SecretPatterns.looksSecret("ghp_" + String(repeating: "a1B2", count: 10)))
+        #expect(SecretPatterns.looksSecret("sk-ant-api03-" + String(repeating: "x", count: 30)))
+        #expect(SecretPatterns.looksSecret("AKIAABCDEFGHIJKLMNOP"))
+        #expect(SecretPatterns.looksSecret("-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----"))
+        #expect(SecretPatterns.looksSecret("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"))
+    }
+
+    @Test func leavesOrdinaryTextAlone() {
+        #expect(!SecretPatterns.looksSecret("Meeting notes: send the invoice on Friday"))
+        #expect(!SecretPatterns.looksSecret("https://github.com/andikanbassey/Transom"))
+        #expect(!SecretPatterns.looksSecret("#4F46E5"))
+        #expect(!SecretPatterns.looksSecret(""))
+    }
+
+    @Test func aSensitiveClipHidesItsText() {
+        var clip = Clip(kind: .text)
+        clip.text = "correct horse battery staple"
+        clip.sensitive = true
+        #expect(clip.title == "Sensitive item")
+        #expect(!clip.title.contains("horse"))
+        #expect(clip.kindLabel == "Sensitive")
+    }
+}
+
+/// A save must never delete the month file it has just written, however the folder path is spelled.
+@Suite struct FolderPathTests {
+    @Test func symlinkedPathIsTheSameFile() throws {
+        let name = "transom-test-\(UUID().uuidString).md"
+        let viaSymlink = URL(fileURLWithPath: "/tmp/" + name)
+        try "x".write(to: viaSymlink, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: viaSymlink) }
+        #expect(ClipboardFolder.sameFile(viaSymlink, URL(fileURLWithPath: "/private/tmp/" + name)))
+    }
+
+    @Test func differentFilesAreNot() {
+        #expect(!ClipboardFolder.sameFile(URL(fileURLWithPath: "/tmp/Clipboard/2026-10.md"),
+                                          URL(fileURLWithPath: "/tmp/Clipboard/2026-10 2.md")))
+    }
+}

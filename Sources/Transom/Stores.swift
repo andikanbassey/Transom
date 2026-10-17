@@ -129,6 +129,7 @@ final class FilesStore: ObservableObject {
     /// A clipboard item dropped on Quick Access stays there: files are added as they are, links become .webloc files,
     /// text becomes a .txt file and pictures are copied in.
     func addClip(_ clip: Clip) {
+        guard !clip.sensitive else { return }   // a sensitive item is never written to disk
         let fm = FileManager.default
         let dir: URL
         if mode == .folder { try? fm.createDirectory(at: Self.folder, withIntermediateDirectories: true); dir = Self.folder } else { dir = Self.itemsFolder }
@@ -417,6 +418,7 @@ final class NotesStore: ObservableObject {
     /// A clipboard item dropped on Notes becomes a note of its own. Pictures are copied into an Attachments folder
     /// beside the notes and shown inside the note.
     func addClip(_ clip: Clip) {
+        guard !clip.sensitive else { return }   // a sensitive item is never written to disk
         let fm = FileManager.default
         var body = ""
         switch clip.kind {

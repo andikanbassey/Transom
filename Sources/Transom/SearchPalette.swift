@@ -154,7 +154,7 @@ struct SearchPalette: View {
         let recents = nav.recents.map { r in
             PaletteItem(id: "recent-\(r)", section: "Earlier", symbol: "magnifyingglass", title: r, keepsOpen: true) { query.value = r }
         }
-        let matchClips = clipboard.clips.filter { $0.title.localizedCaseInsensitiveContains(q) || ($0.text ?? "").localizedCaseInsensitiveContains(q)
+        let matchClips = clipboard.clips.filter { $0.title.localizedCaseInsensitiveContains(q) || (!$0.sensitive && ($0.text ?? "").localizedCaseInsensitiveContains(q))
             || ($0.sourceApp ?? "").localizedCaseInsensitiveContains(q) }
         let matchNotes = notes.notes.filter { $0.text.localizedCaseInsensitiveContains(q) }
         let matchFiles = files.paths.filter { URL(fileURLWithPath: $0).lastPathComponent.localizedCaseInsensitiveContains(q) }
@@ -187,8 +187,8 @@ struct SearchPalette: View {
     private func clipItem(_ c: Clip) -> PaletteItem {
         let cat = c.category
         let thumb: URL? = [.image, .gif, .video, .pdf].contains(cat) ? c.previewURL : nil
-        return PaletteItem(id: "clip-\(c.id)", section: "Clipboard", symbol: cat.symbol, tint: cat.tint, title: c.title,
-                           subtitle: [cat.label, c.sourceApp, c.date.formatted(.relative(presentation: .named))].compactMap { $0 }.joined(separator: " · "),
+        return PaletteItem(id: "clip-\(c.id)", section: "Clipboard", symbol: c.kindSymbol, tint: cat.tint, title: c.title,
+                           subtitle: [c.kindLabel, c.sourceApp, c.date.formatted(.relative(presentation: .named))].compactMap { $0 }.joined(separator: " · "),
                            hint: "Copy", thumb: thumb) {
             clipboard.copy(c)
             if Settings.shared.v.sounds { NSSound(named: "Pop")?.play() }
