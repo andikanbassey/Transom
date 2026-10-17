@@ -42,7 +42,7 @@ Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clip
 - **Passwords and secret keys are masked** (scrambled text, a lock and "Sensitive"): still there to copy or paste, never shown, never saved.
 
 <p>
-  <img src="docs/images/drawer-clipboard.png" width="88%" alt="The Clipboard panel: two masked sensitive items, a text item and a link, with the time, type and app filters">
+  <img src="docs/images/drawer-clipboard.png" width="100%" alt="The Clipboard panel: two masked sensitive items, a text item and a link, with the time, type and app filters">
 </p>
 
 ### Quick Access
@@ -307,13 +307,15 @@ Clipboard content can be read out only with AppleScript, never through a link.
 The full plan is in [ROADMAP.md](ROADMAP.md), and how releases are made is in [docs/releasing.md](docs/releasing.md).
 In short:
 
-**Now:** make the core trustworthy (capture hardening, speed at any history size, tests, a refactor) and add keyboard
-navigation in Transom.
+**Shipped:** history with previews and filters, Quick Access, Notes, the Library, keyboard navigation, masked sensitive items,
+iCloud sync, updates from GitHub, links and AppleScript.
 
-**Next:** plain-text paste, search by app and date with text recognition in screenshots, pinboards, paste stack, a few
-text transforms, per-app rules, export, and a URL scheme for Shortcuts and Raycast.
+**Now:** speed at any history size, more tests, a cleaner codebase, and checking on more setups.
 
-**Later:** an iPhone and iPad companion, shared pinboards, notarized release with auto-update.
+**Next:** plain-text paste everywhere, text recognition in screenshots, pinboards, paste stack, a few text transforms, one-time
+code handling, per-app rules, export, and Shortcuts.
+
+**Later:** notarized releases, an iPhone and iPad companion, shared pinboards.
 
 **Not doing:** accounts, cloud AI, or anything that sends clipboard content off your Mac.
 
@@ -323,7 +325,7 @@ Inspired by Unclutter and Paste. Built with Swift, AppKit and SwiftUI.
 
 ## Author
 
-Andikan Bassey · [contact@andikanbassey.com](mailto:contact@andikanbassey.com)
+Andikan Bassey · [LinkedIn](https://www.linkedin.com/in/andikanbassey/)
 
 ## License
 
