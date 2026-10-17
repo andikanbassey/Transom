@@ -325,7 +325,7 @@ Inspired by Unclutter and Paste. Built with Swift, AppKit and SwiftUI.
 
 ## Author
 
-Andikan Bassey · [contact@andikanbassey.com](mailto:contact@andikanbassey.com)
+Andikan Bassey · [LinkedIn](https://www.linkedin.com/in/andikanbassey/)
 
 ## License
 
