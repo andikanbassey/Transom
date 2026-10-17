@@ -7,7 +7,7 @@ images for pictures, videos, links and files.
 Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clipboard feature set from
 [Paste](https://pasteapp.io). It is an independent project and is not affiliated with either.
 
-![Transom, with sample items](docs/images/drawer.png)
+![Transom, with Quick Access, Clipboard History and Notes side by side](docs/images/drawer.png)
 
 > **Transom was called Drawer until 0.7.** Your history, notes and settings move across by themselves the first time the new app starts, and `drawer://` links keep working for a few releases.
 
@@ -39,15 +39,28 @@ Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clip
 - Copying the same picture again moves the earlier item to the top instead of storing it twice.
 - History kept for a day, week, month, year or forever. Time is the only limit.
 - Stored as one Markdown file per month, with formatting kept as Markdown, in the Clipboard folder.
+- **Passwords and secret keys are masked** (scrambled text, a lock and "Sensitive"): still there to copy or paste, never shown, never saved.
+
+<p align="center">
+  <img src="docs/images/drawer-clipboard.png" width="88%" alt="The Clipboard panel: two masked sensitive items, a text item and a link, with the time, type and app filters">
+</p>
 
 ### Quick Access
 - Pin files and folders by dragging them in, or keep copies in a folder of your choice.
 - Icon or list view, three item sizes, sort by name, kind, date added or date modified.
 - Drag files back out to any app.
 
+<p align="center">
+  <img src="docs/images/drawer-quick-access.png" width="46%" alt="The Quick Access panel with four pinned files">
+</p>
+
 ### Notes
 - Notes are plain **Markdown files** in a folder you choose; pictures sit in an `Attachments` folder beside them.
 - Opens on the list of your notes with a preview line each, remembers the note you were editing.
+
+<p align="center">
+  <img src="docs/images/drawer-notes.png" width="46%" alt="The Notes panel listing three notes">
+</p>
 
 ### Library
 - A bigger window for everything, opened from the menu bar: clipboard, pinned, notes and Quick Access, with search (⌘K) for the page you are on.
@@ -60,7 +73,8 @@ Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clip
 </p>
 
 ### Privacy
-- Skips passwords and other items that apps flag as concealed or transient.
+- **Sensitive items stay hidden.** Passwords from password managers and secret keys (API tokens, private keys) still show up in the list so you can copy or paste them, but as scrambled text, never as the real thing. They are kept in memory only, never saved to disk or synced, and removed after 15 minutes. Turn this off to skip them entirely.
+- Skips other items that apps flag as transient.
 - Allow list and block list for the apps Transom records from.
 - Optionally hide Transom from screen sharing.
 - Link previews can be switched off. They download the page to get a title and image.

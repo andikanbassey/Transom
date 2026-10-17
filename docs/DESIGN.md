@@ -35,4 +35,5 @@ How Transom looks and behaves, and how it stores your data. Names, colours and t
 - **Sync** works by pointing those folders at iCloud Drive; the newest change per item wins. Link cover images stay on
   your Mac. With "Keep pictures on this Mac" on, copied pictures do too.
 - **Where.** `~/Library/Application Support/Transom/` unless you choose other folders in Settings.
+- **Sensitive items** (concealed pasteboard types from password managers, and text that looks like a secret key) are the exception to all of this: they live in memory only, are never written to the history files, are masked everywhere they are shown, and expire after 15 minutes.
 - **Rich text** is kept as Markdown (bold, italic, strikethrough, code, links); lists and headings are not kept yet.

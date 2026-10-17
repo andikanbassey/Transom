@@ -166,7 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         if let path = Env["SNAPSHOT"] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.drawer.snapshot(to: path); exit(0) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Env["SNAPSHOT_DELAY"] ?? "") ?? 3)) { self.drawer.snapshot(to: path); exit(0) }
         }
         if let path = Env["SNAPSHOT_VIEW"] {
             // Debug aid: render a view to a PNG. "settings" or "onboarding".

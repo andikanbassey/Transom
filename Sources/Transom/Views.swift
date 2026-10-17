@@ -254,10 +254,11 @@ struct ColumnHeader<Trailing: View>: View {
 
 struct Pill: View {
     let category: Category
+    var sensitive = false
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: category.symbol).font(.system(size: fs(9), weight: .semibold))
-            Text(category.label).font(.system(size: fs(10), weight: .semibold))
+            Image(systemName: sensitive ? "lock.fill" : category.symbol).font(.system(size: fs(9), weight: .semibold))
+            Text(sensitive ? "Sensitive" : category.label).font(.system(size: fs(10), weight: .semibold))
         }
         .padding(.horizontal, 8).padding(.vertical, 3)
         .foregroundStyle(Contrast.solidChips ? Color.white : category.tint)
@@ -531,7 +532,7 @@ struct ClipRow: View {
                     .font(.system(size: fs(13.5), weight: .medium))
                     .lineLimit(cat == .text ? 2 : 1).truncationMode(.middle)
                     .multilineTextAlignment(.leading)
-                Pill(category: cat)
+                Pill(category: cat, sensitive: clip.sensitive)
             }
             Spacer(minLength: 4)
             ZStack {
@@ -590,7 +591,7 @@ struct ClipRow: View {
         case .text, .link, .audio:
             ZStack {
                 Contrast.solidChips ? cat.tint : cat.tint.opacity(0.18)
-                Image(systemName: cat == .text ? "text.alignleft" : cat.symbol)
+                Image(systemName: clip.sensitive ? "lock.fill" : (cat == .text ? "text.alignleft" : cat.symbol))
                     .font(.system(size: fs(20), weight: .medium)).foregroundStyle(Contrast.solidChips ? Color.white : cat.tint)
             }
         }
@@ -867,7 +868,7 @@ struct ExpandedClipView: View {
             HStack(spacing: 8) {
                 Button { store.expanded = nil } label: { Label("Back", systemImage: "chevron.left") }
                     .buttonStyle(.borderless)
-                Pill(category: cat)
+                Pill(category: cat, sensitive: clip.sensitive)
                 Spacer()
                 Button("Copy") {
                     store.copy(clip)
@@ -888,9 +889,14 @@ struct ExpandedClipView: View {
         switch cat {
         case .text, .link, .color:
             ScrollView {
-                Text(clip.text ?? clip.title)
-                    .font(.system(size: fs(13))).textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                if clip.sensitive {
+                    SensitiveText(length: (clip.text ?? "").count, active: true, size: fs(13))
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                } else {
+                    Text(clip.text ?? clip.title)
+                        .font(.system(size: fs(13))).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                }
             }
         case .image, .gif:
             if let url = clip.imageURL ?? clip.fileURLs.first, let image = NSImage(contentsOf: url) {
@@ -1018,8 +1024,9 @@ private struct OptionDivider: View {
 /// The preview area of a card: text excerpt, link cover, colour, picture or file thumbnail.
 struct ClipPreview: View {
     let clip: Clip
+    @StateObject private var hovering = Box(false)
 
-    var body: some View { preview(clip.category) }
+    var body: some View { preview(clip.category).onHover { hovering.value = $0 } }
 
     @ViewBuilder private func preview(_ cat: Category) -> some View {
         GeometryReader { geo in
@@ -1057,10 +1064,15 @@ struct ClipPreview: View {
                     Text(host).font(.system(size: fs(11))).foregroundStyle(.secondary).lineLimit(1).padding(.horizontal, 10)
                 }
             case .text:
-                Text(clip.text ?? "")
-                    .font(.system(size: fs(12.5))).multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .padding(10)
+                Group {
+                    if clip.sensitive {
+                        SensitiveText(length: (clip.text ?? "").count, active: hovering.value, size: fs(12.5))
+                    } else {
+                        Text(clip.text ?? "").font(.system(size: fs(12.5))).multilineTextAlignment(.leading)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(10)
             }
         }
     }
@@ -1080,7 +1092,7 @@ struct ClipMenu: View {
         Button("Open in Full") { store.expanded = clip }
         Button("Paste") { AppModel.shared.use(clip, paste: true) }
         Divider()
-        Button(clip.pinned ? "Unpin" : "Pin") { store.togglePin(clip) }
+        if !clip.sensitive { Button(clip.pinned ? "Unpin" : "Pin") { store.togglePin(clip) } }
         if let first = clip.fileURLs.first {
             Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([first]) }
         }
@@ -1116,8 +1128,8 @@ struct ClipCard: View {
             HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 5) {
-                        Image(systemName: cat.symbol).font(.system(size: fs(11), weight: .semibold))
-                        Text(cat.label).font(.system(size: fs(13), weight: .semibold))
+                        Image(systemName: clip.kindSymbol).font(.system(size: fs(11), weight: .semibold))
+                        Text(clip.kindLabel).font(.system(size: fs(13), weight: .semibold))
                     }
                     Text(clip.date.formatted(.relative(presentation: .named)))
                         .font(.system(size: fs(10.5))).opacity(0.85)
@@ -1197,7 +1209,7 @@ struct ClipCard: View {
 
     private func footer(_ cat: Category) -> String {
         switch cat {
-        case .text: return "\((clip.text ?? "").count) characters"
+        case .text: return clip.sensitive ? "Hidden" : "\((clip.text ?? "").count) characters"
         case .link: return host
         case .color: return "Color"
         case .image where clip.imageURL != nil: return clip.imageURL.flatMap(Thumbs.dimensions) ?? "Image"

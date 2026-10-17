@@ -893,8 +893,8 @@ struct LibraryClipCard: View {
 
     var body: some View {
         let cat = clip.category
-        LibraryCard(frame: cat.tint, title: clip.title, symbol: cat.symbol,
-                    meta: "\(cat.label) · \(clip.date.formatted(.relative(presentation: .named)))",
+        LibraryCard(frame: cat.tint, title: clip.title, symbol: clip.kindSymbol,
+                    meta: "\(clip.kindLabel) · \(clip.date.formatted(.relative(presentation: .named)))",
                     appIcon: AppIcons.icon(clip.sourceBundleID), tint: cat.tint) {
             ClipPreview(clip: clip).frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -1063,17 +1063,19 @@ struct LibraryClipMenu: View {
         if let url = clip.fileURLs.first ?? clip.imageURL {
             Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: { Label("Reveal in Finder", systemImage: "magnifyingglass") }
         }
-        Menu {
-            Button { AppModel.shared.notes.addClip(clip) } label: { Label("Notes", systemImage: "note.text") }
-            Button { AppModel.shared.files.addClip(clip) } label: { Label("Quick Access", systemImage: "folder") }
-        } label: { Label("Save To", systemImage: "tray.and.arrow.down") }
-        if let url = clip.imageURL ?? clip.fileURLs.first {
-            ShareLink(item: url) { Label("Share…", systemImage: "square.and.arrow.up") }
-        } else if let text = clip.text, !text.isEmpty {
-            ShareLink(item: text) { Label("Share…", systemImage: "square.and.arrow.up") }
+        if !clip.sensitive {
+            Menu {
+                Button { AppModel.shared.notes.addClip(clip) } label: { Label("Notes", systemImage: "note.text") }
+                Button { AppModel.shared.files.addClip(clip) } label: { Label("Quick Access", systemImage: "folder") }
+            } label: { Label("Save To", systemImage: "tray.and.arrow.down") }
+            if let url = clip.imageURL ?? clip.fileURLs.first {
+                ShareLink(item: url) { Label("Share…", systemImage: "square.and.arrow.up") }
+            } else if let text = clip.text, !text.isEmpty {
+                ShareLink(item: text) { Label("Share…", systemImage: "square.and.arrow.up") }
+            }
+            Divider()
+            Button { store.togglePin(clip) } label: { Label(clip.pinned ? "Unpin" : "Pin", systemImage: clip.pinned ? "pin.slash" : "pin") }
         }
-        Divider()
-        Button { store.togglePin(clip) } label: { Label(clip.pinned ? "Unpin" : "Pin", systemImage: clip.pinned ? "pin.slash" : "pin") }
         Divider()
         Button(role: .destructive) { store.delete(clip) } label: { Label("Delete", systemImage: "trash") }
     }
