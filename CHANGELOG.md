@@ -2,9 +2,10 @@
 
 Each release is written as what you can now do.
 
-## Unreleased
+## 0.7.1 (2026-10-22): sensitive items, scoped clearing, time sections
 
 **New**
+- **The clipboard strip is grouped by age.** Cards are split into Pinned, Past Hour, Today, Yesterday, This Week, This Month and Older, each with a caption and a gap, so a long history is easy to scan. Empty groups do not show. The time filter still narrows the list as before.
 - **Clear Unpinned follows your filters.** With an app chosen in the app filter, right-click the filter pills (or open the ⋯ menu) and choose "Clear Unpinned from Claude (3)…": only that app's unpinned items go, after a confirmation with the count. The type and time filters count too, so you only ever clear what you can see. With no filter it clears every unpinned item, as before. Pinned items always stay.
 - **Mark as Sensitive.** Right-click any item (text, link, picture or file) to mask it: the picture or text is replaced by a field of block characters that scrambles when the pointer is over it, and the card says "Sensitive link", "Sensitive image" and so on. It is removed from your history files (and, through iCloud, from your other Macs), kept in memory only and pasted exactly as copied. "Not Sensitive" puts it back.
 - **A countdown on sensitive items.** Every sensitive item, marked by you or found automatically, shows a ring and the time left (15 minutes). In the last 30 seconds the characters drop away one by one and the card fades, and at zero it is gone.

@@ -409,9 +409,8 @@ struct ClipboardColumn: View {
                 Spacer()
             } else if cards {
                 GeometryReader { geo in
-                    let pinned = visible.filter(\.pinned)
-                    let recent = visible.filter { !$0.pinned }
-                    let sections = !pinned.isEmpty
+                    // Captions and gaps by age (Pinned, Past Hour, Today, Yesterday...) as soon as there is more than one group.
+                    let sections = groups.count > 1
                     let cardHeight = max(110, geo.size.height - 16 - (sections ? 22 : 0))
                     // Cards keep one shape and scale with the drawer: laid out at a base size, then scaled as a whole.
                     let scale = min(2.4, max(0.7, cardHeight / ClipCard.baseHeight))
@@ -419,10 +418,14 @@ struct ClipboardColumn: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(alignment: .top, spacing: 0) {
                             if sections {
-                                cardSection("Pinned", symbol: "pin.fill", items: pinned, index: index, scale: scale)
-                                Rectangle().fill(Color.primary.opacity(0.12)).frame(width: 1)
-                                    .padding(.vertical, 6).padding(.horizontal, 14)
-                                if !recent.isEmpty { cardSection("Recent", symbol: "clock", items: recent, index: index, scale: scale) }
+                                ForEach(Array(groups.enumerated()), id: \.element.0) { n, entry in
+                                    if n > 0 {
+                                        Rectangle().fill(Color.primary.opacity(0.12)).frame(width: 1)
+                                            .padding(.vertical, 6).padding(.horizontal, 14)
+                                    }
+                                    cardSection(entry.0.title, symbol: entry.0 == .pinned ? "pin.fill" : "clock",
+                                                items: entry.1, index: index, scale: scale)
+                                }
                             } else {
                                 cardSection(nil, symbol: "", items: visible, index: index, scale: scale)
                             }
