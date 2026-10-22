@@ -23,6 +23,13 @@ struct Clip: Codable, Identifiable, Equatable {
     var modified = Date()
     /// A password or secret: shown masked, never written to disk or synced, and removed after `ClipboardStore.sensitiveLifetime`.
     var sensitive = false
+    /// When this item became sensitive: the countdown to its removal starts here, not at the copy (an old item can be marked later).
+    /// Memory only, like the rest of what makes an item sensitive.
+    var sensitiveSince: Date?
+    /// What a marked item was ("link", "image", "file"), so its card can say "Sensitive link" without showing it. Memory only.
+    var sensitiveAbout: String?
+    /// The picture of a sensitive image, kept in memory so it can still be pasted after its file is deleted. Never written out.
+    var heldImage: Data?
 
     private enum CodingKeys: String, CodingKey {
         case id, kind, text, markdown, imageFile, paths, sourceApp, sourceBundleID, linkTitle, linkImageFile, date, pinned
@@ -30,17 +37,21 @@ struct Clip: Codable, Identifiable, Equatable {
 
     /// The saved cover image of a link, if it is on this Mac (see `LinkPreviews`).
     var linkImageURL: URL? {
-        guard let name = linkImageFile else { return nil }
+        guard !sensitive, let name = linkImageFile else { return nil }
         let url = LinkPreviews.folder.appendingPathComponent(name)
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
-    var imageURL: URL? { imageFile.map { ClipboardFolder.imageURL($0) } }
+    var imageURL: URL? { sensitive ? nil : imageFile.map { ClipboardFolder.imageURL($0) } }
     var fileURLs: [URL] { (paths ?? []).map { URL(fileURLWithPath: $0) } }
     /// What a card says its kind is: a sensitive item says so instead of "Text".
     var kindLabel: String { sensitive ? "Sensitive" : category.label }
     var kindSymbol: String { sensitive ? "lock.fill" : category.symbol }
+    /// When a sensitive item is removed.
+    var sensitiveExpiry: Date? { sensitive ? (sensitiveSince ?? date).addingTimeInterval(ClipboardStore.sensitiveLifetime) : nil }
+    /// "Sensitive link", "Sensitive image": says what it is without showing it.
+    var sensitiveTitle: String { "Sensitive " + (sensitiveAbout ?? "item") }
     /// The file used for the card's cover art.
-    var previewURL: URL? { imageURL ?? linkImageURL ?? fileURLs.first }
+    var previewURL: URL? { sensitive ? nil : (imageURL ?? linkImageURL ?? fileURLs.first) }
 }
 
 /// What a clip looks like to the user. Drives the card colour, label and preview style.
@@ -137,9 +148,9 @@ extension Clip {
 
     /// File name for files, first lines for text: what the row shows next to the cover art.
     var title: String {
+        if sensitive { return sensitiveTitle }
         switch kind {
         case .text:
-            if sensitive { return "Sensitive item" }
             let t = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             switch category {
             case .link:
@@ -220,14 +231,16 @@ final class ClipboardStore: ObservableObject {
         Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in self?.trim() }
         // History changed on another Mac arrives as a changed file: pick it up within seconds.
         Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in self?.refreshIfChanged() }
-        Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in self?.expireSensitive() }
+        // Every second, so an item goes at the moment its countdown reaches zero.
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.expireSensitive() }
     }
 
     /// Sensitive items are removed once they are old enough. They were never on disk, so there is nothing else to delete.
-    func expireSensitive() {
-        let cutoff = Date().addingTimeInterval(-Self.sensitiveLifetime)
-        guard clips.contains(where: { $0.sensitive && $0.date < cutoff }) else { return }
-        clips.removeAll { $0.sensitive && $0.date < cutoff }
+    func expireSensitive(now: Date = Date()) {
+        guard clips.contains(where: { ($0.sensitiveExpiry ?? .distantFuture) <= now }) else { return }
+        withAnimation(.easeOut(duration: 0.5)) {
+            clips.removeAll { ($0.sensitiveExpiry ?? .distantFuture) <= now }
+        }
     }
 
     // MARK: Storage
@@ -334,16 +347,22 @@ final class ClipboardStore: ObservableObject {
 
     /// The clips the column shows: filtered, pinned first.
     var visible: [Clip] {
+        let filtered = Self.filtered(clips, filter: filter, time: time, app: appFilter, pinnedOnly: pinnedOnly, query: query)
+        return filtered.filter(\.pinned) + filtered.filter { !$0.pinned }
+    }
+
+    /// The filtering behind `visible`, on its own so it can be tested.
+    static func filtered(_ clips: [Clip], filter: Category.Filter, time: TimeFilter, app: String?, pinnedOnly: Bool, query: String,
+                         now: Date = Date()) -> [Clip] {
         let q = query.trimmingCharacters(in: .whitespaces)
-        let filtered = clips.filter { clip in
+        return clips.filter { clip in
             clip.category.matches(filter)
-                && time.includes(clip.date)
-                && (appFilter == nil || Self.appKey(clip) == appFilter)
+                && time.includes(clip.date, now: now)
+                && (app == nil || appKey(clip) == app)
                 && (!pinnedOnly || clip.pinned)
                 && (q.isEmpty || clip.title.localizedCaseInsensitiveContains(q)
                     || (clip.sourceApp ?? "").localizedCaseInsensitiveContains(q))
         }
-        return filtered.filter(\.pinned) + filtered.filter { !$0.pinned }
     }
 
     /// How long a sensitive item stays in the list. It lives in memory only: it is never written to disk or synced.
@@ -392,6 +411,7 @@ final class ClipboardStore: ObservableObject {
             var clip = base
             clip.text = str
             clip.sensitive = s.keepSensitiveMasked && (concealed || SecretPatterns.looksSecret(str))
+            if clip.sensitive { clip.sensitiveSince = Date() }
             clip.markdown = clip.sensitive ? nil : Self.richMarkdown(pb)
             insert(clip, replacing: { $0.kind == .text && $0.text == str })
             log.add(app: who, result: clip.sensitive ? "Stored: sensitive text, masked and kept in memory only" : "Stored: text (\(str.count) characters)")
@@ -570,6 +590,7 @@ final class ClipboardStore: ObservableObject {
             // Put the stored PNG back as it is. Handing macOS an NSImage instead makes it offer uncompressed TIFF,
             // so Finder pasted a 27 MB .tiff for a 2 MB screenshot.
             if let url = clip.imageURL, let data = try? Data(contentsOf: url) { pb.setData(data, forType: .png) }
+            else if let data = clip.heldImage { pb.setData(data, forType: .png) }
         }
         // Tells other clipboard managers (and Transom itself) not to record the copy again.
         if clip.sensitive { pb.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")) }
@@ -616,6 +637,79 @@ final class ClipboardStore: ObservableObject {
 
     func clearUnpinned() {
         for i in clips.indices.reversed() where !clips[i].pinned { remove(at: i, tombstone: true) }
+        save()
+    }
+
+    /// True while an app, type or time filter narrows the list.
+    var isFiltered: Bool { appFilter != nil || filter != .all || time != .any }
+
+    /// The unpinned items the list shows right now: what "Clear Unpinned" clears while a filter is on.
+    var unpinnedShown: [Clip] { visible.filter { !$0.pinned } }
+
+    /// Clears the unpinned items that match the current filters, so with Claude selected only Claude's items go.
+    /// With no filter on it is the same as `clearUnpinned()`. Pinned items always stay.
+    func clearUnpinnedShown() {
+        let ids = Set(unpinnedShown.map(\.id))
+        guard !ids.isEmpty else { return }
+        for i in clips.indices.reversed() where ids.contains(clips[i].id) { remove(at: i, tombstone: true) }
+        save()
+    }
+
+    /// What the menu item says it will clear: "Claude", "this selection" or nil for everything.
+    var clearScopeName: String? {
+        if let key = appFilter { return appsInHistory.first { $0.key == key }?.name ?? "this app" }
+        return isFiltered ? "this selection" : nil
+    }
+
+    // MARK: Marking an item sensitive
+
+    /// Makes an existing item sensitive: masked, removed from the history files (and from iCloud, through a tombstone) and the
+    /// picture or link preview deleted, kept in memory only, and removed when its countdown ends. It gets a new id so
+    /// nothing on disk or on another Mac can bring the old one back.
+    func markSensitive(_ clip: Clip) {
+        guard let i = clips.firstIndex(where: { $0.id == clip.id }), !clips[i].sensitive else { return }
+        var c = clips[i]
+        let noun: String
+        switch c.category {
+        case .link: noun = "link"
+        case .image, .gif: noun = "image"
+        case .video: noun = "video"
+        case .audio, .pdf, .folder, .file: noun = "file"
+        default: noun = c.kind == .text ? "item" : "file"
+        }
+        if c.kind == .image, let url = c.imageURL, let data = try? Data(contentsOf: url) { c.heldImage = data }
+        remove(at: i, tombstone: true)       // deletes the picture and preview files and tombstones the id
+        c.id = UUID()
+        c.pinned = false
+        c.imageFile = nil
+        c.linkImageFile = nil
+        c.linkTitle = nil
+        c.markdown = nil
+        c.sensitive = true
+        c.sensitiveSince = Date()
+        c.sensitiveAbout = noun
+        c.modified = Date()
+        clips.insert(c, at: min(i, clips.count))
+        if expanded?.id == clip.id { expanded = nil }
+        save()
+    }
+
+    /// Undoes `markSensitive` while the item is still in memory: it goes back into the history.
+    func unmarkSensitive(_ clip: Clip) {
+        guard let i = clips.firstIndex(where: { $0.id == clip.id }), clips[i].sensitive else { return }
+        var c = clips[i]
+        c.sensitive = false
+        c.sensitiveSince = nil
+        c.sensitiveAbout = nil
+        c.modified = Date()
+        if let data = c.heldImage {
+            ClipboardFolder.prepare()
+            let name = UUID().uuidString + ".png"
+            if (try? data.write(to: ClipboardFolder.imageWriteFolder.appendingPathComponent(name))) != nil { c.imageFile = name }
+            c.heldImage = nil
+        }
+        clips[i] = c
+        dirtyMonths.insert(ClipboardFolder.monthKey(c.date))
         save()
     }
 
@@ -833,34 +927,142 @@ enum SecretPatterns {
     }
 }
 
+/// How far a sensitive item has dissolved: 0 until its last half minute, then up to 1 as the countdown reaches zero.
+enum SensitiveFade {
+    static let window: TimeInterval = 30
+    static func amount(expiry: Date?, now: Date) -> Double {
+        guard let expiry else { return 0 }
+        return min(max(1 - expiry.timeIntervalSince(now) / window, 0), 1)
+    }
+    /// A steady 0...1 number for a character position, so the same glyphs vanish first every time.
+    static func order(_ i: Int) -> Double {
+        var x = UInt64(truncatingIfNeeded: i &+ 1) &* 0x9E37_79B9_7F4A_7C15
+        x ^= x >> 29; x = x &* 0xBF58_476D_1CE4_E5B9; x ^= x >> 32
+        return Double(x % 10_000) / 10_000
+    }
+}
+
 /// A sensitive item's stand-in text: block and symbol characters, at rest a quiet pattern and while the pointer is over it a
 /// scramble that keeps changing. It never shows the real text; copying or pasting the item still uses it.
+/// In the last 30 seconds before the item is removed the characters drop away one by one and the rest fade.
 struct SensitiveText: View {
     let length: Int
     var active = false
     var size: CGFloat = 13
+    var expiry: Date?
 
     private static let rest: [Character] = Array("▒")
     private static let scramble: [Character] = Array("░▒▓█#%&@$*+=?/\\<>")
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.07, paused: !active)) { context in
+        TimelineView(.animation(minimumInterval: active ? 0.07 : 0.5)) { context in
             let tick = active ? Int(context.date.timeIntervalSinceReferenceDate * 14) : 0
-            Text(glyphs(tick))
+            let fade = SensitiveFade.amount(expiry: expiry, now: context.date)
+            Text(glyphs(tick, fade: fade))
                 .font(.system(size: size, weight: .medium, design: .monospaced))
                 .foregroundStyle(active ? Color.primary.opacity(0.75) : Color.secondary.opacity(0.7))
+                .opacity(1 - 0.6 * fade)
         }
         .lineLimit(3)
         .accessibilityLabel("Sensitive item, hidden")
     }
 
-    private func glyphs(_ tick: Int) -> String {
+    private func glyphs(_ tick: Int, fade: Double) -> String {
         let n = min(max(length, 8), 36)
-        guard active else { return String(repeating: Self.rest[0], count: n) }
         var seed = UInt64(truncatingIfNeeded: tick &* 2_654_435_761)
-        return String((0..<n).map { _ in
+        return String((0..<n).map { i -> Character in
+            if SensitiveFade.order(i) < fade { return " " }
+            guard active else { return Self.rest[0] }
             seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
             return Self.scramble[Int((seed >> 33) % UInt64(Self.scramble.count))]
         })
+    }
+}
+
+/// The cover of a sensitive picture, file or link: a field of block characters where the picture was, scrambling while the
+/// pointer is over it, and dissolving as the countdown ends. The real content is never drawn.
+struct SensitiveCover: View {
+    let clip: Clip
+    var active = false
+
+    private static let rest: [Character] = Array("░▒░░▒▒░▓░▒")
+    private static let scramble: [Character] = Array("░▒▓█#%&@$*+=?/\\<>")
+
+    var body: some View {
+        GeometryReader { geo in
+            let size = max(7, min(geo.size.width, geo.size.height) / 9)
+            let cols = max(4, Int(geo.size.width / (size * 0.62)))
+            let rows = max(2, Int(geo.size.height / (size * 1.25)))
+            TimelineView(.animation(minimumInterval: active ? 0.07 : 0.5)) { context in
+                let tick = active ? Int(context.date.timeIntervalSinceReferenceDate * 12) : 0
+                let fade = SensitiveFade.amount(expiry: clip.sensitiveExpiry, now: context.date)
+                ZStack {
+                    Color.primary.opacity(0.06)
+                    Text(field(cols: cols, rows: rows, tick: tick, fade: fade))
+                        .font(.system(size: size, weight: .medium, design: .monospaced))
+                        .foregroundStyle(active ? Color.primary.opacity(0.7) : Color.secondary.opacity(0.55))
+                        .lineSpacing(size * 0.1)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: min(geo.size.width, geo.size.height) * 0.22, weight: .medium))
+                        .foregroundStyle(Color.primary.opacity(0.5))
+                        .opacity(1 - fade)
+                }
+                .opacity(1 - 0.5 * fade)
+            }
+        }
+        .accessibilityLabel(clip.sensitiveTitle + ", hidden")
+    }
+
+    private func field(cols: Int, rows: Int, tick: Int, fade: Double) -> String {
+        var seed = UInt64(truncatingIfNeeded: tick &* 2_654_435_761) &+ 17
+        var out = ""
+        for r in 0..<rows {
+            for c in 0..<cols {
+                let i = r * cols + c
+                if SensitiveFade.order(i) < fade { out.append(" "); continue }
+                if active {
+                    seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+                    out.append(Self.scramble[Int((seed >> 33) % UInt64(Self.scramble.count))])
+                } else {
+                    out.append(Self.rest[Int(SensitiveFade.order(i &* 7 &+ 3) * Double(Self.rest.count)) % Self.rest.count])
+                }
+            }
+            if r < rows - 1 { out.append("\n") }
+        }
+        return out
+    }
+}
+
+/// The countdown on a sensitive item: a ring that empties and the time left, which turns orange for the last half minute.
+struct SensitiveClock: View {
+    let expiry: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let left = max(0, expiry.timeIntervalSince(context.date))
+            let ending = left <= SensitiveFade.window
+            HStack(spacing: 4) {
+                ZStack {
+                    Circle().stroke(Color.secondary.opacity(0.3), lineWidth: 1.6)
+                    Circle().trim(from: 0, to: left / ClipboardStore.sensitiveLifetime)
+                        .stroke(ending ? Color.orange : Color.secondary, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                }
+                .frame(width: 11, height: 11)
+                Text(Self.format(left))
+                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(ending ? Color.orange : Color.secondary)
+            }
+            .help("This item is removed when the timer ends. It is kept in memory only.")
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Removed in \(Self.format(left))")
+        }
+    }
+
+    static func format(_ seconds: TimeInterval) -> String {
+        let s = Int(seconds.rounded(.up))
+        return String(format: "%d:%02d", s / 60, s % 60)
     }
 }
