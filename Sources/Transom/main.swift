@@ -165,6 +165,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 } else { exit(0) }
             }
         }
+        if let count = Int(Env["MARK_SENSITIVE"] ?? "") {
+            // Debug aid: once the history has loaded, mark the newest items sensitive with different amounts of time left
+            // (14 minutes, 20 seconds, 10 minutes, then 8 seconds), to see the countdown and the dissolve. Use a scratch folder.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                let store = AppModel.shared.clipboard
+                for clip in store.clips.prefix(count) { store.markSensitive(clip) }
+                let left: [TimeInterval] = [840, 20, 600, 8]
+                for n in 0..<min(count, store.clips.count) where store.clips[n].sensitive {
+                    store.clips[n].sensitiveSince = Date().addingTimeInterval(left[n % left.count] - ClipboardStore.sensitiveLifetime)
+                }
+            }
+        }
         if let path = Env["SNAPSHOT"] {
             DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Env["SNAPSHOT_DELAY"] ?? "") ?? 3)) { self.drawer.snapshot(to: path); exit(0) }
         }

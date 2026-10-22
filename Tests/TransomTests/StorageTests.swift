@@ -115,3 +115,70 @@ import Testing
                                           URL(fileURLWithPath: "/tmp/Clipboard/2026-10 2.md")))
     }
 }
+
+/// Clearing unpinned items follows the filters, and a sensitive item's countdown runs from when it became sensitive.
+@Suite struct ScopedClearAndSensitiveTests {
+    private func clip(_ text: String, app: String, pinned: Bool = false) -> Clip {
+        var c = Clip(kind: .text)
+        c.text = text
+        c.sourceApp = app
+        c.sourceBundleID = "com.example." + app
+        c.pinned = pinned
+        return c
+    }
+
+    @Test func filteringByAppKeepsOnlyThatApp() {
+        let list = [clip("a", app: "Claude"), clip("b", app: "Claude", pinned: true), clip("c", app: "Dia")]
+        let shown = ClipboardStore.filtered(list, filter: .all, time: .any, app: "com.example.Claude", pinnedOnly: false, query: "")
+        #expect(shown.map { $0.text } == ["a", "b"])
+        // What "Clear Unpinned" removes while Claude is selected: Claude's unpinned item only.
+        #expect(shown.filter { !$0.pinned }.map { $0.text } == ["a"])
+    }
+
+    @Test func noFilterShowsEverything() {
+        let list = [clip("a", app: "Claude"), clip("c", app: "Dia")]
+        #expect(ClipboardStore.filtered(list, filter: .all, time: .any, app: nil, pinnedOnly: false, query: "").count == 2)
+    }
+
+    @Test func countdownRunsFromWhenItBecameSensitive() {
+        var old = clip("secret", app: "Dia")
+        old.date = Date().addingTimeInterval(-3 * 3600)          // copied three hours ago, marked just now
+        old.sensitive = true
+        old.sensitiveSince = Date()
+        let left = old.sensitiveExpiry!.timeIntervalSinceNow
+        #expect(left > ClipboardStore.sensitiveLifetime - 5 && left <= ClipboardStore.sensitiveLifetime)
+        #expect(clip("plain", app: "Dia").sensitiveExpiry == nil)
+    }
+
+    @Test func itemWithoutAMarkTimeFallsBackToItsCopyDate() {
+        var c = clip("secret", app: "Dia")
+        c.sensitive = true
+        c.date = Date(timeIntervalSince1970: 1_000)
+        #expect(c.sensitiveExpiry == Date(timeIntervalSince1970: 1_000 + ClipboardStore.sensitiveLifetime))
+    }
+
+    @Test func dissolveOnlyStartsInTheLastHalfMinute() {
+        let now = Date()
+        #expect(SensitiveFade.amount(expiry: now.addingTimeInterval(120), now: now) == 0)
+        #expect(SensitiveFade.amount(expiry: now.addingTimeInterval(15), now: now) == 0.5)
+        #expect(SensitiveFade.amount(expiry: now, now: now) == 1)
+        #expect(SensitiveFade.amount(expiry: nil, now: now) == 0)
+    }
+
+    @Test func clockFormatsMinutesAndSeconds() {
+        #expect(SensitiveClock.format(872) == "14:32")
+        #expect(SensitiveClock.format(59.2) == "1:00")
+        #expect(SensitiveClock.format(0) == "0:00")
+    }
+
+    @Test func aSensitivePictureOffersNoFileToShow() {
+        var c = Clip(kind: .image)
+        c.imageFile = "ABCD.png"
+        #expect(c.imageURL != nil)
+        c.sensitive = true
+        c.sensitiveAbout = "image"
+        #expect(c.imageURL == nil)
+        #expect(c.previewURL == nil)
+        #expect(c.title == "Sensitive image")
+    }
+}

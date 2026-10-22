@@ -58,6 +58,7 @@ struct TransomView: View {
     @ViewBuilder private func column(_ p: Panel, gear: Bool) -> some View {
         switch p {
         case .clipboard: ClipboardColumn(store: AppModel.shared.clipboard, showsGear: gear, cards: settings.v.clipboardCards)
+            .overlay(alignment: .bottom) { ClearConfirmBar(store: AppModel.shared.clipboard) }
         case .files: FilesColumn(store: AppModel.shared.files, showsGear: gear)
         case .notes: NotesColumn(store: AppModel.shared.notes, showsGear: gear)
         }
@@ -370,7 +371,7 @@ struct ClipboardColumn: View {
                     .help(settings.v.paused ? "Clipboard capture paused" : "Pause clipboard capture")
                     PanelMenu {
                         Button(settings.v.paused ? "Resume Capture" : "Pause Capture") { settings.v.paused.toggle() }
-                        Button("Clear Unpinned Items") { store.clearUnpinned() }
+                        ClearUnpinnedButton(store: store)
                         Divider()
                         Button("Clipboard Settings…") { AppModel.shared.openSettings(.clipboard) }
                         Button("Hide Clipboard Panel") { settings.v.showClipboard = false }
@@ -532,7 +533,10 @@ struct ClipRow: View {
                     .font(.system(size: fs(13.5), weight: .medium))
                     .lineLimit(cat == .text ? 2 : 1).truncationMode(.middle)
                     .multilineTextAlignment(.leading)
-                Pill(category: cat, sensitive: clip.sensitive)
+                HStack(spacing: 8) {
+                    Pill(category: cat, sensitive: clip.sensitive)
+                    if let expiry = clip.sensitiveExpiry { SensitiveClock(expiry: expiry) }
+                }
             }
             Spacer(minLength: 4)
             ZStack {
@@ -570,6 +574,9 @@ struct ClipRow: View {
     /// A square cover that says what the clip is: real artwork for media, a tinted symbol for the rest.
     @ViewBuilder private func coverArt(_ cat: Category) -> some View {
         let size = CGSize(width: cover, height: cover)
+        if clip.sensitive {
+            SensitiveCover(clip: clip, active: hovering.value)
+        } else {
         switch cat {
         case .color:
             (Clip.hexColor((clip.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)) ?? .gray)
@@ -591,9 +598,10 @@ struct ClipRow: View {
         case .text, .link, .audio:
             ZStack {
                 Contrast.solidChips ? cat.tint : cat.tint.opacity(0.18)
-                Image(systemName: clip.sensitive ? "lock.fill" : (cat == .text ? "text.alignleft" : cat.symbol))
+                Image(systemName: cat == .text ? "text.alignleft" : cat.symbol)
                     .font(.system(size: fs(20), weight: .medium)).foregroundStyle(Contrast.solidChips ? Color.white : cat.tint)
             }
+        }
         }
     }
 }
@@ -869,6 +877,7 @@ struct ExpandedClipView: View {
                 Button { store.expanded = nil } label: { Label("Back", systemImage: "chevron.left") }
                     .buttonStyle(.borderless)
                 Pill(category: cat, sensitive: clip.sensitive)
+                if let expiry = clip.sensitiveExpiry { SensitiveClock(expiry: expiry) }
                 Spacer()
                 Button("Copy") {
                     store.copy(clip)
@@ -886,11 +895,14 @@ struct ExpandedClipView: View {
     }
 
     @ViewBuilder private func content(_ cat: Category) -> some View {
+        if clip.sensitive && ![.text, .link, .color].contains(cat) {
+            SensitiveCover(clip: clip, active: true)
+        } else {
         switch cat {
         case .text, .link, .color:
             ScrollView {
                 if clip.sensitive {
-                    SensitiveText(length: (clip.text ?? "").count, active: true, size: fs(13))
+                    SensitiveText(length: (clip.text ?? "").count, active: true, size: fs(13), expiry: clip.sensitiveExpiry)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(12)
                 } else {
                     Text(clip.text ?? clip.title)
@@ -915,6 +927,7 @@ struct ExpandedClipView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
         }
     }
 }
@@ -1030,6 +1043,9 @@ struct ClipPreview: View {
 
     @ViewBuilder private func preview(_ cat: Category) -> some View {
         GeometryReader { geo in
+            if clip.sensitive && cat != .text {
+                SensitiveCover(clip: clip, active: hovering.value)
+            } else {
             switch cat {
             case .color:
                 ZStack {
@@ -1066,13 +1082,14 @@ struct ClipPreview: View {
             case .text:
                 Group {
                     if clip.sensitive {
-                        SensitiveText(length: (clip.text ?? "").count, active: hovering.value, size: fs(12.5))
+                        SensitiveText(length: (clip.text ?? "").count, active: hovering.value, size: fs(12.5), expiry: clip.sensitiveExpiry)
                     } else {
                         Text(clip.text ?? "").font(.system(size: fs(12.5))).multilineTextAlignment(.leading)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(10)
+            }
             }
         }
     }
@@ -1093,7 +1110,8 @@ struct ClipMenu: View {
         Button("Paste") { AppModel.shared.use(clip, paste: true) }
         Divider()
         if !clip.sensitive { Button(clip.pinned ? "Unpin" : "Pin") { store.togglePin(clip) } }
-        if let first = clip.fileURLs.first {
+        SensitiveToggleButton(clip: clip, store: store)
+        if !clip.sensitive, let first = clip.fileURLs.first {
             Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([first]) }
         }
         if let id = clip.sourceBundleID, let name = clip.sourceApp {
@@ -1150,7 +1168,11 @@ struct ClipCard: View {
                 .clipped()
 
             HStack {
-                Text(footer(cat)).font(.system(size: fs(10.5))).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                if let expiry = clip.sensitiveExpiry {
+                    SensitiveClock(expiry: expiry)
+                } else {
+                    Text(footer(cat)).font(.system(size: fs(10.5))).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                }
                 Spacer(minLength: 4)
                 if let n = quickKey {
                     Text("\(Settings.shared.v.quickPasteModifier.symbol)\(n)")
@@ -1246,4 +1268,73 @@ func dragProvider(_ clip: Clip) -> NSItemProvider {
         if let url = clip.fileURLs.first, let p = NSItemProvider(contentsOf: url) { return p }
     }
     return NSItemProvider(object: clip.title as NSString)
+}
+
+/// Right-click item that marks a clipboard item sensitive (masked, memory only, removed after a countdown) or undoes it.
+struct SensitiveToggleButton: View {
+    let clip: Clip
+    let store: ClipboardStore
+    var library = false
+    var body: some View {
+        if clip.sensitive {
+            if library {
+                Button { store.unmarkSensitive(clip) } label: { Label("Not Sensitive", systemImage: "lock.open") }
+            } else {
+                Button("Not Sensitive") { store.unmarkSensitive(clip) }
+            }
+        } else if library {
+            Button { store.markSensitive(clip) } label: { Label("Mark as Sensitive", systemImage: "lock") }
+        } else {
+            Button("Mark as Sensitive") { store.markSensitive(clip) }
+        }
+    }
+}
+
+/// "Clear Unpinned" that follows the filters: with Claude chosen in the app filter it clears only Claude's unpinned items.
+struct ClearUnpinnedButton: View {
+    @ObservedObject var store: ClipboardStore
+    var body: some View {
+        let n = store.unpinnedShown.count
+        if let scope = store.clearScopeName {
+            // Asked inside the window: a system alert takes focus away and the drawer closes on that.
+            Button(scope == "this selection" ? "Clear Unpinned Items Shown (\(n))…" : "Clear Unpinned from \(scope) (\(n))…") {
+                store.pendingClear = .init(scope: scope, count: n)
+            }
+            .disabled(n == 0)
+        } else {
+            Button("Clear All Unpinned Items") { store.clearUnpinned() }
+        }
+    }
+}
+
+/// The yes/no for a filtered "Clear Unpinned", shown at the bottom of the clipboard panel so the drawer stays open.
+struct ClearConfirmBar: View {
+    @ObservedObject var store: ClipboardStore
+    var body: some View {
+        if let pending = store.pendingClear {
+            let what = pending.scope == "this selection" ? "the unpinned items shown" : "unpinned items from \(pending.scope)"
+            HStack(spacing: 10) {
+                Text("Clear \(pending.count) \(pending.count == 1 ? "item" : "items") (\(what))?")
+                    .font(.system(size: 12, weight: .medium)).lineLimit(1).truncationMode(.tail)
+                Spacer(minLength: 6)
+                Button("Cancel") { withAnimation { store.pendingClear = nil } }
+                    .buttonStyle(.plain).foregroundStyle(.secondary).font(.system(size: 12, weight: .medium))
+                Button("Clear") {
+                    store.clearUnpinnedShown()
+                    withAnimation { store.pendingClear = nil }
+                }
+                .buttonStyle(.plain).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+                .padding(.horizontal, 12).padding(.vertical, 4).background(Color.red, in: Capsule())
+            }
+            .padding(.horizontal, 14).padding(.vertical, 9)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.12)))
+            .shadow(color: .black.opacity(0.2), radius: 10, y: 3)
+            .padding(.horizontal, 14).padding(.bottom, 12)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .onChange(of: store.appFilter) { _, _ in store.pendingClear = nil }
+            .onChange(of: store.filter) { _, _ in store.pendingClear = nil }
+            .onChange(of: store.time) { _, _ in store.pendingClear = nil }
+        }
+    }
 }

@@ -245,6 +245,7 @@ struct DesktopView: View {
         HStack(spacing: 0) {
             sidebar
             content.background(Look.page)
+                .overlay(alignment: .bottom) { ClearConfirmBar(store: clipboard) }
         }
         .onAppear {
             clipboard.expanded = nil
@@ -838,6 +839,8 @@ struct LibraryCard<Preview: View>: View {
     let meta: String
     var appIcon: NSImage?
     var tint: Color?
+    /// A sensitive item's removal time: the card shows the countdown next to the details.
+    var expiry: Date?
     @ViewBuilder var preview: () -> Preview
     @StateObject private var hovering = Box(false)
     private let outerRadius: CGFloat = 18
@@ -870,6 +873,7 @@ struct LibraryCard<Preview: View>: View {
                     HStack(spacing: 5) {
                         Image(systemName: symbol).font(.system(size: 10.5, weight: .semibold)).foregroundStyle(tint ?? frame)
                         Text(meta).font(Look.meta).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                        if let expiry { SensitiveClock(expiry: expiry) }
                     }
                 }
                 Spacer(minLength: 6)
@@ -895,7 +899,7 @@ struct LibraryClipCard: View {
         let cat = clip.category
         LibraryCard(frame: cat.tint, title: clip.title, symbol: clip.kindSymbol,
                     meta: "\(clip.kindLabel) · \(clip.date.formatted(.relative(presentation: .named)))",
-                    appIcon: AppIcons.icon(clip.sourceBundleID), tint: cat.tint) {
+                    appIcon: AppIcons.icon(clip.sourceBundleID), tint: cat.tint, expiry: clip.sensitiveExpiry) {
             ClipPreview(clip: clip).frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .overlay {
@@ -963,6 +967,7 @@ struct TimeMenu: View {
             }
         } label: { FilterMenuLabel(symbol: "clock", value: store.time.rawValue, active: store.time != .any, compact: compact, showsText: showsText) }
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
+            .contextMenu { ClearUnpinnedButton(store: store) }
     }
 }
 
@@ -983,6 +988,7 @@ struct TypeMenu: View {
             FilterMenuLabel(symbol: FilterIcon.symbol(current), value: current == .all ? "All types" : current.rawValue, active: current != .all, compact: compact, showsText: showsText)
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
+        .contextMenu { ClearUnpinnedButton(store: store) }
     }
 }
 
@@ -1019,6 +1025,7 @@ struct AppMenu: View {
             FilterMenuLabel(symbol: "app.dashed", image: small(current?.bundle), value: current?.name ?? "All apps", active: current != nil, compact: compact, showsText: showsText)
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
+        .contextMenu { ClearUnpinnedButton(store: store) }
     }
 }
 
@@ -1031,7 +1038,7 @@ struct LibraryClipMenu: View {
 
     var body: some View {
         let cat = clip.category
-        let file = clip.imageURL ?? clip.fileURLs.first
+        let file = clip.sensitive ? nil : (clip.imageURL ?? clip.fileURLs.first)
         // Grouped the way Craft groups its menus: use it, open it, send it somewhere, then pin and delete last.
         Button {
             store.copy(clip)
@@ -1060,7 +1067,7 @@ struct LibraryClipMenu: View {
         case .text, .color:
             EmptyView()
         }
-        if let url = clip.fileURLs.first ?? clip.imageURL {
+        if !clip.sensitive, let url = clip.fileURLs.first ?? clip.imageURL {
             Button { NSWorkspace.shared.activateFileViewerSelecting([url]) } label: { Label("Reveal in Finder", systemImage: "magnifyingglass") }
         }
         if !clip.sensitive {
@@ -1076,6 +1083,7 @@ struct LibraryClipMenu: View {
             Divider()
             Button { store.togglePin(clip) } label: { Label(clip.pinned ? "Unpin" : "Pin", systemImage: clip.pinned ? "pin.slash" : "pin") }
         }
+        SensitiveToggleButton(clip: clip, store: store, library: true)
         Divider()
         Button(role: .destructive) { store.delete(clip) } label: { Label("Delete", systemImage: "trash") }
     }
