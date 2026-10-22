@@ -208,6 +208,9 @@ final class ClipboardStore: ObservableObject {
     @Published var cursor: UUID?
     /// The clip shown in full in place of the list, when clicking is set to expand.
     @Published var expanded: Clip?
+    /// A filtered "Clear Unpinned" waiting for a yes, asked inside the window (a system alert would take focus and close the drawer).
+    @Published var pendingClear: PendingClear?
+    struct PendingClear: Equatable { var scope: String; var count: Int }
 
     /// Months whose Markdown file needs rewriting, and the folder and file state the clips were loaded from.
     private var dirtyMonths = Set<String>()

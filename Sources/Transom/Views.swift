@@ -58,6 +58,7 @@ struct TransomView: View {
     @ViewBuilder private func column(_ p: Panel, gear: Bool) -> some View {
         switch p {
         case .clipboard: ClipboardColumn(store: AppModel.shared.clipboard, showsGear: gear, cards: settings.v.clipboardCards)
+            .overlay(alignment: .bottom) { ClearConfirmBar(store: AppModel.shared.clipboard) }
         case .files: FilesColumn(store: AppModel.shared.files, showsGear: gear)
         case .notes: NotesColumn(store: AppModel.shared.notes, showsGear: gear)
         }
@@ -1295,15 +1296,45 @@ struct ClearUnpinnedButton: View {
     var body: some View {
         let n = store.unpinnedShown.count
         if let scope = store.clearScopeName {
+            // Asked inside the window: a system alert takes focus away and the drawer closes on that.
             Button(scope == "this selection" ? "Clear Unpinned Items Shown (\(n))…" : "Clear Unpinned from \(scope) (\(n))…") {
-                let what = scope == "this selection" ? "the unpinned items shown" : "the unpinned items from \(scope)"
-                SettingsActions.confirm("Clear \(n) \(n == 1 ? "item" : "items")?",
-                                        detail: "This clears \(what). Pinned items and everything else stay. This can't be undone.",
-                                        action: "Clear") { store.clearUnpinnedShown() }
+                store.pendingClear = .init(scope: scope, count: n)
             }
             .disabled(n == 0)
         } else {
             Button("Clear All Unpinned Items") { store.clearUnpinned() }
+        }
+    }
+}
+
+/// The yes/no for a filtered "Clear Unpinned", shown at the bottom of the clipboard panel so the drawer stays open.
+struct ClearConfirmBar: View {
+    @ObservedObject var store: ClipboardStore
+    var body: some View {
+        if let pending = store.pendingClear {
+            let what = pending.scope == "this selection" ? "the unpinned items shown" : "unpinned items from \(pending.scope)"
+            HStack(spacing: 10) {
+                Text("Clear \(pending.count) \(pending.count == 1 ? "item" : "items") (\(what))?")
+                    .font(.system(size: 12, weight: .medium)).lineLimit(1).truncationMode(.tail)
+                Spacer(minLength: 6)
+                Button("Cancel") { withAnimation { store.pendingClear = nil } }
+                    .buttonStyle(.plain).foregroundStyle(.secondary).font(.system(size: 12, weight: .medium))
+                Button("Clear") {
+                    store.clearUnpinnedShown()
+                    withAnimation { store.pendingClear = nil }
+                }
+                .buttonStyle(.plain).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
+                .padding(.horizontal, 12).padding(.vertical, 4).background(Color.red, in: Capsule())
+            }
+            .padding(.horizontal, 14).padding(.vertical, 9)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.12)))
+            .shadow(color: .black.opacity(0.2), radius: 10, y: 3)
+            .padding(.horizontal, 14).padding(.bottom, 12)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .onChange(of: store.appFilter) { _, _ in store.pendingClear = nil }
+            .onChange(of: store.filter) { _, _ in store.pendingClear = nil }
+            .onChange(of: store.time) { _, _ in store.pendingClear = nil }
         }
     }
 }

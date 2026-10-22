@@ -245,6 +245,7 @@ struct DesktopView: View {
         HStack(spacing: 0) {
             sidebar
             content.background(Look.page)
+                .overlay(alignment: .bottom) { ClearConfirmBar(store: clipboard) }
         }
         .onAppear {
             clipboard.expanded = nil
