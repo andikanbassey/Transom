@@ -1,0 +1,49 @@
+# Publishes a release when a version tag is pushed (git tag v0.7.2 && git push origin v0.7.2).
+# It builds the DMG the way docs/releasing.md says, checks that the tag matches the version inside the app (the in-app updater
+# compares the two), and creates the GitHub release with Transom.dmg, Transom.dmg.sha256 and the changelog entry as the notes.
+# Ordinary merges to main never publish anything: only a tag does.
+
+name: Release
+
+on:
+  push:
+    tags: [ "v*" ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Unit tests
+      run: swift test
+    - name: Check the tag matches the app version
+      run: |
+        tag="${GITHUB_REF_NAME#v}"
+        built="$(sed -n 's|.*<key>CFBundleShortVersionString</key><string>\(.*\)</string>.*|\1|p' build.sh | head -1)"
+        echo "tag: $tag, build.sh: $built"
+        # v0.7 is 0.7.0 inside the app; v0.7.1 is 0.7.1
+        test "$tag" = "$built" || test "$tag.0" = "$built"
+    - name: Build the DMG
+      run: ./build.sh dmg
+    - name: Check the bundle
+      run: |
+        codesign --verify --deep --strict build/Transom.app
+        test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/Transom.app/Contents/Info.plist)" = "com.studioab.drawer"
+        (cd build && shasum -a 256 -c Transom.dmg.sha256)
+    - name: Write the release notes
+      run: |
+        tag="${GITHUB_REF_NAME#v}"
+        # The changelog section that starts "## <version>" (with or without a trailing .0), up to the next "## ".
+        awk -v v="$tag" 'index($0, "## " v " ") == 1 || index($0, "## " v ".0 ") == 1 {on=1; next} /^## / {on=0} on' CHANGELOG.md > notes.md
+        test -s notes.md || echo "See CHANGELOG.md for what changed." > notes.md
+        printf '\nSHA-256 of Transom.dmg: `%s`\n' "$(cut -d' ' -f1 build/Transom.dmg.sha256)" >> notes.md
+    - name: Create the release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release create "$GITHUB_REF_NAME" build/Transom.dmg build/Transom.dmg.sha256 \
+          --title "Transom ${GITHUB_REF_NAME#v}" --notes-file notes.md --verify-tag

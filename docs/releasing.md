@@ -13,6 +13,8 @@ How a Transom release is made. The same steps keep the in-app updater working, b
 
 ## Publish
 
+Pushing a tag does it for you: `git tag vX.Y.Z && git push origin vX.Y.Z` runs `.github/workflows/release.yml`, which tests, builds the DMG, checks the tag against the version in `build.sh`, and creates the release with `Transom.dmg`, `Transom.dmg.sha256` and the changelog entry as the notes. Check the release afterwards (download it back and compare checksums). By hand, it is:
+
 - Tag `vX.Y` (or `vX.Y.Z`) on `main` and create a GitHub release.
 - Attach exactly `Transom.dmg` and `Transom.dmg.sha256`. The updater downloads the DMG, checks it against the checksum file,
   verifies the app's signature, and swaps the app in place.
