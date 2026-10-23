@@ -148,7 +148,7 @@ final class ClipboardStore: ObservableObject {
     }
 
     func moveCursor(_ delta: Int) {
-        let list = visible
+        let list = window
         guard !list.isEmpty else { return }
         if let current = list.firstIndex(where: { $0.id == cursor }) {
             cursor = list[min(max(current + delta, 0), list.count - 1)].id
@@ -163,6 +163,25 @@ final class ClipboardStore: ObservableObject {
     var visible: [Clip] {
         let filtered = Self.filtered(clips, filter: filter, time: time, app: appFilter, pinnedOnly: pinnedOnly, query: query)
         return filtered.filter(\.pinned) + filtered.filter { !$0.pinned }
+    }
+
+    /// How many unpinned items the drawer draws before "Show older". Drawing the whole history made the drawer hold tens of
+    /// megabytes of views for items nobody was looking at.
+    static let windowStep = 200
+    @Published var windowLimit = ClipboardStore.windowStep
+
+    /// What the drawer draws: every pinned item, then the newest unpinned ones up to `windowLimit`.
+    var window: [Clip] { Self.window(of: visible, limit: windowLimit) }
+    /// Unpinned items still hidden behind "Show older".
+    var hiddenCount: Int { max(0, visible.filter { !$0.pinned }.count - windowLimit) }
+    func showOlder() { windowLimit += Self.windowStep }
+    func resetWindow() { if windowLimit != Self.windowStep { windowLimit = Self.windowStep } }
+
+    /// The window on its own, so it can be tested: `visible` is pinned first, then unpinned.
+    static func window(of visible: [Clip], limit: Int) -> [Clip] {
+        let pinned = visible.prefix { $0.pinned }
+        let rest = visible.dropFirst(pinned.count)
+        return Array(pinned) + Array(rest.prefix(limit))
     }
 
     /// The filtering behind `visible`, on its own so it can be tested.
