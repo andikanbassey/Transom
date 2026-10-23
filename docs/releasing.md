@@ -52,4 +52,6 @@ Measured on 2026-10-17 with the release build from a fresh clone, on an Apple si
 
 Long history, measured 2026-10-23 with `footprint` (release build, 20,000 text items over 13 months, drawer closed): 94 MB before the drawer drew only a window of the history, 47 MB after; an empty history is 25 MB. The rest is the history itself held in memory (about 22 MB for 20,000 items); loading older months only on demand is the next step.
 
+Launch work with the same 20,000 items: 14.1 s of CPU before batching the removals at launch, 3.7 s after (an empty history needs 0.9 s); it runs off the main thread, so the menu bar icon and drawer are not held up.
+
 Not covered yet: memory with a year of history including pictures, and CPU while Transom is open and scrolling.

@@ -5,6 +5,7 @@ Each release is written as what you can now do.
 ## Unreleased
 
 **Faster**
+- **Opening with a long history is faster.** Clearing, trimming and deleting many items at once no longer copies the whole history for each item: with 20,000 items Transom's start-up work dropped from 14 s of CPU to under 4 s.
 - **A long history no longer weighs the drawer down.** The drawer draws the newest 200 items plus everything pinned, and ends with a "Show older" button for the next batch. With 20,000 items over a year, Transom's memory dropped from 94 MB to 47 MB. Searching and filters still look through the whole history.
 
 ## 0.7.1 (2026-10-22): sensitive items, scoped clearing, time sections
