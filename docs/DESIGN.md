@@ -30,6 +30,7 @@ How Transom looks and behaves, and how it stores your data. Names, colours and t
   between `<!-- drawer:clip {json} -->` markers. The marker keeps its original spelling so older history stays readable.
   Formatted text is stored as Markdown and pasted back with its styling. Pictures with no source file go in
   `Clipboard/Images/`; copied files stay as pointers. There is no item cap: time is the only limit.
+- **Retention** moves items older than the chosen period to `Application Support/Transom/ClipboardArchive` (one `archived-<day>.md` per day, pictures in `Images`), on this Mac only, and deletes that archive after 90 days (`ClipboardArchive`). To get an item back, copy its block into the matching month file in the Clipboard folder.
 - **Deletions** are remembered in `deleted.txt` so a delete on one Mac is not undone by another Mac's copy of the file.
 - **Notes** are Markdown files in a folder. **Quick Access** files are references or copies in a folder.
 - **Sync** works by pointing those folders at iCloud Drive; the newest change per item wins. Link cover images stay on

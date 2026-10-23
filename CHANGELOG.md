@@ -4,6 +4,9 @@ Each release is written as what you can now do.
 
 ## Unreleased
 
+**Changed**
+- **"Keep history for" now really removes old items, with a safety net.** Items past the period used to be hidden but stayed in your month files, so they were loaded again at every launch. They now leave the history (and your other Macs, through iCloud) and move to an archive on this Mac, with their pictures. The archive is emptied after 90 days. Pinned items and "Forever" are unchanged. Clear Unpinned, Erase History and deleting items still delete at once.
+
 **Faster**
 - **Opening with a long history is faster.** Clearing, trimming and deleting many items at once no longer copies the whole history for each item: with 20,000 items Transom's start-up work dropped from 14 s of CPU to under 4 s.
 - **A long history no longer weighs the drawer down.** The drawer draws the newest 200 items plus everything pinned, and ends with a "Show older" button for the next batch. With 20,000 items over a year, Transom's memory dropped from 94 MB to 47 MB. Searching and filters still look through the whole history.

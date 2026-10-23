@@ -1,0 +1,56 @@
+import Foundation
+
+/// Where items go when the "Keep history" setting expires them: one Markdown file per day they were archived, plus
+/// their pictures, kept for `keepDays` and then deleted for good. It lives on this Mac only (never in a synced folder),
+/// so retention frees the synced history while a mistake can still be undone by hand for a while.
+enum ClipboardArchive {
+    static let keepDays = 90
+
+    static var folder: URL { supportDir.appendingPathComponent("ClipboardArchive", isDirectory: true) }
+
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX"); return f
+    }()
+    private static let prefix = "archived-"
+
+    private static func file(on day: Date, in folder: URL) -> URL {
+        folder.appendingPathComponent("\(prefix)\(dayFormatter.string(from: day)).md")
+    }
+
+    /// Adds the clips to today's archive file and moves their pictures next to it. Runs on the disk queue.
+    static func store(_ clips: [Clip], on day: Date = Date(), in folder: URL = folder,
+                      pictureURL: (String) -> URL = ClipboardFolder.imageURL) {
+        guard !clips.isEmpty else { return }
+        let fm = FileManager.default
+        let pictures = folder.appendingPathComponent("Images", isDirectory: true)
+        try? fm.createDirectory(at: pictures, withIntermediateDirectories: true)
+        for name in clips.compactMap(\.imageFile) {
+            let from = pictureURL(name), to = pictures.appendingPathComponent(name)
+            if fm.fileExists(atPath: from.path), !fm.fileExists(atPath: to.path) { try? fm.moveItem(at: from, to: to) }
+            else { try? fm.removeItem(at: from) }
+        }
+        let target = file(on: day, in: folder)
+        var merged: [UUID: Clip] = [:]
+        if let text = try? String(contentsOf: target, encoding: .utf8) { for c in ClipHistoryFile.parse(text) { merged[c.id] = c } }
+        for c in clips { merged[c.id] = c }
+        let title = "archived \(dayFormatter.string(from: day))"
+        try? ClipHistoryFile.render(month: title, clips: Array(merged.values)).write(to: target, atomically: true, encoding: .utf8)
+    }
+
+    /// Deletes archive files older than `keepDays`, with the pictures they refer to.
+    static func purge(now: Date = Date(), in folder: URL = folder) {
+        let fm = FileManager.default
+        let cutoff = now.addingTimeInterval(-Double(keepDays) * 86400)
+        for url in (try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        where url.pathExtension == "md" && url.lastPathComponent.hasPrefix(prefix) {
+            let stamp = url.deletingPathExtension().lastPathComponent.dropFirst(prefix.count)
+            guard let day = dayFormatter.date(from: String(stamp)), day < cutoff else { continue }
+            if let text = try? String(contentsOf: url, encoding: .utf8) {
+                for name in ClipHistoryFile.parse(text).compactMap(\.imageFile) {
+                    try? fm.removeItem(at: folder.appendingPathComponent("Images").appendingPathComponent(name))
+                }
+            }
+            try? fm.removeItem(at: url)
+        }
+    }
+}
