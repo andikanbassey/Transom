@@ -280,6 +280,7 @@ final class TransomController {
             ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
             panel.animator().setFrame(f, display: true)
         }, completionHandler: { [weak self] in
+            AppModel.shared.clipboard.resetWindow()   // the next opening starts from the newest items again
             if self?.isVisible == false { self?.panel.orderOut(nil) }
             if done == nil, restoreFocus, let self, self.isVisible == false,
                NSWorkspace.shared.frontmostApplication == NSRunningApplication.current,
