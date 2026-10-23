@@ -322,7 +322,7 @@ final class ClipboardStore: ObservableObject {
     func trim() {
         if let interval = settings.retention.interval {
             let cutoff = Date().addingTimeInterval(-interval)
-            for i in clips.indices.reversed() where !clips[i].pinned && clips[i].date < cutoff { remove(at: i) }
+            removeAll { !$0.pinned && $0.date < cutoff }
         }
         save()
     }
@@ -455,7 +455,7 @@ final class ClipboardStore: ObservableObject {
 
     /// Delete many at once (Library selection): one save for the lot.
     func delete(ids: Set<UUID>) {
-        for i in clips.indices.reversed() where ids.contains(clips[i].id) { remove(at: i, tombstone: true) }
+        removeAll(tombstone: true) { ids.contains($0.id) }
         save()
     }
 
@@ -469,7 +469,7 @@ final class ClipboardStore: ObservableObject {
     }
 
     func clearUnpinned() {
-        for i in clips.indices.reversed() where !clips[i].pinned { remove(at: i, tombstone: true) }
+        removeAll(tombstone: true) { !$0.pinned }
         save()
     }
 
@@ -484,7 +484,7 @@ final class ClipboardStore: ObservableObject {
     func clearUnpinnedShown() {
         let ids = Set(unpinnedShown.map(\.id))
         guard !ids.isEmpty else { return }
-        for i in clips.indices.reversed() where ids.contains(clips[i].id) { remove(at: i, tombstone: true) }
+        removeAll(tombstone: true) { ids.contains($0.id) }
         save()
     }
 
@@ -547,7 +547,7 @@ final class ClipboardStore: ObservableObject {
     }
 
     func eraseAll() {
-        for i in clips.indices.reversed() { remove(at: i, tombstone: true) }
+        removeAll(tombstone: true) { _ in true }
         // Nothing refers to this Mac's own pictures any more, so none are kept.
         for name in (try? FileManager.default.contentsOfDirectory(atPath: ClipboardFolder.localImages.path)) ?? [] {
             try? FileManager.default.removeItem(at: ClipboardFolder.localImages.appendingPathComponent(name))
@@ -556,15 +556,30 @@ final class ClipboardStore: ObservableObject {
     }
 
     private func remove(at i: Int, tombstone: Bool = false) {
-        if tombstone { ClipboardFolder.addTombstone(clips[i].id) }
-        if let file = clips[i].imageFile {
+        discardFiles(of: clips[i], tombstone: tombstone)
+        clips.remove(at: i)
+    }
+
+    /// Removes every item that matches in one pass. Removing them one by one copied the whole history each time, which made
+    /// clearing or trimming thousands of items take many seconds.
+    private func removeAll(tombstone: Bool = false, where match: (Clip) -> Bool) {
+        let doomed = clips.filter(match)
+        guard !doomed.isEmpty else { return }
+        if tombstone { ClipboardFolder.addTombstones(doomed.map(\.id)) }
+        for clip in doomed { discardFiles(of: clip, tombstone: false) }
+        clips.removeAll(where: match)
+    }
+
+    /// What deleting an item leaves behind to clean up: its tombstone, its picture and link preview, and a rewrite of its month.
+    private func discardFiles(of clip: Clip, tombstone: Bool) {
+        if tombstone { ClipboardFolder.addTombstone(clip.id) }
+        if let file = clip.imageFile {
             // Clearing history deletes the picture too, wherever it is kept.
             try? FileManager.default.removeItem(at: ClipboardFolder.images.appendingPathComponent(file))
             try? FileManager.default.removeItem(at: ClipboardFolder.localImages.appendingPathComponent(file))
         }
-        if let file = clips[i].linkImageFile { try? FileManager.default.removeItem(at: LinkPreviews.folder.appendingPathComponent(file)) }
-        dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
-        clips.remove(at: i)
+        if let file = clip.linkImageFile { try? FileManager.default.removeItem(at: LinkPreviews.folder.appendingPathComponent(file)) }
+        dirtyMonths.insert(ClipboardFolder.monthKey(clip.date))
     }
 
     /// Rewrite only the months that changed. Each month is merged with what is on disk first, so another Mac's
