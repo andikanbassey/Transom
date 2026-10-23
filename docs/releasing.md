@@ -50,4 +50,6 @@ Measured on 2026-10-17 with the release build from a fresh clone, on an Apple si
 | Idle CPU, averaged over 5 minutes | under 1% | 0.4% (1.2 s of CPU in 290 s) |
 | Launch with the network off | opens, no crash, no dialog | opens at 38 MB; the update check fails silently; no crash report |
 
+Long history, measured 2026-10-23 with `footprint` (release build, 20,000 text items over 13 months, drawer closed): 94 MB before the drawer drew only a window of the history, 47 MB after; an empty history is 25 MB. The rest is the history itself held in memory (about 22 MB for 20,000 items); loading older months only on demand is the next step.
+
 Not covered yet: memory with a year of history including pictures, and CPU while Transom is open and scrolling.

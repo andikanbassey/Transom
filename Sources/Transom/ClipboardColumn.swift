@@ -41,7 +41,8 @@ struct ClipboardColumn: View {
     @StateObject private var columnWidth = Box<CGFloat>(900)
 
     var body: some View {
-        let visible = store.visible
+        let visible = store.window
+        let hidden = store.hiddenCount
         let now = Date()
         let index = Dictionary(uniqueKeysWithValues: visible.enumerated().map { ($1.id, $0) })
         let groups = TimeGroup.allCases.compactMap { g -> (TimeGroup, [Clip])? in
@@ -132,6 +133,7 @@ struct ClipboardColumn: View {
                             } else {
                                 cardSection(nil, symbol: "", items: visible, index: index, scale: scale)
                             }
+                            if hidden > 0 { showOlderCard(hidden, scale: scale) }
                         }
                         .padding(.horizontal, 14).padding(.vertical, 4)
                     }
@@ -152,6 +154,7 @@ struct ClipboardColumn: View {
                                     ClipRow(clip: clip, store: store, quickKey: settings.v.quickPaste && n < 9 ? n + 1 : nil).id(clip.id)
                                 }
                             }
+                            if hidden > 0 { showOlderRow(hidden) }
                         }
                         .padding(.horizontal, 8).padding(.bottom, 10)
                     }
@@ -165,6 +168,33 @@ struct ClipboardColumn: View {
 }
 
 extension ClipboardColumn {
+    /// The end of the card strip when older items are held back: one tap draws the next batch.
+    fileprivate func showOlderCard(_ hidden: Int, scale: CGFloat) -> some View {
+        Button { store.showOlder() } label: {
+            VStack(spacing: 6) {
+                Image(systemName: "clock.arrow.circlepath").font(.system(size: fs(20)))
+                Text("Show older").font(.system(size: fs(12), weight: .semibold))
+                Text("\(hidden) more").font(.system(size: fs(10.5))).foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.secondary)
+            .frame(width: ClipCard.baseWidth * scale * 0.7)
+            .frame(maxHeight: .infinity)
+            .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.leading, 10).padding(.top, 22)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Show \(min(hidden, ClipboardStore.windowStep)) older items")
+    }
+
+    /// The end of the list when older items are held back.
+    fileprivate func showOlderRow(_ hidden: Int) -> some View {
+        Button { store.showOlder() } label: {
+            Text("Show older (\(hidden) more)").font(.system(size: fs(12), weight: .medium)).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity).padding(.vertical, 10)
+        }
+        .buttonStyle(.plain)
+    }
+
     /// A run of cards with an optional caption above it.
     fileprivate func cardSection(_ title: String?, symbol: String, items: [Clip], index: [UUID: Int], scale: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 4) {

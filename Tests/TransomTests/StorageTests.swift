@@ -182,3 +182,25 @@ import Testing
         #expect(c.title == "Sensitive image")
     }
 }
+
+/// The drawer draws a window of the history, not all of it.
+@Suite struct DrawerWindowTests {
+    private func clips(_ n: Int, pinned: Int = 0) -> [Clip] {
+        (0..<n).map { i in var c = Clip(kind: .text); c.text = "item \(i)"; c.pinned = i < pinned; return c }
+    }
+
+    @Test func keepsEveryPinnedItemAndTheNewestUnpinnedOnes() {
+        let list = clips(10, pinned: 2)       // `visible` order: pinned first
+        let w = ClipboardStore.window(of: list, limit: 3)
+        #expect(w.map { $0.text } == ["item 0", "item 1", "item 2", "item 3", "item 4"])
+    }
+
+    @Test func aShortListIsShownWhole() {
+        #expect(ClipboardStore.window(of: clips(5), limit: 200).count == 5)
+        #expect(ClipboardStore.window(of: [], limit: 200).isEmpty)
+    }
+
+    @Test func pinnedItemsAreNeverCutOff() {
+        #expect(ClipboardStore.window(of: clips(300, pinned: 250), limit: 10).count == 260)
+    }
+}
