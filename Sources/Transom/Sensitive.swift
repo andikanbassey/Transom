@@ -3,6 +3,7 @@ import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 import QuickLookThumbnailing
+
 // Sensitive items: recognising secrets, and the masked look with its scramble, dissolve and countdown.
 
 /// Text that is a secret even when the app that copied it did not say so: API keys, tokens and private keys.

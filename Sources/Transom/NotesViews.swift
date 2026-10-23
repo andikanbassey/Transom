@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+
 // The Notes column of the drawer: the list of notes and a note's row.
 
 struct NotesColumn: View {

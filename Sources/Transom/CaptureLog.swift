@@ -3,6 +3,7 @@ import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 import QuickLookThumbnailing
+
 // The last few things the clipboard watcher saw and what it did with them.
 
 /// The last few things the clipboard watcher saw and what it did with them, for finding out why something was not saved.

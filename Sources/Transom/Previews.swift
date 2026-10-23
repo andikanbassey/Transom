@@ -3,6 +3,7 @@ import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 import QuickLookThumbnailing
+
 // Cover art and icons: picture and file thumbnails, link previews and the icons of the apps items came from.
 
 enum Thumbs {

@@ -3,6 +3,7 @@ import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 import QuickLookThumbnailing
+
 // One clipboard item and how it is classified (its category and title), plus the time filter.
 
 struct Clip: Codable, Identifiable, Equatable {

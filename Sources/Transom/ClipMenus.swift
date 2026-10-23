@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+
 // What you can do with a clipboard item: the right-click menus, marking sensitive, clearing unpinned items, and dragging out.
 
 /// Right-click menu shared by clipboard rows and cards.

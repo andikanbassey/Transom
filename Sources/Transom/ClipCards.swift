@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+
 // How a clipboard item looks: the row, the card, the preview inside it and the full view of one item.
 
 struct ClipRow: View {

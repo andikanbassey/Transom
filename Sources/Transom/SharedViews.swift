@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+
 // Small pieces the three columns share: header icons, the panel menu, the type pill, cover thumbnails and haptics.
 
 struct HeaderIcon: View {

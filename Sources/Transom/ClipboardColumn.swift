@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+
 // The Clipboard column of the drawer: the header with its filters, the card strip and the list, grouped by age.
 
 /// How recently an item was copied. Pinned items sit above everything else.

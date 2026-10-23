@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+
 // The Quick Access column of the drawer: tiles and list rows, the right-click menu and the options popover.
 
 struct FilesColumn: View {
