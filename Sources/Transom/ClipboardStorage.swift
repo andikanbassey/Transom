@@ -85,8 +85,13 @@ enum ClipboardFolder {
         return out
     }
 
-    static func addTombstone(_ id: UUID) {
-        let line = "\(id.uuidString)\t\(Date().timeIntervalSince1970)\n"
+    static func addTombstone(_ id: UUID) { addTombstones([id]) }
+
+    /// Records several deletions with one write.
+    static func addTombstones(_ ids: [UUID]) {
+        guard !ids.isEmpty else { return }
+        let now = Date().timeIntervalSince1970
+        let line = ids.map { "\($0.uuidString)\t\(now)\n" }.joined()
         if let h = try? FileHandle(forWritingTo: deletedFile) { h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close() }
         else { try? line.write(to: deletedFile, atomically: true, encoding: .utf8) }
     }
