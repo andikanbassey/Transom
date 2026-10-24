@@ -204,3 +204,105 @@ import Testing
         #expect(ClipboardStore.window(of: clips(300, pinned: 250), limit: 10).count == 260)
     }
 }
+
+/// Retention moves expired items to a local archive that is emptied after 90 days, instead of losing them at once.
+@Suite struct ClipboardArchiveTests {
+    private func scratch() -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("transom-archive-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    private func clipWithPicture(in pictures: URL, name: String) -> Clip {
+        var clip = Clip(kind: .image)
+        clip.imageFile = name
+        try? FileManager.default.createDirectory(at: pictures, withIntermediateDirectories: true)
+        try? Data("png".utf8).write(to: pictures.appendingPathComponent(name))
+        return clip
+    }
+
+    @Test func storeKeepsItemsAndMovesPictures() {
+        let archive = scratch(), pictures = scratch()
+        defer { try? FileManager.default.removeItem(at: archive); try? FileManager.default.removeItem(at: pictures) }
+        var text = Clip(kind: .text); text.text = "old note"
+        let picture = clipWithPicture(in: pictures, name: "A.png")
+
+        ClipboardArchive.store([text, picture], in: archive) { pictures.appendingPathComponent($0) }
+
+        let file = try! FileManager.default.contentsOfDirectory(at: archive, includingPropertiesForKeys: nil).first { $0.pathExtension == "md" }!
+        let parsed = ClipHistoryFile.parse(try! String(contentsOf: file, encoding: .utf8))
+        #expect(Set(parsed.map(\.id)) == [text.id, picture.id])
+        #expect(FileManager.default.fileExists(atPath: archive.appendingPathComponent("Images/A.png").path))
+        #expect(!FileManager.default.fileExists(atPath: pictures.appendingPathComponent("A.png").path))
+    }
+
+    @Test func storingTwiceOnOneDayAddsToTheSameFile() {
+        let archive = scratch()
+        defer { try? FileManager.default.removeItem(at: archive) }
+        var a = Clip(kind: .text); a.text = "a"
+        var b = Clip(kind: .text); b.text = "b"
+        ClipboardArchive.store([a], in: archive)
+        ClipboardArchive.store([b], in: archive)
+
+        let files = try! FileManager.default.contentsOfDirectory(at: archive, includingPropertiesForKeys: nil).filter { $0.pathExtension == "md" }
+        #expect(files.count == 1)
+        #expect(ClipHistoryFile.parse(try! String(contentsOf: files[0], encoding: .utf8)).count == 2)
+    }
+
+    @Test func purgeDeletesOnlyFilesPastTheKeepPeriod() {
+        let archive = scratch(), pictures = scratch()
+        defer { try? FileManager.default.removeItem(at: archive); try? FileManager.default.removeItem(at: pictures) }
+        let now = Date()
+        let old = clipWithPicture(in: pictures, name: "OLD.png")
+        let recent = clipWithPicture(in: pictures, name: "NEW.png")
+        let longAgo = now.addingTimeInterval(-Double(ClipboardArchive.keepDays + 1) * 86400)
+        let lately = now.addingTimeInterval(-86400)
+        ClipboardArchive.store([old], on: longAgo, in: archive) { pictures.appendingPathComponent($0) }
+        ClipboardArchive.store([recent], on: lately, in: archive) { pictures.appendingPathComponent($0) }
+
+        ClipboardArchive.purge(now: now, in: archive)
+
+        let files = try! FileManager.default.contentsOfDirectory(at: archive, includingPropertiesForKeys: nil).filter { $0.pathExtension == "md" }
+        #expect(files.count == 1)
+        #expect(!FileManager.default.fileExists(atPath: archive.appendingPathComponent("Images/OLD.png").path))
+        #expect(FileManager.default.fileExists(atPath: archive.appendingPathComponent("Images/NEW.png").path))
+    }
+}
+
+@Suite struct ArchiveRestoreTests {
+    private func scratch() -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("transom-restore-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    @Test func rangesPickFilesByTheHourTheyWereArchived() {
+        let archive = scratch(), pictures = scratch()
+        defer { try? FileManager.default.removeItem(at: archive); try? FileManager.default.removeItem(at: pictures) }
+        let now = Date()
+        var recent = Clip(kind: .text); recent.text = "recent"
+        var older = Clip(kind: .text); older.text = "older"
+        ClipboardArchive.store([recent], on: now, in: archive)
+        ClipboardArchive.store([older], on: now.addingTimeInterval(-20 * 86400), in: archive)
+
+        let counts = ClipboardArchive.counts(now: now, in: archive)
+        #expect(counts[.pastHour] == 1)
+        #expect(counts[.all] == 2)
+
+        let back = ClipboardArchive.restore(.pastHour, now: now, in: archive, pictures: pictures)
+        #expect(back.map(\.id) == [recent.id])
+        #expect(ClipboardArchive.counts(now: now, in: archive)[.all] == 1)
+    }
+
+    @Test func restoreMovesPicturesBack() {
+        let archive = scratch(), pictures = scratch(), source = scratch()
+        defer { for u in [archive, pictures, source] { try? FileManager.default.removeItem(at: u) } }
+        var clip = Clip(kind: .image); clip.imageFile = "P.png"
+        try? Data("x".utf8).write(to: source.appendingPathComponent("P.png"))
+        ClipboardArchive.store([clip], in: archive) { source.appendingPathComponent($0) }
+
+        _ = ClipboardArchive.restore(.all, in: archive, pictures: pictures)
+
+        #expect(FileManager.default.fileExists(atPath: pictures.appendingPathComponent("P.png").path))
+    }
+}

@@ -209,6 +209,8 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
             RowDivider()
+            RestoreRow()
+            RowDivider()
             Row("Pause capture", subtitle: "Stop recording new clipboard items.") { toggle(\.paused) }
         }
         Section("Storage") {

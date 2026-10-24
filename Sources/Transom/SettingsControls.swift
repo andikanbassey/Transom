@@ -126,6 +126,39 @@ struct RetentionSlider: View {
     }
 }
 
+/// Brings back items that "Keep history" removed, by when they were removed.
+struct RestoreRow: View {
+    @StateObject private var counts = Box<[ClipboardArchive.Range: Int]>([:])
+    @StateObject private var note = Box("")
+
+    private func refresh() {
+        DispatchQueue.global(qos: .utility).async {
+            let found = ClipboardArchive.counts()
+            DispatchQueue.main.async { counts.value = found }
+        }
+    }
+
+    var body: some View {
+        Row("Restore removed items", subtitle: note.value.isEmpty
+            ? "Items that Keep history removed are held on this Mac for \(ClipboardArchive.keepDays) days. Choose how far back to bring them back."
+            : note.value) {
+            Menu("Restore…") {
+                ForEach(ClipboardArchive.Range.allCases, id: \.self) { range in
+                    let n = counts.value[range] ?? 0
+                    Button("\(range.label) · \(n)") {
+                        AppModel.shared.clipboard.restoreArchived(range) { restored in
+                            note.value = restored == 1 ? "Restored 1 item." : "Restored \(restored) items."
+                            refresh()
+                        }
+                    }.disabled(n == 0)
+                }
+            }
+            .fixedSize()
+        }
+        .onAppear(perform: refresh)
+    }
+}
+
 struct AccessibilityRow: View {
     @StateObject private var trusted = Box(Paster.trusted)
     var body: some View {

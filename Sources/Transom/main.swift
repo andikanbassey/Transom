@@ -126,6 +126,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 run(0)
             }
         }
+        if Env["THUMB_TEST"] != nil {
+            // Debug aid (scratch TRANSOM_SUPPORT_DIR with many pictures): loads every picture's card thumbnail, as scrolling the
+            // whole history would, then writes the memory in use to /tmp/transom-thumb-test.txt.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+                let urls = AppModel.shared.clipboard.clips.compactMap(\.imageURL)
+                Task {
+                    var made = 0
+                    for url in urls where await Thumbs.image(for: url, size: CGSize(width: 190, height: 215)) != nil { made += 1 }
+                    let kb = (try? String(contentsOfFile: "/proc/self/status", encoding: .utf8)) ?? ""
+                    var info = task_vm_info_data_t(); var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+                    _ = withUnsafeMutablePointer(to: &info) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) } }
+                    try? "\(made) of \(urls.count) thumbnails, \(info.phys_footprint / 1_048_576) MB\(kb)\n".write(toFile: "/tmp/transom-thumb-test.txt", atomically: true, encoding: .utf8)
+                }
+            }
+        }
         if Env["DROP_TEST"] != nil {
             // Debug aid (run it with TRANSOM_SUPPORT_DIR set to a scratch folder): drop a text, a link and a picture item on Notes and Quick Access.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {

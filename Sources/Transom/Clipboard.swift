@@ -322,9 +322,29 @@ final class ClipboardStore: ObservableObject {
     func trim() {
         if let interval = settings.retention.interval {
             let cutoff = Date().addingTimeInterval(-interval)
-            removeAll { !$0.pinned && $0.date < cutoff }
+            // A restored item keeps its old date but counts from when it was restored, so it is not expired again at once.
+            removeAll(tombstone: true, archive: true) { !$0.pinned && max($0.date, $0.modified) < cutoff }
         }
         save()
+        diskQueue.async { ClipboardArchive.purge() }
+    }
+
+    /// Brings archived items of a range back into the history. They get a new `modified` time so the deletion record
+    /// that went with them no longer hides them. Calls `done` on the main thread with how many came back.
+    func restoreArchived(_ range: ClipboardArchive.Range, done: @escaping (Int) -> Void) {
+        diskQueue.async { [weak self] in
+            let restored = ClipboardArchive.restore(range)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                let have = Set(self.clips.map(\.id))
+                var back = restored.filter { !have.contains($0.id) }
+                for i in back.indices { back[i].modified = Date() }
+                for c in back { self.dirtyMonths.insert(ClipboardFolder.monthKey(c.date)) }
+                self.clips = (self.clips + back).sorted { $0.date > $1.date }
+                self.save()
+                done(back.count)
+            }
+        }
     }
 
     // MARK: Link previews
@@ -562,18 +582,21 @@ final class ClipboardStore: ObservableObject {
 
     /// Removes every item that matches in one pass. Removing them one by one copied the whole history each time, which made
     /// clearing or trimming thousands of items take many seconds.
-    private func removeAll(tombstone: Bool = false, where match: (Clip) -> Bool) {
+    /// With `archive`, the items go to `ClipboardArchive` (pictures included) instead of being lost; sensitive ones never do.
+    private func removeAll(tombstone: Bool = false, archive: Bool = false, where match: (Clip) -> Bool) {
         let doomed = clips.filter(match)
         guard !doomed.isEmpty else { return }
         if tombstone { ClipboardFolder.addTombstones(doomed.map(\.id)) }
-        for clip in doomed { discardFiles(of: clip, tombstone: false) }
+        let kept = archive ? doomed.filter { !$0.sensitive } : []
+        if !kept.isEmpty { diskQueue.async { ClipboardArchive.store(kept) } }
+        for clip in doomed { discardFiles(of: clip, tombstone: false, keepPicture: archive && !clip.sensitive) }
         clips.removeAll(where: match)
     }
 
     /// What deleting an item leaves behind to clean up: its tombstone, its picture and link preview, and a rewrite of its month.
-    private func discardFiles(of clip: Clip, tombstone: Bool) {
+    private func discardFiles(of clip: Clip, tombstone: Bool, keepPicture: Bool = false) {
         if tombstone { ClipboardFolder.addTombstone(clip.id) }
-        if let file = clip.imageFile {
+        if !keepPicture, let file = clip.imageFile {
             // Clearing history deletes the picture too, wherever it is kept.
             try? FileManager.default.removeItem(at: ClipboardFolder.images.appendingPathComponent(file))
             try? FileManager.default.removeItem(at: ClipboardFolder.localImages.appendingPathComponent(file))
