@@ -268,3 +268,41 @@ import Testing
         #expect(FileManager.default.fileExists(atPath: archive.appendingPathComponent("Images/NEW.png").path))
     }
 }
+
+@Suite struct ArchiveRestoreTests {
+    private func scratch() -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("transom-restore-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    @Test func rangesPickFilesByTheHourTheyWereArchived() {
+        let archive = scratch(), pictures = scratch()
+        defer { try? FileManager.default.removeItem(at: archive); try? FileManager.default.removeItem(at: pictures) }
+        let now = Date()
+        var recent = Clip(kind: .text); recent.text = "recent"
+        var older = Clip(kind: .text); older.text = "older"
+        ClipboardArchive.store([recent], on: now, in: archive)
+        ClipboardArchive.store([older], on: now.addingTimeInterval(-20 * 86400), in: archive)
+
+        let counts = ClipboardArchive.counts(now: now, in: archive)
+        #expect(counts[.pastHour] == 1)
+        #expect(counts[.all] == 2)
+
+        let back = ClipboardArchive.restore(.pastHour, now: now, in: archive, pictures: pictures)
+        #expect(back.map(\.id) == [recent.id])
+        #expect(ClipboardArchive.counts(now: now, in: archive)[.all] == 1)
+    }
+
+    @Test func restoreMovesPicturesBack() {
+        let archive = scratch(), pictures = scratch(), source = scratch()
+        defer { for u in [archive, pictures, source] { try? FileManager.default.removeItem(at: u) } }
+        var clip = Clip(kind: .image); clip.imageFile = "P.png"
+        try? Data("x".utf8).write(to: source.appendingPathComponent("P.png"))
+        ClipboardArchive.store([clip], in: archive) { source.appendingPathComponent($0) }
+
+        _ = ClipboardArchive.restore(.all, in: archive, pictures: pictures)
+
+        #expect(FileManager.default.fileExists(atPath: pictures.appendingPathComponent("P.png").path))
+    }
+}

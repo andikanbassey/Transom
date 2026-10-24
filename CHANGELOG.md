@@ -6,6 +6,7 @@ Each release is written as what you can now do.
 
 **Changed**
 - **"Keep history for" now really removes old items, with a safety net.** Items past the period used to be hidden but stayed in your month files, so they were loaded again at every launch. They now leave the history (and your other Macs, through iCloud) and move to an archive on this Mac, with their pictures. The archive is emptied after 90 days. Pinned items and "Forever" are unchanged. Clear Unpinned, Erase History and deleting items still delete at once.
+- **Restore removed items.** Settings › Clipboard › Keep history has a Restore menu: bring back what was removed in the past hour, today, this week, this month or the whole 90 days, with a count for each. Restored items keep their original date and are not expired again straight away.
 
 **Faster**
 - **Opening with a long history is faster.** Clearing, trimming and deleting many items at once no longer copies the whole history for each item: with 20,000 items Transom's start-up work dropped from 14 s of CPU to under 4 s.

@@ -322,10 +322,29 @@ final class ClipboardStore: ObservableObject {
     func trim() {
         if let interval = settings.retention.interval {
             let cutoff = Date().addingTimeInterval(-interval)
-            removeAll(tombstone: true, archive: true) { !$0.pinned && $0.date < cutoff }
+            // A restored item keeps its old date but counts from when it was restored, so it is not expired again at once.
+            removeAll(tombstone: true, archive: true) { !$0.pinned && max($0.date, $0.modified) < cutoff }
         }
         save()
         diskQueue.async { ClipboardArchive.purge() }
+    }
+
+    /// Brings archived items of a range back into the history. They get a new `modified` time so the deletion record
+    /// that went with them no longer hides them. Calls `done` on the main thread with how many came back.
+    func restoreArchived(_ range: ClipboardArchive.Range, done: @escaping (Int) -> Void) {
+        diskQueue.async { [weak self] in
+            let restored = ClipboardArchive.restore(range)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                let have = Set(self.clips.map(\.id))
+                var back = restored.filter { !have.contains($0.id) }
+                for i in back.indices { back[i].modified = Date() }
+                for c in back { self.dirtyMonths.insert(ClipboardFolder.monthKey(c.date)) }
+                self.clips = (self.clips + back).sorted { $0.date > $1.date }
+                self.save()
+                done(back.count)
+            }
+        }
     }
 
     // MARK: Link previews
