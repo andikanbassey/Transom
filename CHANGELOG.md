@@ -4,6 +4,9 @@ Each release is written as what you can now do.
 
 ## Unreleased
 
+
+## 0.7.2 (2026-10-24): retention archive, restore, lighter memory
+
 **Changed**
 - **"Keep history for" now really removes old items, with a safety net.** Items past the period used to be hidden but stayed in your month files, so they were loaded again at every launch. They now leave the history (and your other Macs, through iCloud) and move to an archive on this Mac, with their pictures. The archive is emptied after 90 days. Pinned items and "Forever" are unchanged. Clear Unpinned, Erase History and deleting items still delete at once.
 - **Restore removed items.** Settings › Clipboard › Keep history has a Restore menu: bring back what was removed in the past hour, today, this week, this month or the whole 90 days, with a count for each. Restored items keep their original date and are not expired again straight away.
