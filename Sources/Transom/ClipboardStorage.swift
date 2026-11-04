@@ -101,7 +101,10 @@ enum ClipboardFolder {
         let files = tombstoneFiles()
         guard !files.isEmpty else { return }
         let cutoff = Date().addingTimeInterval(-90 * 86400)
-        let kept = tombstones().filter { $0.value > cutoff }
+        let all = tombstones()
+        let kept = all.filter { $0.value > cutoff }
+        // Only write when there is something to change: in a synced folder each write reaches the other Macs and makes them load again.
+        if kept.count == all.count, files.count == 1, sameFile(files[0], deletedFile) { return }
         let text = kept.map { "\($0.key.uuidString)\t\($0.value.timeIntervalSince1970)\n" }.joined()
         try? text.write(to: deletedFile, atomically: true, encoding: .utf8)
         for f in files where !sameFile(f, deletedFile) { try? FileManager.default.removeItem(at: f) }
@@ -110,12 +113,15 @@ enum ClipboardFolder {
     static func monthKey(_ date: Date) -> String { monthFormatter.string(from: date) }
     static func fileURL(month: String) -> URL { url.appendingPathComponent("\(month).md") }
 
-    /// Changes when a month file is added, removed or edited, including by another Mac through iCloud.
+    /// Changes when a month file or a deletion record is added, removed or edited, including by another Mac through iCloud.
     static var signature: String {
-        monthFiles().map { f in
-            let d = (try? f.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
-            return "\(f.lastPathComponent):\(d?.timeIntervalSince1970 ?? 0)"
-        }.joined(separator: "|")
+        (monthFiles() + tombstoneFiles()).map { "\($0.lastPathComponent):\(fileSignature($0))" }.sorted().joined(separator: "|")
+    }
+
+    /// Asks the file system each time: URL resource values can stay cached after a file is replaced atomically.
+    static func fileSignature(_ file: URL) -> String {
+        let a = try? FileManager.default.attributesOfItem(atPath: file.path)
+        return "\((a?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0):\(a?[.size] ?? 0):\(a?[.systemFileNumber] ?? 0)"
     }
 
     private static let monthFormatter: DateFormatter = {
@@ -190,7 +196,8 @@ enum ClipHistoryFile {
 
     // MARK: Read
 
-    static func parse(_ text: String) -> [Clip] {
+    /// Reads the items in `text`, or with `ids` only those; the text of the others is skipped, not built.
+    static func parse(_ text: String, including ids: Set<UUID>? = nil) -> [Clip] {
         var clips: [Clip] = []
         var meta: Meta?
         var body: [String] = []
@@ -202,9 +209,9 @@ enum ClipHistoryFile {
                 meta = try? decoder.decode(Meta.self, from: Data(json.utf8))
                 body = []
             } else if line == close {
-                if let m = meta { clips.append(clip(from: m, body: unescape(body))) }
+                if let m = meta, ids?.contains(m.id) ?? true { clips.append(clip(from: m, body: unescape(body))) }
                 meta = nil
-            } else {
+            } else if let m = meta, ids?.contains(m.id) ?? true {
                 body.append(line)
             }
         }
