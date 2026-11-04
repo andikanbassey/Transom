@@ -30,10 +30,10 @@ This is a plan, not a promise. Priorities move with what people actually use. To
 
 ## Now: make the core trustworthy
 
-- **Fast at any history size.** Read recent months at launch and older months only when searched or scrolled to, so memory
-  stays flat even with history kept forever.
+- **Fast at any history size.** Pins and the newest items now load first, with the rest read on demand. Next, keep memory
+  bounded during search and in the Library too; those still load the whole history while open.
 - **More tests** for the parts that must not break: two-way sync merge and deletions.
-- **A cleaner codebase.** Split the largest view file into one file per area and keep sizes and colours in one place.
+- **A cleaner codebase.** Keep sizes and colours in one place.
 - **Checked on more setups.** Scroll-to-open and swipe-to-close on trackpads and mice, Transom in front of full-screen apps,
   macOS 14 and 15, Intel Macs (the download is Apple silicon only for now), and a listening pass with VoiceOver.
 

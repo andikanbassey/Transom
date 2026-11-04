@@ -118,7 +118,13 @@ final class Automation {
 
     /// Item 1 is the newest.
     func item(_ index: Int) throws -> Clip {
-        let clips = AppModel.shared.clipboard.clips
+        let store = AppModel.shared.clipboard
+        let clips = store.clips
+        // Past the window, `clips` jumps from the newest items to old pins, so position N is only right up to there.
+        if index > min(clips.count, store.windowLimit), store.deferredCount > 0 {
+            store.showNewest(index)
+            throw AutomationError.bad("Older history is loading. Try this command again in a moment.")
+        }
         guard index >= 1, index <= clips.count else { throw AutomationError.noItem(index) }
         return clips[index - 1]
     }

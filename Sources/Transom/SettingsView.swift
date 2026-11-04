@@ -188,7 +188,7 @@ struct SettingsView: View {
                 Button("Open Issues") { NSWorkspace.shared.open(Brand.issuesURL) }
             }
             RowDivider()
-            Row("Privacy", subtitle: "No accounts and no analytics. What you copy never leaves your Mac, except in the iCloud Drive folders you choose to sync. The only other request is the update check to GitHub.") { EmptyView() }
+            Row("Privacy", subtitle: "No accounts and no analytics. What you copy never leaves your Mac, except in the iCloud Drive folders you choose to sync. The only other requests are link previews and the update check to GitHub, and you can turn off both.") { EmptyView() }
             RowDivider()
             Row("License", subtitle: "MIT License. Free to use, copy and modify.") {
                 Button("View License…") { showLicense.value = true }

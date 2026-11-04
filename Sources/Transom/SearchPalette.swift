@@ -73,7 +73,9 @@ struct SearchPalette: View {
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
             .shadow(color: .black.opacity(0.22), radius: 28, y: 12)
         }
+        .onDisappear { clipboard.releaseFullHistory(MainNav.paletteHolder) }
         .onAppear {
+            clipboard.holdFullHistory(MainNav.paletteHolder)
             focused = true; selected.value = 0
             if let q = nav.pendingQuery { query.value = q; nav.pendingQuery = nil }
         }

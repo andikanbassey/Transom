@@ -25,7 +25,7 @@ class TransomScriptCommand: NSScriptCommand {
 @objc(TransomClipCountCommand) final class TransomClipCountCommand: TransomScriptCommand {
     override func run() throws -> Any? {
         guard Automation.shared.enabled else { throw AutomationError.disabled }
-        return AppModel.shared.clipboard.clips.count
+        return AppModel.shared.clipboard.totalCount
     }
 }
 @objc(TransomGetClipTextCommand) final class TransomGetClipTextCommand: TransomScriptCommand {

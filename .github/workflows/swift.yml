@@ -18,6 +18,8 @@ jobs:
     - uses: actions/checkout@v7
     - name: Unit tests
       run: swift test
+    - name: Store test on scratch data (partial history, sync, retention, restore)
+      run: TRANSOM_STORAGE_TESTS=1 TRANSOM_SUPPORT_DIR=/tmp/transom-storage-${{ github.run_id }} swift test --filter HistoryStoreIntegrationTests
     - name: Build the app and the zip
       run: ./build.sh zip
     - name: Check the bundle
