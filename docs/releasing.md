@@ -50,7 +50,9 @@ Measured on 2026-10-17 with the release build from a fresh clone, on an Apple si
 | Idle CPU, averaged over 5 minutes | under 1% | 0.4% (1.2 s of CPU in 290 s) |
 | Launch with the network off | opens, no crash, no dialog | opens at 38 MB; the update check fails silently; no crash report |
 
-Long history, measured 2026-10-23 with `footprint` (release build, 20,000 text items over 13 months, drawer closed): 94 MB before the drawer drew only a window of the history, 47 MB after; an empty history is 25 MB. The rest is the history itself held in memory (about 22 MB for 20,000 items); loading older months only on demand is the next step.
+Long history, measured 2026-10-23 with `footprint` (release build, 20,000 text items over 13 months, drawer closed): 94 MB before the drawer drew only a window of the history, 47 MB after; an empty history is 25 MB. The rest was the history itself held in memory.
+
+Lazy history, measured 2026-11-04 the same way (release build, 20,000 text items over 13 months, capture paused, three runs each, macOS 27.2): 37 MB with 0.7.2, 26 to 28 MB after, with the drawer closed; 42 to 57 MB with 0.7.2, 31 to 32 MB after, with it open. Peak at launch 72 to 74 MB with 0.7.2, 52 to 60 MB after. The Library and search still load everything while open.
 
 Launch work with the same 20,000 items: 14.1 s of CPU before batching the removals at launch, 3.7 s after (an empty history needs 0.9 s); it runs off the main thread, so the menu bar icon and drawer are not held up.
 

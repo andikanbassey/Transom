@@ -36,5 +36,7 @@ How Transom looks and behaves, and how it stores your data. Names, colours and t
 - **Sync** works by pointing those folders at iCloud Drive; the newest change per item wins. Link cover images stay on
   your Mac. With "Keep pictures on this Mac" on, copied pictures do too.
 - **Where.** `~/Library/Application Support/Transom/` unless you choose other folders in Settings.
+- **Loading.** Memory holds every pin and the newest 200 unpinned items. Show older reads another batch; search, filters and the Library read the rest, and it is let go when they close. Items past the retention period are read from any month so they can be archived.
+- **Index.** `Application Support/Transom/clipboard-index.json` caches each month file's item ids, dates, pins, source apps and short content hashes, so unchanged months need not be read. It holds no clipboard text, stays on this Mac, and is rebuilt if deleted. Erase History deletes it.
 - **Sensitive items** (concealed pasteboard types from password managers, and text that looks like a secret key) are the exception to all of this: they live in memory only, are never written to the history files, are masked everywhere they are shown, and expire after 15 minutes.
 - **Rich text** is kept as Markdown (bold, italic, strikethrough, code, links); lists and headings are not kept yet.
