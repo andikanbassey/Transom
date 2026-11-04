@@ -4,6 +4,9 @@ Each release is written as what you can now do.
 
 ## Unreleased
 
+
+## 0.7.3 (2026-11-04): lighter with a long history
+
 **Faster**
 - **Transom keeps less of a long history in memory.** It holds your pins and newest 200 items, and reads the rest from disk when you press Show older, search, filter or open the Library. With 20,000 items, memory with the drawer open dropped from over 42 MB to about 32 MB, and to about 27 MB with it closed. Copying something old still moves it to the top, and retention and restore still cover every month.
 - **Later launches skip unchanged months.** A small local index, with no clipboard text in it, lets Transom read only the files it needs. The first launch after updating builds it in the background.
