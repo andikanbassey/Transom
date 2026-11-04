@@ -306,3 +306,201 @@ import Testing
         #expect(FileManager.default.fileExists(atPath: pictures.appendingPathComponent("P.png").path))
     }
 }
+
+@Suite struct HistoryLoadingTests {
+    private func text(_ body: String, date: Date, pinned: Bool = false, modified: Date? = nil) -> Clip {
+        var clip = Clip(kind: .text)
+        clip.text = body; clip.date = date; clip.modified = modified ?? date; clip.pinned = pinned
+        return clip
+    }
+
+    @Test func windowIncludesOldPinsAndExpiredItemsButDefersRestoredItems() {
+        let now = Date(), old = Date().addingTimeInterval(-90 * 86400)
+        let recent = text("recent", date: now)
+        let pin = text("pinned", date: old, pinned: true)
+        let expired = text("expired", date: old)
+        let restored = text("restored", date: old, modified: now)
+        let source = ClipHistoryFile.render(month: "2026-01", clips: [recent, pin, expired, restored])
+        let records = ClipHistoryFile.parse(source).map(ClipRecord.init)
+        let chosen = ClipRecord.selection(records, limit: 1, cutoff: now.addingTimeInterval(-86400))
+        #expect(chosen == Set([recent.id, pin.id, expired.id]))
+        #expect(Set(ClipHistoryFile.parse(source, including: chosen).map(\.id)) == chosen)
+        #expect(ClipRecord.selection(records, limit: nil, cutoff: nil).count == 4)
+    }
+
+    @Test func selectiveReadKeepsMarkdownAndEscapedMarkersExactly() {
+        let now = Date()
+        var rich = text("bold", date: now)
+        rich.markdown = "**bold**\n<!-- /drawer:clip -->\n\\literal"
+        let other = text(String(repeating: "unused body", count: 1000), date: now)
+        let source = ClipHistoryFile.render(month: "2026-01", clips: [rich, other])
+        let parsed = ClipHistoryFile.parse(source, including: [rich.id])
+        #expect(parsed.count == 1)
+        #expect(parsed.first?.markdown == rich.markdown)
+                #expect(ClipHistoryFile.parse(source, including: []).isEmpty)
+    }
+
+    @Test func incompleteRecordsNeverEnterTheIndex() {
+        let clip = text("hello", date: Date())
+        let source = ClipHistoryFile.render(month: "2026-01", clips: [clip])
+        let truncated = source.replacingOccurrences(of: "<!-- /drawer:clip -->", with: "")
+                #expect(ClipHistoryFile.parse(truncated).isEmpty)
+    }
+
+    @Test func metadataCacheInvalidatesChangesAndDoesNotStoreBodies() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appendingPathComponent("2026-01.md")
+        let a = text("private clipboard body 12345", date: Date())
+        try ClipHistoryFile.render(month: "2026-01", clips: [a]).write(to: file, atomically: true, encoding: .utf8)
+        var cache = ClipboardIndex()
+        #expect(cache.records(in: file).map(\.id) == [a.id])
+        let encoded = try JSONEncoder().encode(cache)
+        #expect(!String(decoding: encoded, as: UTF8.self).contains(a.text!))
+        cache = try JSONDecoder().decode(ClipboardIndex.self, from: encoded)
+        #expect(cache.records(in: file).map(\.id) == [a.id])
+        let b = text("different", date: Date(), pinned: true)
+        try ClipHistoryFile.render(month: "2026-01", clips: [b]).write(to: file, atomically: true, encoding: .utf8)
+        #expect(cache.records(in: file).map(\.id) == [b.id])
+        #expect(cache.records(in: file).first?.pinned == true)
+        try FileManager.default.removeItem(at: file)
+        cache.keep(only: [])
+        #expect(cache.fileCount == 0)
+        #expect(cache.records(in: file).isEmpty)
+    }
+
+    @Test func identityMatchesPlainTextAndKeepsFileBoundaries() {
+        var a = text("body", date: Date())
+        var b = a; b.date = .distantPast; b.pinned = true
+        #expect(ClipRecord.identity(of: a) == ClipRecord.identity(of: b))
+        b.text = "different"
+        #expect(ClipRecord.identity(of: a) != ClipRecord.identity(of: b))
+        a.kind = .file; b.kind = .file
+        a.paths = ["a", "bc"]; b.paths = ["ab", "c"]
+        #expect(ClipRecord.identity(of: a) != ClipRecord.identity(of: b))
+    }
+}
+
+@Suite struct DeferredHistoryTests {
+    private func record(_ body: String, app: String) -> ClipRecord {
+        var clip = Clip(kind: .text)
+        clip.text = body; clip.sourceApp = app
+        return ClipRecord(clip)
+    }
+
+    @Test func aRepeatCopyTakesTheOlderItemOutOfTheCounts() throws {
+        var deferred = DeferredHistory()
+        let a = record("a", app: "Notes"), b = record("b", app: "Notes"), c = record("c", app: "Safari")
+        for r in [a, b, c] { deferred.add(r, lifetime: nil) }
+        #expect(deferred.count == 3)
+        #expect(deferred.apps["Notes"]?.count == 2)
+
+        #expect(deferred.take(identity: try #require(a.identity))?.id == a.id)
+        #expect(deferred.take(identity: try #require(a.identity)) == nil)
+        #expect(deferred.count == 2)
+        #expect(deferred.apps["Notes"]?.count == 1)
+
+        _ = deferred.take(identity: try #require(c.identity))
+        #expect(deferred.apps["Safari"] == nil)
+    }
+
+    @Test func expiryIsTheSoonestItem() {
+        var deferred = DeferredHistory()
+        var old = Clip(kind: .text); old.date = Date(timeIntervalSince1970: 1000); old.modified = old.date
+        var new = Clip(kind: .text); new.date = Date(timeIntervalSince1970: 5000); new.modified = new.date
+        deferred.add(ClipRecord(new), lifetime: 10)
+        deferred.add(ClipRecord(old), lifetime: 10)
+        #expect(deferred.expiry == Date(timeIntervalSince1970: 1010))
+    }
+}
+
+/// Opt in with TRANSOM_STORAGE_TESTS=1 and a fresh TRANSOM_SUPPORT_DIR; never runs against personal history.
+@Suite(.serialized) @MainActor struct HistoryStoreIntegrationTests {
+    private func settled(_ store: ClipboardStore) async throws {
+        for _ in 0..<500 {
+            if !store.loading { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        Issue.record("History loading did not finish")
+    }
+
+    @Test(.enabled(if: Env["STORAGE_TESTS"] == "1" && Env["SUPPORT_DIR"]?.hasPrefix("/tmp/transom-storage-") == true))
+    func partialSavesSyncRetentionAndRestoreKeepDeferredHistory() async throws {
+        // A fresh folder is required so even an incorrectly repeated invocation cannot clear pre-existing files.
+        #expect(ClipboardFolder.monthFiles().isEmpty)
+        guard ClipboardFolder.monthFiles().isEmpty else { return }
+        Settings.shared.v.retention = .forever
+        Settings.shared.v.paused = true
+        Settings.shared.v.linkPreviews = false
+        ClipboardFolder.prepare()
+        let now = Date()
+        var clips = (0..<600).map { i -> Clip in
+            var c = Clip(kind: .text)
+            c.text = "fixture \(i)"; c.date = now.addingTimeInterval(-Double(i) * 86400); c.modified = c.date
+            return c
+        }
+        clips[599].pinned = true
+        for (month, items) in Dictionary(grouping: clips, by: { ClipboardFolder.monthKey($0.date) }) {
+            try ClipHistoryFile.render(month: month, clips: items).write(to: ClipboardFolder.fileURL(month: month), atomically: true, encoding: .utf8)
+        }
+        let store = ClipboardStore(monitoring: false)
+        try await settled(store)
+        #expect(store.clips.count == 201)
+        #expect(store.totalCount == 600)
+        #expect(store.clips.contains { $0.id == clips[599].id })
+        #expect(store.hiddenCount == 399)
+
+        // A save containing only recent clips must leave older entries in the same month intact.
+        let edge = try #require(store.clips.first { $0.id == clips[199].id })
+        store.togglePin(edge)
+        store.showOlder()
+        try await settled(store)
+        #expect(store.totalCount == 600)
+        #expect(store.clips.first { $0.id == edge.id }?.pinned == true)
+        #expect(store.deferredCount > 0)
+
+        // A deletion arriving through deleted.txt alone must invalidate the history signature.
+        ClipboardFolder.addTombstone(clips[10].id)
+        store.refreshIfChanged()
+        try await settled(store)
+        #expect(!store.clips.contains { $0.id == clips[10].id })
+        #expect(store.totalCount == 599)
+
+        // Loading must not rewrite deleted.txt when nothing changed: in a synced folder two Macs would wake each other forever.
+        let before = ClipboardFolder.fileSignature(ClipboardFolder.deletedFile)
+        store.showOlder()
+        try await settled(store)
+        #expect(ClipboardFolder.fileSignature(ClipboardFolder.deletedFile) == before)
+
+        store.holdFullHistory("test")
+        try await settled(store)
+        #expect(store.clips.count == 599)
+        #expect(store.deferredCount == 0)
+        #expect(Set(store.clips.map(\.id)) == Set(clips.map(\.id)).subtracting([clips[10].id]))
+
+        // Expiring items in deferred months must still archive them; old pins survive.
+        store.releaseFullHistory("test")
+        store.resetWindow()
+        try await settled(store)
+        #expect(store.deferredCount > 0)
+        Settings.shared.v.retention = .day
+        try await Task.sleep(for: .milliseconds(30))
+        try await settled(store)
+        #expect(store.clips.contains { $0.id == clips[599].id })
+        #expect(store.clips.contains { $0.id == edge.id })
+        store.holdFullHistory("test")
+        try await settled(store)
+        let beforeRestore = store.clips.count
+        var restored: Int?
+        store.restoreArchived(.all) { restored = $0 }
+        for _ in 0..<500 {
+            if restored != nil { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(restored == 599 - beforeRestore)
+        #expect(store.clips.count == 599)
+        store.trim()
+        #expect(store.clips.count == 599)
+    }
+}

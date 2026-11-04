@@ -84,7 +84,7 @@ struct ClearUnpinnedButton: View {
             Button(scope == "this selection" ? "Clear Unpinned Items Shown (\(n))…" : "Clear Unpinned from \(scope) (\(n))…") {
                 store.pendingClear = .init(scope: scope, count: n)
             }
-            .disabled(n == 0)
+            .disabled(n == 0 || store.loading)
         } else {
             Button("Clear All Unpinned Items") { store.clearUnpinned() }
         }

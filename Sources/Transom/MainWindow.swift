@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 
 final class MainNav: ObservableObject {
     static let shared = MainNav()
+    static let libraryHolder = "library", paletteHolder = "palette"
     @Published var tab = MainTab.library
     @Published var section = DesktopSection.all
     @Published var paletteOpen = false
@@ -69,6 +70,9 @@ final class SettingsWindow {
             if !w.setFrameUsingName("DrawerMainWindow") { w.center() }
             NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { _ in
                 NSApp.setActivationPolicy(.accessory)
+                // A closed window is only hidden, so its views may not report that they went away.
+                AppModel.shared.clipboard.releaseFullHistory(MainNav.libraryHolder)
+                AppModel.shared.clipboard.releaseFullHistory(MainNav.paletteHolder)
             }
             window = w
             // The window's own appearance follows the Theme setting live, not just when the window opens.
@@ -80,6 +84,8 @@ final class SettingsWindow {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+        if MainNav.shared.tab == .library { AppModel.shared.clipboard.holdFullHistory(MainNav.libraryHolder) }
+        if MainNav.shared.paletteOpen { AppModel.shared.clipboard.holdFullHistory(MainNav.paletteHolder) }
     }
 }
 

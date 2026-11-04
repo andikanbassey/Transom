@@ -107,7 +107,7 @@ struct ClipboardColumn: View {
                 Spacer()
                 VStack(spacing: 6) {
                     Image(systemName: "doc.on.clipboard").font(.system(size: fs(22))).foregroundStyle(.tertiary)
-                    Text(store.clips.isEmpty ? "Copy something to see it here" : "No matches")
+                    Text(store.loading ? "Loading history…" : (store.clips.isEmpty ? "Copy something to see it here" : "No matches"))
                         .font(.system(size: fs(12))).foregroundStyle(.tertiary)
                 }
                 Spacer()

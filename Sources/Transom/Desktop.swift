@@ -32,7 +32,9 @@ struct DesktopView: View {
             content.background(Look.page)
                 .overlay(alignment: .bottom) { ClearConfirmBar(store: clipboard) }
         }
+        .onDisappear { clipboard.releaseFullHistory(MainNav.libraryHolder) }
         .onAppear {
+            clipboard.holdFullHistory(MainNav.libraryHolder)
             clipboard.expanded = nil
             if Env["SELECT"] != nil {
                 selecting.value = true
@@ -84,7 +86,7 @@ struct DesktopView: View {
     private func count(_ s: DesktopSection) -> Int? {
         switch s {
         case .all: nil
-        case .clipboard: clipboard.clips.count
+        case .clipboard: clipboard.totalCount
         case .pinned: clipboard.clips.filter(\.pinned).count
         case .notes: savedNotes.count
         case .files: files.paths.count
