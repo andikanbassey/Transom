@@ -50,7 +50,12 @@ final class TransomController {
             self?.handleLocalScroll(event)
             return self?.horizontalForWheel(event) ?? event
         }
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in self?.handleKey(event) ?? event }
+        // Not `self?.handleKey(event) ?? event`: that turns "used it" (nil) back into the event, so every handled key went on to
+        // the panel too, and Esc left select mode and then closed the drawer.
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            return self.handleKey(event)
+        }
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             if self?.isVisible == true { self?.hide(restoreFocus: false) }
         }
@@ -172,7 +177,9 @@ final class TransomController {
     private func navigate(_ event: NSEvent) -> Bool {
         guard !(panel.firstResponder is NSTextView) || event.keyCode == 53 else { return false }
         let store = AppModel.shared.clipboard
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        // Only the keys a person holds: arrow keys always carry .function (and .numericPad), which made every arrow look
+        // like it had a modifier, so keyboard navigation in the drawer never moved.
+        let flags = event.modifierFlags.intersection([.shift, .control, .option, .command])
         let cards = settings.clipboardCards
         if event.keyCode == 53, store.naming != nil { withAnimation { store.naming = nil }; return true }
         // ⇧ with an arrow along the strip (or list) picks a run of items, entering select mode if needed.
@@ -229,7 +236,9 @@ final class TransomController {
         guard isVisible, panel.isKeyWindow else { return event }
         if navigate(event) { return nil }
         guard settings.quickPaste else { return event }
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        // Only the keys a person holds: arrow keys always carry .function (and .numericPad), which made every arrow look
+        // like it had a modifier, so keyboard navigation in the drawer never moved.
+        let flags = event.modifierFlags.intersection([.shift, .control, .option, .command])
         guard flags == settings.quickPasteModifier.flag, let ch = event.charactersIgnoringModifiers,
               let n = Int(ch), (1...9).contains(n) else { return event }
         let list = AppModel.shared.clipboard.visible

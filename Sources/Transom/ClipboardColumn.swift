@@ -257,6 +257,7 @@ extension ClipboardColumn {
                         .scaleEffect(scale, anchor: .topLeading)
                         .frame(width: ClipCard.baseWidth * scale, height: ClipCard.baseHeight * scale, alignment: .topLeading)
                         .selectFrame(clip.id, active: store.selecting)
+                        .testFrame("card:\(clip.id)")
                 }
             }
         }

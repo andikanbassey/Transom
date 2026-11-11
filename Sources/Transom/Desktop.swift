@@ -95,6 +95,7 @@ struct DesktopView: View {
             .padding(.leading, 14)
             .accessibleTap(name, selected: on) { go(.pinned); pinGroup.value = name }
             .modifier(SidebarDrop(section: .pinned, group: name, notes: notes, files: files, clipboard: clipboard, ids: dropIDs))
+            .testFrame("group:\(name)")
             .contextMenu {
                 Button("Rename Group…") { withAnimation { clipboard.naming = .init(renaming: name) } }
                 Button("Delete Group") { if pinGroup.value == name { pinGroup.value = nil }; clipboard.deleteGroup(name) }
@@ -309,7 +310,7 @@ struct DesktopView: View {
 
     @ViewBuilder private func clipboardItems(_ list: [Clip]) -> some View {
         if settings.v.clipboardCards {
-            LazyVGrid(columns: grid, spacing: 18) { ForEach(list) { c in selectable(c.id.uuidString, clipCard(c)) } }
+            LazyVGrid(columns: grid, spacing: 18) { ForEach(list) { c in selectable(c.id.uuidString, clipCard(c).testFrame("libcard:\(c.id)")) } }
         } else {
             listBox { ForEach(list) { c in selectable(c.id.uuidString, radius: 8, ClipRow(clip: c, store: clipboard, quickKey: nil, inWindow: true)) } }
         }

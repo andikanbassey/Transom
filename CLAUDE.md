@@ -86,6 +86,12 @@ plus the hotkey and paste helpers; `Stores.swift` has the files and notes stores
 - Transom clipboard cards scale as a whole with the drawer height.
 - Clipboard pictures: with a synced clipboard folder, `picturesStayOnThisMac` writes new pictures to `Application Support/Transom/ClipboardImages` (local) instead of `<folder>/Images`; `ClipboardFolder.imageURL` looks local first, then the synced folder. Deleting an item or clearing history removes the file from both places.
 - Library lists show 48 items a page (`Look.pageSize`, `TRANSOM_PAGE_SIZE=4` to test the pagination bar); empty pages use `EmptyState` (Theme.swift) with the one action that fills them. The Library hides the store's blank "always one note".
+- **UI self-test:** `TRANSOM_UI_TEST=1` (UITest.swift) drives the real app with posted keys and mouse drags (drawer keys,
+  drag-select, multi-drag out, Paste One by One into TextEdit, a Library drop onto a group) and writes PASS/FAIL to
+  `/tmp/transom-ui-test.txt`. The shell cannot post events (no Accessibility), Transom can, so run it from /Applications with the
+  everyday Transom quit, on a scratch folder seeded with a "Replies" group and six or more unpinned text items:
+  `open -n -a /Applications/Transom.app --env TRANSOM_UI_TEST=1 --env TRANSOM_SUPPORT_DIR=/tmp/transom-ui-<unique>`. It takes
+  the keyboard and mouse for about a minute and stops posting keys if the wrong app is in front. Run it before a release.
 - Debug aids: `TRANSOM_PIN_GROUP=<name|"">` and `TRANSOM_APP_FILTER=<bundle id>` (Library snapshots: open Pinned on a group, filter by app), `TRANSOM_SELECT=1` (with `TRANSOM_SNAPSHOT`: the drawer in select mode with three items picked; with `TRANSOM_SNAPSHOT_VIEW=…desktop.png`, the Library's Select mode), `TRANSOM_MARK_SENSITIVE=<n>` (with a scratch `TRANSOM_SUPPORT_DIR`: marks the newest n items sensitive with different times left, to see the countdown and dissolve; it deletes them from that scratch history), `TRANSOM_THUMB_TEST=1` (with a scratch folder full of pictures: loads every card thumbnail and writes the memory in use to `/tmp/transom-thumb-test.txt`), `TRANSOM_LIGHT=1`, `TRANSOM_SECTION=<section>`, `TRANSOM_SNAPSHOT_DELAY=<seconds>`, `~/Library/Application Support/Transom/debug-scroll` (logs scroll events),
   and `TRANSOM_COPY_LATEST_IMAGE=1` (with `TRANSOM_PASTE=1`) to copy the newest image and paste it into the front app.
   Run those with `open -n -a /Applications/Transom.app --env NAME=1` so macOS uses the app's own Accessibility permission.

@@ -23,6 +23,8 @@ Each release is written as what you can now do.
 - **Search finds text anywhere in an item**, not only in its first lines, as well as link titles and file names. It never looks inside sensitive items.
 - **Pictures show their thumbnail.** Some apps put JPEG data on the clipboard labelled as PNG; those cards showed a generic file icon. New pictures are saved with their real type and older ones are read correctly.
 - **Copying the same thing again moves it to the top** even if it differs only in surrounding spaces, or for a link in tracking tags (utm_, fbclid…) or a trailing slash. The first launch rebuilds the local index once.
+- **Arrow keys work in the drawer.** Keyboard navigation never moved: macOS marks arrow keys as function keys, and that counted as a modifier.
+- **Keys the drawer handles stop there.** Esc used to leave a preview or select mode and then close the drawer as well.
 - Picked items that a new filter hides are let go, so a batch action never reaches items you cannot see.
 
 

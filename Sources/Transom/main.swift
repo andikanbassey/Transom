@@ -141,6 +141,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 run(0)
             }
         }
+        if Env["UI_TEST"] != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { UITest.start(drawer: self.drawer) }
+        }
         if Env["THUMB_TEST"] != nil {
             // Debug aid (scratch TRANSOM_SUPPORT_DIR with many pictures): loads every picture's card thumbnail, as scrolling the
             // whole history would, then writes the memory in use to /tmp/transom-thumb-test.txt.
