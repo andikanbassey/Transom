@@ -43,6 +43,7 @@ struct ClipboardColumn: View {
 
     var body: some View {
         let visible = store.window
+        // The group switcher only ever shows pins, and those are all in memory: nothing is held back behind "Show older".
         let hidden = store.hiddenCount
         let index = Dictionary(uniqueKeysWithValues: visible.enumerated().map { ($1.id, $0) })
         let groups = ClipSection.sections(of: visible, groups: store.groups)
@@ -68,8 +69,7 @@ struct ClipboardColumn: View {
                         if !store.searching { store.query = "" }
                     }
                     .help("Search clipboard (⌘F)")
-                    HeaderIcon(symbol: store.pinnedOnly ? "star.fill" : "star", active: store.pinnedOnly) { store.pinnedOnly.toggle() }
-                        .help("Pinned only")
+                    GroupSwitcher(store: store)
                     HeaderIcon(symbol: settings.v.paused ? "pause.circle.fill" : "record.circle", active: settings.v.paused) {
                         settings.v.paused.toggle()
                     }
@@ -109,6 +109,10 @@ struct ClipboardColumn: View {
             }
             if let clip = store.expanded {
                 ExpandedClipView(clip: clip, store: store)
+            } else if visible.isEmpty, !store.loading, !store.clips.isEmpty, store.narrowingSummary != nil {
+                Spacer()
+                FilteredEmptyState(store: store)
+                Spacer()
             } else if visible.isEmpty {
                 Spacer()
                 VStack(spacing: 6) {
@@ -141,8 +145,9 @@ struct ClipboardColumn: View {
                             if hidden > 0 { showOlderCard(hidden, scale: scale) }
                         }
                         .padding(.horizontal, 14).padding(.vertical, 4)
-                        .dragToSelect(store: store, state: drag)
+                        .dragToSelect(store: store, state: drag, horizontal: true) { id, edge in proxy.scrollTo(id, anchor: edge) }
                     }
+                    .dragViewport(drag)
                     .mask(edgeFade)
                     .onChange(of: store.cursor) { _, id in
                         if let id { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id, anchor: .center) } }
@@ -166,8 +171,9 @@ struct ClipboardColumn: View {
                             if hidden > 0 { showOlderRow(hidden) }
                         }
                         .padding(.horizontal, 8).padding(.bottom, 10)
-                        .dragToSelect(store: store, state: drag)
+                        .dragToSelect(store: store, state: drag, horizontal: false) { id, edge in proxy.scrollTo(id, anchor: edge) }
                     }
+                    .dragViewport(drag)
                     .onChange(of: store.cursor) { _, id in
                         if let id { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id, anchor: .center) } }
                     }
@@ -245,8 +251,7 @@ extension ClipboardColumn {
                     let n = index[clip.id] ?? 99
                     ClipCard(clip: clip, store: store, quickKey: settings.v.quickPaste && n < 9 ? n + 1 : nil,
                              picked: store.selecting ? store.selection.contains(clip.id) : nil)
-                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Color.accentColor, lineWidth: store.cursor == clip.id ? 3 : 0))
+                        .overlay(cursorRing(on: store.cursor == clip.id))
                         .id(clip.id)
                         .frame(width: ClipCard.baseWidth, height: ClipCard.baseHeight)
                         .scaleEffect(scale, anchor: .topLeading)
@@ -254,6 +259,17 @@ extension ClipboardColumn {
                         .selectFrame(clip.id, active: store.selecting)
                 }
             }
+        }
+    }
+
+    /// The keyboard's place in the strip. While selecting, the picked cards carry the accent ring, so the cursor is a
+    /// quieter outline just outside the card instead.
+    @ViewBuilder fileprivate func cursorRing(on: Bool) -> some View {
+        if store.selecting {
+            RoundedRectangle(cornerRadius: 17, style: .continuous)
+                .strokeBorder(Color.primary.opacity(on ? 0.6 : 0), lineWidth: 2).padding(-4)
+        } else {
+            RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.accentColor, lineWidth: on ? 3 : 0)
         }
     }
 

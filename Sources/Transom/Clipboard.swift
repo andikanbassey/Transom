@@ -325,7 +325,7 @@ final class ClipboardStore: ObservableObject {
     var window: [Clip] { Self.window(of: visible, limit: windowLimit) }
     /// Unpinned items still hidden behind "Show older".
     var hiddenCount: Int {
-        max(0, visible.filter { !$0.pinned }.count - windowLimit) + (isFiltered || !query.isEmpty || pinnedOnly ? 0 : deferred.count)
+        max(0, visible.filter { !$0.pinned }.count - windowLimit) + (isFiltered || !query.isEmpty || pinnedOnly || groupFilter != nil ? 0 : deferred.count)
     }
     func showOlder() { showNewest(windowLimit + Self.windowStep) }
     /// Widens the window to at least `count` items, reading them from disk if they are not in memory.

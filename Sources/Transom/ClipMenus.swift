@@ -19,6 +19,9 @@ struct ClipMenu: View {
     @ViewBuilder private var single: some View {
         Button("Open in Full") { store.expanded = clip }
         Button("Paste") { AppModel.shared.use(clip, paste: true) }
+        if clip.kind == .text, clip.markdown != nil, !clip.sensitive {
+            Button("Paste as Plain Text") { AppModel.shared.use(clip, paste: true, plain: true) }
+        }
         Divider()
         if !clip.sensitive {
             Button(clip.pinned ? "Unpin" : "Pin") { store.togglePin(clip) }
@@ -124,10 +127,11 @@ struct ClearConfirmBar: View {
                 withAnimation { store.endSelecting() }
             }
         } else if let pending = store.pendingClear {
-            let what = pending.scope == "this selection" ? "the unpinned items shown" : "unpinned items from \(pending.scope)"
+            let what = (pending.scope == "this selection" ? "the unpinned items shown" : "unpinned items from \(pending.scope)")
+                + (pending.before.map { " copied before \($0.formatted(date: .abbreviated, time: .omitted))" } ?? "")
             ConfirmBar(text: "Clear \(pending.count) \(pending.count == 1 ? "item" : "items") (\(what))?", action: "Clear",
                        cancel: { withAnimation { store.pendingClear = nil } }) {
-                store.clearUnpinnedShown()
+                store.clearUnpinnedShown(before: pending.before)
                 withAnimation { store.pendingClear = nil }
             }
             .onChange(of: store.appFilter) { _, _ in store.pendingClear = nil }

@@ -114,6 +114,12 @@ struct LibraryClipMenu: View {
             store.copy(clip)
             if Settings.shared.v.sounds { NSSound(named: "Pop")?.play() }
         } label: { Label(cat == .image || cat == .gif ? "Copy Image" : "Copy", systemImage: "doc.on.doc") }
+        if clip.kind == .text, clip.markdown != nil, !clip.sensitive {
+            Button {
+                store.copy(clip, plain: true)
+                if Settings.shared.v.sounds { NSSound(named: "Pop")?.play() }
+            } label: { Label("Copy as Plain Text", systemImage: "textformat") }
+        }
         Button { store.expanded = clip } label: { Label("Open in Full", systemImage: "arrow.up.left.and.arrow.down.right") }
         Divider()
         switch cat {
