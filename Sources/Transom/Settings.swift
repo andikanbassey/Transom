@@ -224,6 +224,8 @@ struct SettingsValues: Codable, Equatable {
     var quickPaste = true
     var quickPasteModifier = Mod.command
     var sounds = true
+    /// Names of the groups pinned clipboard items can be sorted into, in the order they are shown.
+    var clipGroups: [String] = []
 
     // Privacy
     var ignoreConfidential = true

@@ -20,6 +20,10 @@ struct DesktopView: View {
     @StateObject private var editor = NoteEditorController()
     @StateObject private var selecting = Box(false)
     @StateObject private var picked = Box(Set<String>())
+    /// The last item clicked while selecting: ⇧-click picks everything from there.
+    @StateObject private var anchor = Box<String?>(nil)
+    /// On the Pinned page: nil for every pin, "" for pins in no group, or a group's name.
+    @StateObject private var pinGroup = Box<String?>(nil)
     /// Zero-based page of the long list on show; goes back to the first page when the list or its filters change.
     @StateObject private var page = Box(0)
 
@@ -41,7 +45,8 @@ struct DesktopView: View {
                 picked.value = Set(visibleIDs().prefix(2))
             }
         }
-        .onChange(of: nav.section) { _, _ in endSelecting(); page.value = 0 }
+        .onChange(of: nav.section) { _, s in endSelecting(); page.value = 0; if s != .pinned { pinGroup.value = nil } }
+        .onChange(of: pinGroup.value) { _, _ in endSelecting(); page.value = 0 }
         .onChange(of: clipboard.filter) { _, _ in page.value = 0 }
         .onChange(of: clipboard.time) { _, _ in page.value = 0 }
         .onChange(of: clipboard.appFilter) { _, _ in page.value = 0 }
@@ -60,6 +65,7 @@ struct DesktopView: View {
             SidebarHeader(title: "Clipboard")
             sidebarRow(.clipboard)
             sidebarRow(.pinned)
+            ForEach(clipboard.groups, id: \.self) { name in groupRow(name) }
             SidebarHeader(title: "Saved")
             sidebarRow(.notes)
             sidebarRow(.files)
@@ -77,7 +83,21 @@ struct DesktopView: View {
             .modifier(SidebarDrop(section: s, notes: notes, files: files))
     }
 
+    /// A group of pins, indented under Pinned: opens the Pinned page showing only that group.
+    private func groupRow(_ name: String) -> some View {
+        let on = nav.section == .pinned && pinGroup.value == name
+        return SidebarRow(title: name, symbol: "square.stack.fill", color: DesktopSection.pinned.color.opacity(0.75), selected: on,
+                          trailing: "\(clipboard.clips.filter { $0.pinGroup == name }.count)")
+            .padding(.leading, 14)
+            .accessibleTap(name, selected: on) { go(.pinned); pinGroup.value = name }
+            .contextMenu {
+                Button("Rename Group…") { withAnimation { clipboard.naming = .init(renaming: name) } }
+                Button("Delete Group") { if pinGroup.value == name { pinGroup.value = nil }; clipboard.deleteGroup(name) }
+            }
+    }
+
     private func go(_ s: DesktopSection) {
+        pinGroup.value = nil
         nav.section = s
         clipboard.expanded = nil
         if s == .notes { notes.showingList = true }
@@ -127,6 +147,9 @@ struct DesktopView: View {
                     }
                 }
             }
+            // Right-clicking empty space on a clipboard page acts on the selection, or else on what the filters show.
+            .contentShape(Rectangle())
+            .contextMenu { if nav.section == .clipboard || nav.section == .pinned { pageMenu } }
             // Files dragged in from Finder go into Quick Access; the other pages do not take drops from Finder.
             .dropDestination(for: URL.self) { urls, _ in
                 guard nav.section == .files, !urls.isEmpty else { return false }
@@ -140,11 +163,13 @@ struct DesktopView: View {
     /// selection bar while selecting, with Select and Search on the right.
     private var header: some View {
         let isClips = nav.section == .clipboard || nav.section == .pinned
-        return PageHeader(title: nav.section.title, plus: plusAction, plusLabel: nav.section == .notes ? "New note" : "Add files",
+        let title = nav.section == .pinned ? (pinGroup.value.map { $0.isEmpty ? "Pinned, No Group" : $0 } ?? "Pinned") : nav.section.title
+        return PageHeader(title: title, plus: plusAction, plusLabel: nav.section == .notes ? "New note" : "Add files",
                           onSelect: !selecting.value && !visibleIDs().isEmpty ? { selecting.value = true } : nil) {
             if selecting.value {
                 selectionBar
             } else if isClips {
+                if nav.section == .pinned { groupFilter }
                 TimeMenu(store: clipboard)
                 TypeMenu(store: clipboard)
                 AppMenu(store: clipboard)
@@ -158,6 +183,26 @@ struct DesktopView: View {
         .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, Look.headerGap)
     }
 
+    /// Which pins the Pinned page shows: all, those in no group, or one group; plus making and tidying groups.
+    private var groupFilter: some View {
+        let current = pinGroup.value
+        return Menu {
+            CheckButton("All Pinned", current == nil) { pinGroup.value = nil }
+            CheckButton("No Group", current == "") { pinGroup.value = "" }
+            if !clipboard.groups.isEmpty { Divider() }
+            ForEach(clipboard.groups, id: \.self) { name in CheckButton(name, current == name) { pinGroup.value = name } }
+            Divider()
+            Button("New Group…") { withAnimation { clipboard.naming = .init() } }
+            if let name = current, !name.isEmpty {
+                Button("Rename “\(name)”…") { withAnimation { clipboard.naming = .init(renaming: name) } }
+                Button("Delete “\(name)”") { pinGroup.value = nil; clipboard.deleteGroup(name) }
+            }
+        } label: {
+            FilterMenuLabel(symbol: "square.stack", value: current.map { $0.isEmpty ? "No group" : $0 } ?? "All groups", active: current != nil)
+        }
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
+    }
+
     private var plusAction: (() -> Void)? {
         switch nav.section {
         case .notes: return { notes.add(); notes.showingList = false }
@@ -169,7 +214,7 @@ struct DesktopView: View {
     @ViewBuilder private var cards: some View {
         switch nav.section {
         case .clipboard: clipboardItems(slice(clips()))
-        case .pinned: clipboardItems(slice(clips().filter(\.pinned)))
+        case .pinned: clipboardItems(slice(pinnedClips()))
         case .notes: notesItems(slice(savedNotes))
         case .files: filesItems(slice(files.paths))
         case .all: EmptyView()
@@ -182,7 +227,7 @@ struct DesktopView: View {
     private var totalItems: Int {
         switch nav.section {
         case .clipboard: clips().count
-        case .pinned: clips().filter(\.pinned).count
+        case .pinned: pinnedClips().count
         case .notes: savedNotes.count
         case .files: files.paths.count
         case .all: 0
@@ -274,17 +319,26 @@ struct DesktopView: View {
     private func visibleIDs() -> [String] {
         switch nav.section {
         case .clipboard: clips().map { $0.id.uuidString }
-        case .pinned: clips().filter(\.pinned).map { $0.id.uuidString }
+        case .pinned: pinnedClips().map { $0.id.uuidString }
         case .notes: savedNotes.map { $0.id.uuidString }
         case .files: files.paths
         case .all: []
         }
     }
 
-    private func endSelecting() { selecting.value = false; picked.value = [] }
+    private func endSelecting() { selecting.value = false; picked.value = []; anchor.value = nil }
 
+    /// A click while selecting flips one item; ⇧-click picks everything from the last click to this one.
     private func toggle(_ id: String) {
+        if NSEvent.modifierFlags.contains(.shift), let a = anchor.value {
+            let order = visibleIDs()
+            if let i = order.firstIndex(of: a), let j = order.firstIndex(of: id) {
+                picked.value.formUnion(order[min(i, j)...max(i, j)])
+                return
+            }
+        }
         if picked.value.contains(id) { picked.value.remove(id) } else { picked.value.insert(id) }
+        anchor.value = id
     }
 
     /// Wraps an item so a click picks it while selecting; nothing changes otherwise.
@@ -329,6 +383,11 @@ struct DesktopView: View {
                     picked.value = []
                 } label: { SelectBarLabel(title: allPinned ? "Unpin" : "Pin", symbol: allPinned ? "pin.slash" : "pin") }
                     .buttonStyle(.plain).disabled(n == 0).opacity(n == 0 ? 0.4 : 1)
+                Menu {
+                    GroupMenuItems(store: clipboard, ids: Set(picked.value.compactMap(UUID.init(uuidString:)))) { endSelecting() }
+                } label: { SelectBarLabel(title: "Group", symbol: "square.stack", chevron: true) }
+                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
+                    .disabled(n == 0).opacity(n == 0 ? 0.4 : 1)
             }
             Button { deleteSelection() } label: { SelectBarLabel(title: "Delete", symbol: "trash", tint: .red) }
                 .buttonStyle(.plain).disabled(n == 0).opacity(n == 0 ? 0.4 : 1)
@@ -340,10 +399,29 @@ struct DesktopView: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Look.hairline, lineWidth: 1))
     }
 
+    /// The right-click menu on empty space of the Clipboard and Pinned pages.
+    @ViewBuilder private var pageMenu: some View {
+        let ids = Set(picked.value.compactMap(UUID.init(uuidString:)))
+        if selecting.value && !ids.isEmpty {
+            let allPinned = clipboard.clips.filter { ids.contains($0.id) }.allSatisfy(\.pinned)
+            Section("\(ids.count) Selected") {
+                Button(allPinned ? "Unpin" : "Pin") { clipboard.setPinned(!allPinned, ids: ids); picked.value = [] }
+                Menu("Move to Group") { GroupMenuItems(store: clipboard, ids: ids) { endSelecting() } }
+                Button("Copy Together") { clipboard.copyTogether(clipboard.clips.filter { ids.contains($0.id) }) }
+                Button("Delete…") { deleteSelection() }
+            }
+            Button("Done Selecting") { endSelecting() }
+        } else {
+            ClipboardScopeItems(store: clipboard,
+                                selectAll: { selecting.value = true; picked.value = Set(visibleIDs()) },
+                                startSelecting: { selecting.value = true }, shown: visibleIDs().count)
+        }
+    }
+
     /// Adds the shown clipboard items copied in the last `seconds` to the selection.
     private func pickRecent(_ seconds: TimeInterval) {
         let cutoff = Date().addingTimeInterval(-seconds)
-        let list = nav.section == .pinned ? clips().filter(\.pinned) : clips()
+        let list = nav.section == .pinned ? pinnedClips() : clips()
         picked.value.formUnion(list.filter { $0.date >= cutoff }.map { $0.id.uuidString })
     }
 
@@ -454,6 +532,13 @@ struct DesktopView: View {
     }
 
     // MARK: Data
+
+    /// The Pinned page's items: every pin, or one group's.
+    private func pinnedClips() -> [Clip] {
+        let pins = clips().filter(\.pinned)
+        guard let g = pinGroup.value else { return pins }
+        return pins.filter { ($0.pinGroup ?? "") == g }
+    }
 
     private func clips() -> [Clip] {
         let list = clipboard.clips.filter {

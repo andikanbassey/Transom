@@ -152,6 +152,7 @@ struct LibraryClipMenu: View {
             }
             Divider()
             Button { store.togglePin(clip) } label: { Label(clip.pinned ? "Unpin" : "Pin", systemImage: clip.pinned ? "pin.slash" : "pin") }
+            Menu { GroupMenuItems(store: store, ids: [clip.id]) } label: { Label("Move to Group", systemImage: "square.stack") }
         }
         SensitiveToggleButton(clip: clip, store: store, library: true)
         Divider()

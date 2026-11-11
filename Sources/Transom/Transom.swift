@@ -170,7 +170,23 @@ final class TransomController {
         let store = AppModel.shared.clipboard
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let cards = settings.clipboardCards
+        if event.keyCode == 53, store.naming != nil { withAnimation { store.naming = nil }; return true }
+        // Select mode: Esc leaves it, ⌘A picks everything shown, Delete asks to delete the picked items, Return pastes them together.
+        if store.selecting, !(panel.firstResponder is NSTextView) {
+            switch event.keyCode {
+            case 53:
+                if store.pendingDelete != nil { store.pendingDelete = nil } else { store.endSelecting() }
+                return true
+            case 0 where flags == .command: store.selectAllShown(); return true
+            case 51, 117: store.askDeleteSelection(); return true
+            case 36, 76:
+                if let ids = store.pendingDelete { store.delete(ids: ids); store.endSelecting() } else { store.useSelection(paste: true) }
+                return true
+            default: break
+            }
+        }
         switch event.keyCode {
+        case 0 where flags == .command && store.expanded == nil: store.selectAllShown()
         case 123 where cards && flags.isEmpty: store.moveCursor(-1)
         case 124 where cards && flags.isEmpty: store.moveCursor(1)
         case 126 where !cards && flags.isEmpty: store.moveCursor(-1)

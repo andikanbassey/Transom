@@ -13,7 +13,11 @@ How Transom looks and behaves, and how it stores your data. Names, colours and t
   Images, GIFs, videos and PDFs show a real preview, files and folders their icon, hex codes a swatch, and text, links and
   audio a tinted symbol. Links show the page title and image. A name is the file name, the first two lines of text, or the
   domain and path.
-- **Grouping.** Pinned, Past Hour, Today, Yesterday, This Week, This Month, Older.
+- **Grouping.** Pinned, then each named group of pins, then Past Hour, Today, Yesterday, This Week, This Month, Older.
+- **Selecting.** In the drawer, a card's type symbol turns into a circle on hover. Clicking it, or ⌘- or ⇧-clicking a card, starts
+  select mode: the header becomes the selection bar, a click adds an item, ⇧-click adds a run, and a drag across cards picks
+  everything it passes. Right-clicking one of several picked items acts on all of them. Confirmations appear at the bottom
+  of the panel, not as alerts, so the drawer stays open.
 - **Controls.** Each panel has a "⋯" menu for its own options and the right-most panel carries the settings gear.
   Right-clicking anywhere on Transom opens the app menu.
 - **Closing.** Transom closes on a click outside, Esc, or a swipe up at the top; optional auto-close after 5, 10 or 15 seconds.
@@ -28,7 +32,7 @@ How Transom looks and behaves, and how it stores your data. Names, colours and t
 
 - **Clipboard history** is one Markdown file per month (`Clipboard/2026-10.md`), a section per day and one entry per copy
   between `<!-- drawer:clip {json} -->` markers. The marker keeps its original spelling so older history stays readable.
-  Formatted text is stored as Markdown and pasted back with its styling. Pictures with no source file go in
+  Formatted text is stored as Markdown and pasted back with its styling. A pinned item's group is stored as `group` in the same JSON (only for pins). Pictures with no source file go in
   `Clipboard/Images/`; copied files stay as pointers. There is no item cap: time is the only limit.
 - **Retention** moves items older than the chosen period to `Application Support/Transom/ClipboardArchive` (one `archived-<day>-<hour>.md` per hour, pictures in `Images`), on this Mac only, and deletes that archive after 90 days (`ClipboardArchive`). Settings › Clipboard › Restore brings a time range back.
 - **Deletions** are remembered in `deleted.txt` so a delete on one Mac is not undone by another Mac's copy of the file.

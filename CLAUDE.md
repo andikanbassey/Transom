@@ -10,6 +10,11 @@ Personal, machine-specific notes live in `CLAUDE.local.md`, which is not committ
 
 - `./build.sh` build to `build/Transom.app`; `run` build and launch; `dev` fast debug build and launch; `install` copy to
   /Applications and launch; `zip` / `dmg` write the sharing files.
+- **Hand every change over installed.** The user tests the copy in /Applications (it is the one the login item, the hotkey
+  and the Accessibility grant belong to), and `run` and `dev` launch a different copy in `build/`. So when a change is ready to
+  try, finish with `./build.sh install` and tell the user it is running. It quits the open Transom, replaces
+  /Applications/Transom.app, relaunches it, and fails if the running Transom is not the new build. Say which commit it is
+  (the script prints it), and never say "ready to test" before it has passed.
 - `dev` is for trying changes: an edit to one file rebuilds in a few seconds (a change to something used everywhere, such as
   `Theme.swift`, takes about a minute) against about 90 seconds for the optimised build the other targets make. It is
   unoptimised, so judge smoothness with `run` and never release a dev build.
@@ -76,11 +81,12 @@ plus the hotkey and paste helpers; `Stores.swift` has the files and notes stores
 - One window holds the Library and Settings, switched by the two-sided Library | Settings pill at the bottom of both sidebars (`ModeSwitch`). The two sidebars share one structure (brand, quiet group headers, rows, the pill) so it reads as one app. It shows in the Dock while open. Page headings use `Look.headerGap` below them everywhere.
   Library and Settings share one look (`Look` in Theme.swift): keep fonts, cards and sidebars consistent between them.
 - Global search lives in each page header (⌘K) and searches the page you are on.
+- Drawer select mode lives on `ClipboardStore` (`selecting`, `selection`, `ClipSelection.swift`); the Library keeps its own `picked` set. Groups are named pinboards: `Clip.group` counts only while pinned (`pinGroup`), the order is `Settings.clipGroups`, and unpinning drops the group.
 - Library cards: coloured frame fading toward the bottom; on hover the card grows over the frame (no content zoom).
 - Transom clipboard cards scale as a whole with the drawer height.
 - Clipboard pictures: with a synced clipboard folder, `picturesStayOnThisMac` writes new pictures to `Application Support/Transom/ClipboardImages` (local) instead of `<folder>/Images`; `ClipboardFolder.imageURL` looks local first, then the synced folder. Deleting an item or clearing history removes the file from both places.
 - Library lists show 48 items a page (`Look.pageSize`, `TRANSOM_PAGE_SIZE=4` to test the pagination bar); empty pages use `EmptyState` (Theme.swift) with the one action that fills them. The Library hides the store's blank "always one note".
-- Debug aids: `TRANSOM_MARK_SENSITIVE=<n>` (with a scratch `TRANSOM_SUPPORT_DIR`: marks the newest n items sensitive with different times left, to see the countdown and dissolve; it deletes them from that scratch history), `TRANSOM_THUMB_TEST=1` (with a scratch folder full of pictures: loads every card thumbnail and writes the memory in use to `/tmp/transom-thumb-test.txt`), `TRANSOM_LIGHT=1`, `TRANSOM_SECTION=<section>`, `TRANSOM_SNAPSHOT_DELAY=<seconds>`, `~/Library/Application Support/Transom/debug-scroll` (logs scroll events),
+- Debug aids: `TRANSOM_SELECT=1` (with `TRANSOM_SNAPSHOT`: the drawer in select mode with three items picked; with `TRANSOM_SNAPSHOT_VIEW=…desktop.png`, the Library's Select mode), `TRANSOM_MARK_SENSITIVE=<n>` (with a scratch `TRANSOM_SUPPORT_DIR`: marks the newest n items sensitive with different times left, to see the countdown and dissolve; it deletes them from that scratch history), `TRANSOM_THUMB_TEST=1` (with a scratch folder full of pictures: loads every card thumbnail and writes the memory in use to `/tmp/transom-thumb-test.txt`), `TRANSOM_LIGHT=1`, `TRANSOM_SECTION=<section>`, `TRANSOM_SNAPSHOT_DELAY=<seconds>`, `~/Library/Application Support/Transom/debug-scroll` (logs scroll events),
   and `TRANSOM_COPY_LATEST_IMAGE=1` (with `TRANSOM_PASTE=1`) to copy the newest image and paste it into the front app.
   Run those with `open -n -a /Applications/Transom.app --env NAME=1` so macOS uses the app's own Accessibility permission.
 - Sensitive clips (`Clip.sensitive`): set when the pasteboard is concealed or `SecretPatterns` matches; shown as `SensitiveText`, excluded from `save()`, search, pinning, Save To, drag-in to Notes and Quick Access, and expired by `expireSensitive()` after 15 minutes. Anything that displays or exports clip text must check the flag.

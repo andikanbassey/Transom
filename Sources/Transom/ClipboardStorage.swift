@@ -145,6 +145,7 @@ enum ClipHistoryFile {
         var linkImage: String?
         var rich: Bool?
         var mod: Double?
+        var group: String?
     }
 
     private static let open = "<!-- drawer:clip "
@@ -169,7 +170,7 @@ enum ClipHistoryFile {
             let meta = Meta(id: clip.id, kind: clip.kind, date: clip.date.timeIntervalSince1970, pinned: clip.pinned ? true : nil,
                             app: clip.sourceApp, bundle: clip.sourceBundleID, paths: clip.paths, image: clip.imageFile,
                             linkTitle: clip.linkTitle, linkImage: clip.linkImageFile, rich: clip.markdown != nil ? true : nil,
-                            mod: clip.modified.timeIntervalSince1970)
+                            mod: clip.modified.timeIntervalSince1970, group: clip.pinned ? clip.group : nil)
             let json = (try? String(data: encoder.encode(meta), encoding: .utf8)) ?? "{}"
             // "-->" inside the JSON would end the comment early.
             let safeJSON = json.replacingOccurrences(of: "-->", with: "--\\u003e")
@@ -224,6 +225,7 @@ enum ClipHistoryFile {
         clip.date = Date(timeIntervalSince1970: m.date)
         clip.modified = Date(timeIntervalSince1970: m.mod ?? m.date)
         clip.pinned = m.pinned ?? false
+        clip.group = clip.pinned ? m.group : nil
         clip.sourceApp = m.app
         clip.sourceBundleID = m.bundle
         clip.paths = m.paths

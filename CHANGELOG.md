@@ -4,6 +4,12 @@ Each release is written as what you can now do.
 
 ## Unreleased
 
+**New**
+- **Select several items in the drawer.** Hover a card and click the circle in its top left corner (or ⌘-click or ⇧-click a card, or right-click › Select). Then click to add items, ⇧-click to pick everything in between, or drag across the cards. The header becomes a bar with Pin, Group, Paste Together and Delete. Esc leaves select mode, ⌘A picks everything shown, Delete asks first, and Return pastes the items together.
+- **Groups for pins.** Sort pinned items into named groups, such as Replies, Code or Screenshots. Groups show as their own sections in the drawer and under Pinned in the Library sidebar, and the Pinned page can filter by group. Use Move to Group on any item or selection, or ⋯ › New Group. Right-click a group in the sidebar to rename or delete it; deleting a group keeps its items pinned.
+- **Right-click follows what you are doing.** With items selected, right-clicking anywhere in the clipboard panel offers actions for the selection. With a filter on (an app, a type or a time), it offers Select All Shown, Clear Unpinned, Never Record from that app and Show Everything. Right-clicking one of several selected items acts on all of them, as in Finder.
+- ⇧-click selects a run of items in the Library's Select mode too.
+
 
 ## 0.7.3 (2026-11-04): lighter with a long history
 

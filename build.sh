@@ -75,7 +75,15 @@ if [ "${1:-}" = "install" ]; then
   pkill -x "$NAME" || true
   rm -rf "/Applications/$NAME.app" && cp -R "$APP" "/Applications/$NAME.app"
   open "/Applications/$NAME.app"
-  echo "Installed to /Applications/$NAME.app"
+  # Check the copy that is running now is the one just built, not an older Transom that was still open.
+  for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -x "$NAME" >/dev/null && break; sleep 0.5; done
+  RUNNING="$(ps -o comm= -p "$(pgrep -x "$NAME" | head -1)" 2>/dev/null || true)"
+  if [ "$RUNNING" = "/Applications/$NAME.app/Contents/MacOS/$NAME" ] && cmp -s "$APP/Contents/MacOS/$NAME" "/Applications/$NAME.app/Contents/MacOS/$NAME"; then
+    echo "Installed to /Applications/$NAME.app and running the new build ($(git rev-parse --short HEAD 2>/dev/null)$(git diff --quiet 2>/dev/null || echo '+changes'), $(date '+%H:%M'))"
+  else
+    echo "Installed to /Applications/$NAME.app, but the running Transom is not the new build (running: ${RUNNING:-none}). Quit Transom and open it again." >&2
+    exit 1
+  fi
 elif [ "${1:-}" = "zip" ]; then
   rm -f build/Transom.zip
   ditto -c -k --keepParent "$APP" build/Transom.zip

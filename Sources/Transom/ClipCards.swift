@@ -9,18 +9,24 @@ struct ClipRow: View {
     var quickKey: Int?
     /// In the Library a click copies; in the drawer it pastes into the app underneath.
     var inWindow = false
+    /// Select mode in the drawer: nil when off, otherwise whether this row is picked.
+    var picked: Bool?
     @StateObject private var hovering = Box(false)
     private let cover: CGFloat = 54
 
     var body: some View {
         let cat = clip.category
         HStack(spacing: 10) {
-            Image(systemName: clip.pinned ? "star.fill" : "star")
-                .font(.system(size: fs(11)))
-                .foregroundStyle(clip.pinned ? Color.yellow : Color.secondary.opacity(hovering.value ? 0.8 : 0))
-                .frame(width: 14)
-                .contentShape(Rectangle())
-                .accessibleTap(clip.pinned ? "Unpin" : "Pin", combine: false) { store.togglePin(clip) }
+            if let picked {
+                SelectCircle(on: picked, size: fs(16)).frame(width: 14)
+            } else {
+                Image(systemName: clip.pinned ? "star.fill" : "star")
+                    .font(.system(size: fs(11)))
+                    .foregroundStyle(clip.pinned ? Color.yellow : Color.secondary.opacity(hovering.value ? 0.8 : 0))
+                    .frame(width: 14)
+                    .contentShape(Rectangle())
+                    .accessibleTap(clip.pinned ? "Unpin" : "Pin", combine: false) { store.togglePin(clip) }
+            }
             coverArt(cat)
                 .frame(width: cover, height: cover)
                 .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
@@ -37,7 +43,7 @@ struct ClipRow: View {
             }
             Spacer(minLength: 4)
             ZStack {
-                if hovering.value {
+                if hovering.value && picked == nil {
                     Image(systemName: "xmark").font(.system(size: fs(10), weight: .semibold)).foregroundStyle(.secondary)
                         .frame(width: 22, height: 22).contentShape(Rectangle())
                         .accessibleTap("Delete", combine: false) { store.delete(clip) }
@@ -55,16 +61,19 @@ struct ClipRow: View {
             }
         }
         .padding(.horizontal, 8).padding(.vertical, 6)
-        .background(store.cursor == clip.id ? Color.accentColor.opacity(0.22) : (hovering.value ? Color.primary.opacity(0.08) : .clear),
+        .background(store.cursor == clip.id || picked == true ? Color.accentColor.opacity(0.22) : (hovering.value ? Color.primary.opacity(0.08) : .clear),
                     in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .contentShape(Rectangle())
         .onHover { hovering.value = $0 }
-        .accessibleTap(hint: "Pastes or copies the item") {
+        .accessibleTap(hint: picked == nil ? "Pastes or copies the item" : "Selects the item") {
+            let flags = NSEvent.modifierFlags
+            if picked != nil { store.clickSelect(clip.id, extend: flags.contains(.shift)); return }
+            if !inWindow, flags.contains(.command) || flags.contains(.shift) { store.beginSelecting(clip.id); return }
             if Settings.shared.v.pasteMode == .expand { store.expanded = clip }
             else if inWindow { store.copy(clip); if Settings.shared.v.sounds { NSSound(named: "Pop")?.play() } }
             else { AppModel.shared.use(clip) }
         }
-        .onDrag { dragProvider(clip) }
+        .dragOut(clip, enabled: picked == nil)
         .contextMenu { if inWindow { LibraryClipMenu(clip: clip, store: store) } else { ClipMenu(clip: clip, store: store) } }
     }
 
@@ -247,16 +256,29 @@ struct ClipCard: View {
     var quickKey: Int?
     /// In the Library window there is no app to paste into, so a click copies and says so.
     var inWindow = false
+    /// Select mode: nil when off, otherwise whether this card is picked.
+    var picked: Bool?
     @StateObject private var hovering = Box(false)
     @StateObject private var copied = Box(false)
 
     var body: some View {
         let cat = clip.category
+        // The check sits in the top left corner, where the type symbol is: it shows on hover and stays while selecting.
+        let showsCheck = picked != nil || hovering.value
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 5) {
-                        Image(systemName: clip.kindSymbol).font(.system(size: fs(11), weight: .semibold))
+                        if showsCheck {
+                            SelectCircle(on: picked == true, size: fs(16))
+                                .padding(5).contentShape(Rectangle()).padding(-5)
+                                .accessibleTap("Select", selected: picked == true, combine: false) {
+                                    if picked == nil { store.beginSelecting(clip.id) } else { store.clickSelect(clip.id, extend: NSEvent.modifierFlags.contains(.shift)) }
+                                }
+                                .help(picked == nil ? "Select" : "")
+                        } else {
+                            Image(systemName: clip.kindSymbol).font(.system(size: fs(11), weight: .semibold)).frame(width: fs(16))
+                        }
                         Text(clip.kindLabel).font(.system(size: fs(13), weight: .semibold))
                     }
                     Text(clip.date.formatted(.relative(presentation: .named)))
@@ -284,7 +306,7 @@ struct ClipCard: View {
                     Text(footer(cat)).font(.system(size: fs(10.5))).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
                 Spacer(minLength: 4)
-                if let n = quickKey {
+                if let n = quickKey, picked == nil {
                     Text("\(Settings.shared.v.quickPasteModifier.symbol)\(n)")
                         .font(.system(size: fs(10), weight: .medium, design: .rounded)).foregroundStyle(.tertiary)
                 }
@@ -295,8 +317,15 @@ struct ClipCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
             .strokeBorder(hovering.value ? cat.tint : Color.primary.opacity(0.1), lineWidth: hovering.value ? 2 : 1))
+        .overlay {
+            if picked == true {
+                RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.accentColor.opacity(0.12))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.accentColor, lineWidth: 3))
+                    .allowsHitTesting(false)
+            }
+        }
         .overlay(alignment: .topTrailing) {
-            if hovering.value {
+            if hovering.value && picked == nil {
                 HStack(spacing: 6) {
                     cardButton(clip.pinned ? "pin.fill" : "pin") { store.togglePin(clip) }
                     cardButton("trash") { store.delete(clip) }
@@ -313,7 +342,10 @@ struct ClipCard: View {
                     .transition(.opacity)
             }
         }
-        .accessibleTap(hint: "Copies the item") {
+        .accessibleTap(hint: picked == nil ? "Copies the item" : "Selects the item") {
+            let flags = NSEvent.modifierFlags
+            if picked != nil { store.clickSelect(clip.id, extend: flags.contains(.shift)); return }
+            if flags.contains(.command) || flags.contains(.shift) { store.beginSelecting(clip.id); return }
             if Settings.shared.v.pasteMode == .expand { store.expanded = clip; return }
             if inWindow {
                 store.copy(clip)
@@ -324,7 +356,7 @@ struct ClipCard: View {
                 AppModel.shared.use(clip)
             }
         }
-        .onDrag { dragProvider(clip) }
+        .dragOut(clip, enabled: picked == nil)
         .contextMenu { ClipMenu(clip: clip, store: store) }
     }
 

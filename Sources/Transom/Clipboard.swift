@@ -23,6 +23,16 @@ final class ClipboardStore: ObservableObject {
     @Published var pendingClear: PendingClear?
     struct PendingClear: Equatable { var scope: String; var count: Int }
 
+    /// Select mode in the drawer: the items picked for a batch action, and the last one clicked (⇧-click selects from there).
+    @Published var selecting = false
+    @Published var selection = Set<UUID>()
+    var selectionAnchor: UUID?
+    /// "Delete n items?" waiting for a yes at the bottom of the panel, like `pendingClear`.
+    @Published var pendingDelete: Set<UUID>?
+    /// A group name being typed: for a new group holding `ids`, or a new name for `renaming`.
+    struct GroupNaming: Equatable { var ids = Set<UUID>(); var renaming: String? }
+    @Published var naming: GroupNaming?
+
     /// Months whose Markdown file needs rewriting, and the folder and file state the clips were loaded from.
     private var dirtyMonths = Set<String>()
     private var loadedFolder = ClipboardFolder.url.path
@@ -275,7 +285,7 @@ final class ClipboardStore: ObservableObject {
     /// The clips the column shows: filtered, pinned first.
     var visible: [Clip] {
         let filtered = Self.filtered(clips, filter: filter, time: time, app: appFilter, pinnedOnly: pinnedOnly, query: query)
-        return filtered.filter(\.pinned) + filtered.filter { !$0.pinned }
+        return Self.pinnedByGroup(filtered.filter(\.pinned), groups: groups) + filtered.filter { !$0.pinned }
     }
 
     /// How many unpinned items the drawer draws before "Show older". Drawing the whole history made the drawer hold tens of
@@ -298,6 +308,16 @@ final class ClipboardStore: ObservableObject {
     func resetWindow() {
         if windowLimit != Self.windowStep { windowLimit = Self.windowStep }
         dropOlderItems()
+    }
+
+    /// Plain pins first, then each group in its order; within each, the order they came in.
+    static func pinnedByGroup(_ pinned: [Clip], groups: [String]) -> [Clip] {
+        let rank = Dictionary(groups.enumerated().map { ($1, $0 + 1) }, uniquingKeysWith: { a, _ in a })
+        return pinned.enumerated().sorted { a, b in
+            let ra = a.element.pinGroup.map { rank[$0] ?? Int.max } ?? 0
+            let rb = b.element.pinGroup.map { rank[$0] ?? Int.max } ?? 0
+            return ra != rb ? ra < rb : a.offset < b.offset
+        }.map(\.element)
     }
 
     /// The window on its own, so it can be tested: `visible` is pinned first, then unpinned.
@@ -435,6 +455,7 @@ final class ClipboardStore: ObservableObject {
         }
         if let i = clips.firstIndex(where: match) {
             clip.pinned = clips[i].pinned
+            clip.group = clips[i].group
             clip.linkTitle = clips[i].linkTitle
             clip.linkImageFile = clips[i].linkImageFile
             dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
@@ -595,6 +616,7 @@ final class ClipboardStore: ObservableObject {
     func togglePin(_ clip: Clip) {
         guard let i = clips.firstIndex(of: clip), !clip.sensitive else { return }
         clips[i].pinned.toggle()
+        if !clips[i].pinned { clips[i].group = nil }
         clips[i].modified = Date()
         dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
         save()
@@ -613,12 +635,83 @@ final class ClipboardStore: ObservableObject {
     }
 
     func setPinned(_ pinned: Bool, ids: Set<UUID>) {
-        for i in clips.indices where ids.contains(clips[i].id) && clips[i].pinned != pinned {
+        for i in clips.indices where ids.contains(clips[i].id) && clips[i].pinned != pinned && !clips[i].sensitive {
             clips[i].pinned = pinned
+            if !pinned { clips[i].group = nil }
             clips[i].modified = Date()
             dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
         }
         save()
+    }
+
+    // MARK: Groups
+
+    /// Every group name: the saved order first, then any that arrived with items from another Mac.
+    var groups: [String] {
+        var names = Settings.shared.v.clipGroups
+        for clip in clips { if let g = clip.pinGroup, !names.contains(g) { names.append(g) } }
+        return names
+    }
+
+    /// Puts items in a group (pinning them, since groups hold pins) or, with nil, takes them out and leaves them pinned.
+    func setGroup(_ name: String?, ids: Set<UUID>) {
+        let name = name.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
+        if let name, !Settings.shared.v.clipGroups.contains(name) { Settings.shared.v.clipGroups.append(name) }
+        for i in clips.indices where ids.contains(clips[i].id) && !clips[i].sensitive {
+            guard clips[i].group != name || (name != nil && !clips[i].pinned) else { continue }
+            clips[i].group = name
+            if name != nil { clips[i].pinned = true }
+            clips[i].modified = Date()
+            dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
+        }
+        save()
+    }
+
+    /// Adds an empty group (it shows in menus and the Library until it is deleted).
+    func addGroup(_ name: String) {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, !groups.contains(name) else { return }
+        Settings.shared.v.clipGroups.append(name)
+    }
+
+    func renameGroup(_ old: String, to new: String) {
+        let new = new.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !new.isEmpty, new != old else { return }
+        var names = groups
+        if let i = names.firstIndex(of: old) { names[i] = new } else { names.append(new) }
+        var seen = Set<String>()
+        Settings.shared.v.clipGroups = names.filter { seen.insert($0).inserted }
+        for i in clips.indices where clips[i].group == old {
+            clips[i].group = new
+            clips[i].modified = Date()
+            dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
+        }
+        save()
+    }
+
+    /// Removes a group. Its items stay pinned, as plain pins.
+    func deleteGroup(_ name: String) {
+        Settings.shared.v.clipGroups.removeAll { $0 == name }
+        setGroup(nil, ids: Set(clips.filter { $0.group == name }.map(\.id)))
+    }
+
+    /// Puts several items on the clipboard as one, oldest first (the order they were copied): text joined line by line, or
+    /// all the files together. Pictures and sensitive items are left out of joined text. False when there was nothing to copy.
+    @discardableResult
+    func copyTogether(_ items: [Clip]) -> Bool {
+        let pb = NSPasteboard.general
+        let items = items.sorted { $0.date < $1.date }
+        if !items.isEmpty, items.allSatisfy({ $0.kind == .file && !$0.sensitive }) {
+            let files = items.flatMap(\.fileURLs)
+            pb.clearContents()
+            pb.writeObjects(files as [NSURL])
+            return true
+        }
+        let texts = items.filter { $0.kind == .text && !$0.sensitive }.compactMap(\.text)
+        guard !texts.isEmpty else { return false }
+        pb.clearContents()
+        pb.setString(texts.joined(separator: "\n"), forType: .string)
+        return true
     }
 
     func clearUnpinned() {

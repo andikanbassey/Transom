@@ -524,8 +524,21 @@ final class AppModel {
         }
     }
 
+    /// Pastes what is on the clipboard now into the app underneath, closing the drawer first (as `use` does for one item).
+    func pasteCurrent() {
+        if Settings.shared.v.sounds { NSSound(named: "Pop")?.play() }
+        if !Paster.trusted { Paster.requestTrust() }
+        hideDrawerThen { [weak self] in
+            guard Paster.trusted else { return }
+            if let app = self?.previousApp, NSWorkspace.shared.frontmostApplication != app { app.activate(options: []) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { Paster.pasteNow() }
+        }
+    }
+
     /// Re-read anything that can change outside the app.
     func refresh() {
+        clipboard.endSelecting()
+        clipboard.naming = nil
         clipboard.expanded = nil
         clipboard.cursor = nil
         clipboard.refreshIfChanged()

@@ -193,6 +193,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         if let path = Env["SNAPSHOT"] {
+            // TRANSOM_SELECT=1 with a drawer snapshot: shows select mode with the first three items picked.
+            if Env["SELECT"] != nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    let store = AppModel.shared.clipboard
+                    store.beginSelecting()
+                    store.selection = Set(store.window.prefix(3).map(\.id))
+                }
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Env["SNAPSHOT_DELAY"] ?? "") ?? 3)) { self.drawer.snapshot(to: path); exit(0) }
         }
         if let path = Env["SNAPSHOT_VIEW"] {

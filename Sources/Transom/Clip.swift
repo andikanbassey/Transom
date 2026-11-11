@@ -21,6 +21,8 @@ struct Clip: Codable, Identifiable, Equatable {
     var linkImageFile: String?
     var date = Date()
     var pinned = false
+    /// The named group a pinned item belongs to (a pinboard: "Replies", "Screenshots"). Nil for plain pins; ignored when unpinned.
+    var group: String?
     /// When this item last changed (copied again, pinned, preview fetched). Newest wins when two Macs disagree.
     var modified = Date()
     /// A password or secret: shown masked, never written to disk or synced, and removed after `ClipboardStore.sensitiveLifetime`.
@@ -34,8 +36,11 @@ struct Clip: Codable, Identifiable, Equatable {
     var heldImage: Data?
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, text, markdown, imageFile, paths, sourceApp, sourceBundleID, linkTitle, linkImageFile, date, pinned
+        case id, kind, text, markdown, imageFile, paths, sourceApp, sourceBundleID, linkTitle, linkImageFile, date, pinned, group
     }
+
+    /// The group this item shows under: only pinned items are grouped.
+    var pinGroup: String? { pinned && !sensitive ? group : nil }
 
     /// The saved cover image of a link, if it is on this Mac (see `LinkPreviews`).
     var linkImageURL: URL? {
