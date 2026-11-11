@@ -35,6 +35,7 @@ struct DesktopView: View {
             sidebar
             content.background(Look.page)
                 .overlay(alignment: .bottom) { ClearConfirmBar(store: clipboard) }
+                .overlay(alignment: .bottom) { UndoToast(store: clipboard) }
         }
         .onDisappear { clipboard.releaseFullHistory(MainNav.libraryHolder) }
         .onAppear {
