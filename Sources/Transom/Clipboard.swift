@@ -10,6 +10,8 @@ final class ClipboardStore: ObservableObject {
     @Published var query = "" { didSet { fullHistoryDemandChanged() } }
     @Published var searching = false
     @Published var pinnedOnly = false
+    /// Narrows the list to pins in one group (a name), to pins in no group (""), or nil for no group filter.
+    @Published var groupFilter: String?
     @Published var filter = Category.Filter.all { didSet { fullHistoryDemandChanged() } }
     /// Library only: show clips copied from one app (see `appKey`). Nil shows every app.
     @Published var appFilter: String? { didSet { fullHistoryDemandChanged() } }
@@ -284,7 +286,8 @@ final class ClipboardStore: ObservableObject {
 
     /// The clips the column shows: filtered, pinned first.
     var visible: [Clip] {
-        let filtered = Self.filtered(clips, filter: filter, time: time, app: appFilter, pinnedOnly: pinnedOnly, query: query)
+        var filtered = Self.filtered(clips, filter: filter, time: time, app: appFilter, pinnedOnly: pinnedOnly, query: query)
+        if let g = groupFilter { filtered = filtered.filter { $0.pinned && ($0.pinGroup ?? "") == g } }
         return Self.pinnedByGroup(filtered.filter(\.pinned), groups: groups) + filtered.filter { !$0.pinned }
     }
 
