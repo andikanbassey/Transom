@@ -9,14 +9,57 @@ import QuickLookThumbnailing
 enum Thumbs {
     private static let cache = NSCache<NSString, NSImage>()
 
-    /// QuickLook cover art: first frame of a video or GIF, first page of a PDF, the image itself, or the file icon.
+    /// Cover art: pictures are read with ImageIO, which goes by the bytes, not the name; for anything else QuickLook gives the
+    /// first frame of a video, the first page of a PDF, or the file icon.
     static func image(for url: URL, size: CGSize) async -> NSImage? {
         let key = "\(url.path)|\(Int(size.width))x\(Int(size.height))" as NSString
         if let hit = cache.object(forKey: key) { return hit }
+        // QuickLook picks its generator from the file name, so a JPEG saved as .png (some apps put JPEG bytes on the
+        // pasteboard as PNG) came back as a generic PNG icon instead of the picture.
+        if let picture = pictureThumbnail(url, size: size, scale: 2) {
+            cache.setObject(picture, forKey: key)
+            return picture
+        }
         let req = QLThumbnailGenerator.Request(fileAt: url, size: size, scale: 2, representationTypes: .all)
         guard let rep = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: req) else { return nil }
         cache.setObject(rep.nsImage, forKey: key)
         return rep.nsImage
+    }
+
+    /// What a picture's bytes really are (PNG, JPEG, HEIC…), whatever its name or pasteboard type says. Nil if it is not a picture.
+    static func pictureType(of data: Data) -> UTType? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return pictureType(src)
+    }
+
+    static func pictureType(at url: URL) -> UTType? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        return pictureType(src)
+    }
+
+    private static func pictureType(_ src: CGImageSource) -> UTType? {
+        guard let id = CGImageSourceGetType(src) as String?, let type = UTType(id), type.conforms(to: .image) else { return nil }
+        return type
+    }
+
+    /// A picture scaled down just enough to fill `size` at `scale`, read from the file's bytes. Nil for anything that is
+    /// not a picture ImageIO can read, so the caller can fall back to QuickLook.
+    static func pictureThumbnail(_ url: URL, size: CGSize, scale: CGFloat) -> NSImage? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil), pictureType(src) != nil,
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? CGFloat, let h = props[kCGImagePropertyPixelHeight] as? CGFloat,
+              w > 0, h > 0 else { return nil }
+        // Enough pixels for the shorter side to cover the frame (cards crop to fill), never more than the picture has.
+        let fit = max(size.width / w, size.height / h) * scale
+        let longest = min(max(w, h), max(64, (max(w, h) * fit).rounded(.up)))
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: longest,
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, options as CFDictionary) else { return nil }
+        return NSImage(cgImage: cg, size: NSSize(width: CGFloat(cg.width) / scale, height: CGFloat(cg.height) / scale))
     }
 
     private static var dimensionCache: [String: String] = [:]

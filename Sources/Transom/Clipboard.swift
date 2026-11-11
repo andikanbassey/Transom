@@ -447,11 +447,17 @@ final class ClipboardStore: ObservableObject {
     /// the earlier item moves to the top and keeps its file.
     func storeImage(_ data: Data, alreadyPNG: Bool, base: Clip, who: String) {
         ClipboardFolder.prepare()
-        let name = UUID().uuidString + ".png"
-        let dest = ClipboardFolder.imageWriteFolder.appendingPathComponent(name)
+        let folder = ClipboardFolder.imageWriteFolder
         let candidates = clips.filter { $0.kind == .image }.prefix(60).compactMap(\.imageFile)
         imageQueue.async { [weak self] in
-            guard let png = alreadyPNG ? data : NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:]) else {
+            // Some apps put JPEG (or HEIC) bytes on the pasteboard as public.png. Keep those bytes as they are, under the
+            // extension they really have, so previews and pasting back see the right format.
+            let real = Thumbs.pictureType(of: data)
+            let keepAsIs = alreadyPNG && real != nil
+            let ext = keepAsIs ? (real?.preferredFilenameExtension ?? "png") : "png"
+            let name = UUID().uuidString + "." + ext
+            let dest = folder.appendingPathComponent(name)
+            guard let png = keepAsIs ? data : NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:]) else {
                 DispatchQueue.main.async { CaptureLog.shared.add(app: who, result: "Failed: could not save the image") }
                 return
             }
@@ -632,8 +638,11 @@ final class ClipboardStore: ObservableObject {
         case .image:
             // Put the stored PNG back as it is. Handing macOS an NSImage instead makes it offer uncompressed TIFF,
             // so Finder pasted a 27 MB .tiff for a 2 MB screenshot.
-            if let url = clip.imageURL, let data = try? Data(contentsOf: url) { pb.setData(data, forType: .png) }
-            else if let data = clip.heldImage { pb.setData(data, forType: .png) }
+            // The type follows the bytes: older versions saved JPEG data under .png names.
+            if let data = clip.imageURL.flatMap({ try? Data(contentsOf: $0) }) ?? clip.heldImage {
+                let type = Thumbs.pictureType(of: data).map { NSPasteboard.PasteboardType($0.identifier) } ?? .png
+                pb.setData(data, forType: type)
+            }
         }
         // Tells other clipboard managers (and Transom itself) not to record the copy again.
         if clip.sensitive { pb.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")) }
