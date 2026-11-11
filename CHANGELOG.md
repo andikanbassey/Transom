@@ -2,7 +2,7 @@
 
 Each release is written as what you can now do.
 
-## Unreleased
+## 0.8 (2026-11-11): select several items, groups for pins, paste one by one
 
 **New**
 - **Select several items in the drawer.** Hover a card and click the circle in its top left corner (or ⌘-click or ⇧-click a card, or right-click › Select). Then click to add items, ⇧-click to pick everything in between, or drag across the cards. The header becomes a bar with Pin, Group, Paste Together and Delete. Esc leaves select mode, ⌘A picks everything shown, Delete asks first, and Return pastes the items together.
@@ -28,7 +28,7 @@ Each release is written as what you can now do.
 - Picked items that a new filter hides are let go, so a batch action never reaches items you cannot see.
 
 
-## 0.7.3 (2026-11-04): lighter with a long history
+## 0.7.3 (2026-11-04, first published in 0.8): lighter with a long history
 
 **Faster**
 - **Transom keeps less of a long history in memory.** It holds your pins and newest 200 items, and reads the rest from disk when you press Show older, search, filter or open the Library. With 20,000 items, memory with the drawer open dropped from over 42 MB to about 32 MB, and to about 27 MB with it closed. Copying something old still moves it to the top, and retention and restore still cover every month.

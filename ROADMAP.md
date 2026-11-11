@@ -20,7 +20,7 @@ This is a plan, not a promise. Priorities move with what people actually use. To
 
 - **Clipboard history** with real previews, pinning, and search and filters by time, type and app. Stored as plain Markdown files.
 - **Quick Access, Notes and the Library**, with Select for bulk actions, paged lists and empty pages that explain themselves.
-- **Select in the drawer and groups for pins** (unreleased). Click, ⇧-click or drag to pick items, then pin, group, paste together or delete them. Pinned items can be sorted into named groups.
+- **Select in the drawer, groups for pins and Paste One by One** (0.8). Click, ⇧-click or drag to pick items, then pin, group, paste together or delete them. Pinned items can be sorted into named groups.
 - **Keyboard navigation.** Arrow keys to move, Return to paste, ⌥Return to paste as plain text, Space for a preview, ⌘F to search, ⌘1 to ⌘9 for quick paste.
 - **Sensitive items stay hidden** (0.7). Passwords from password managers and secret keys appear as masked text you can still copy or paste, are kept in memory only and expire after 15 minutes.
 - **iCloud Drive sync** for notes, files and history, and a switch to keep copied pictures on one Mac so they do not use iCloud storage.
@@ -43,7 +43,6 @@ This is a plan, not a promise. Priorities move with what people actually use. To
 - **Plain-text paste everywhere**, a modifier while clicking an item, and an "always plain text" option.
 - **Better search.** Optionally find text inside screenshots using on-device recognition. Recognition runs in the background,
   can be paused or turned off, and Settings will say what it costs.
-- **Paste stack.** Collect several items, then paste them one after another, with a clear indicator while it is active.
 - **A few text transforms on paste.** Trim, change case, strip formatting, join lines: instant and deterministic.
 - **More for sensitive items.** Recognise one-time codes and expire them after a few minutes, and let you choose how long
   sensitive items stay.
