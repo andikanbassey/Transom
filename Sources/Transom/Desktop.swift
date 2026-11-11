@@ -40,6 +40,9 @@ struct DesktopView: View {
         .onAppear {
             clipboard.holdFullHistory(MainNav.libraryHolder)
             clipboard.expanded = nil
+            // Debug aids for renders: open the Pinned page on one group, or with an app filter on.
+            if let g = Env["PIN_GROUP"] { pinGroup.value = g }
+            if let app = Env["APP_FILTER"] { clipboard.appFilter = app }
             if Env["SELECT"] != nil {
                 selecting.value = true
                 picked.value = Set(visibleIDs().prefix(2))
@@ -80,7 +83,7 @@ struct DesktopView: View {
     private func sidebarRow(_ s: DesktopSection) -> some View {
         SidebarRow(title: s.title, symbol: s.symbol, color: s.color, selected: nav.section == s, trailing: count(s).map { "\($0)" })
             .accessibleTap(s.title, selected: nav.section == s) { go(s) }
-            .modifier(SidebarDrop(section: s, notes: notes, files: files))
+            .modifier(SidebarDrop(section: s, notes: notes, files: files, clipboard: clipboard, ids: dropIDs))
     }
 
     /// A group of pins, indented under Pinned: opens the Pinned page showing only that group.
@@ -90,10 +93,17 @@ struct DesktopView: View {
                           trailing: "\(clipboard.clips.filter { $0.pinGroup == name }.count)")
             .padding(.leading, 14)
             .accessibleTap(name, selected: on) { go(.pinned); pinGroup.value = name }
+            .modifier(SidebarDrop(section: .pinned, group: name, notes: notes, files: files, clipboard: clipboard, ids: dropIDs))
             .contextMenu {
                 Button("Rename Group…") { withAnimation { clipboard.naming = .init(renaming: name) } }
                 Button("Delete Group") { if pinGroup.value == name { pinGroup.value = nil }; clipboard.deleteGroup(name) }
             }
+    }
+
+    /// What a drop onto a sidebar row moves: every picked item when the dragged one is among them, else just the dragged one.
+    private func dropIDs(_ clip: Clip) -> Set<UUID> {
+        let picks = Set(picked.value.compactMap(UUID.init(uuidString:)))
+        return selecting.value && picks.contains(clip.id) ? picks : [clip.id]
     }
 
     private func go(_ s: DesktopSection) {
@@ -131,6 +141,10 @@ struct DesktopView: View {
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 header
+                if let scope = filterScope, !selecting.value {
+                    FilterHint(scope: scope, clear: showEverything)
+                        .padding(.horizontal, 32).padding(.top, 10 - Look.headerGap).padding(.bottom, Look.headerGap - 6)
+                }
                 if totalItems == 0 {
                     emptyState
                 } else {
@@ -173,11 +187,6 @@ struct DesktopView: View {
                 TimeMenu(store: clipboard)
                 TypeMenu(store: clipboard)
                 AppMenu(store: clipboard)
-                if clipboard.filter != .all || clipboard.time != .any || clipboard.appFilter != nil {
-                    Button("Clear") { clipboard.filter = .all; clipboard.time = .any; clipboard.appFilter = nil }
-                        .buttonStyle(.plain).font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
-                        .padding(.leading, 4)
-                }
             }
         }
         .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, Look.headerGap)
@@ -201,6 +210,20 @@ struct DesktopView: View {
             FilterMenuLabel(symbol: "square.stack", value: current.map { $0.isEmpty ? "No group" : $0 } ?? "All groups", active: current != nil)
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
+    }
+
+    /// What the Clipboard or Pinned page is narrowed to, in words ("Replies · Images from Ghostty"), or nil when it shows everything.
+    private var filterScope: String? {
+        guard nav.section == .clipboard || nav.section == .pinned else { return nil }
+        let group = nav.section == .pinned ? pinGroup.value.map { $0.isEmpty ? "Pins in no group" : $0 } : nil
+        let parts = [group, clipboard.filterSummary].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// Clears the time, type and app filters and, on the Pinned page, the group.
+    private func showEverything() {
+        clipboard.clearFilters()
+        pinGroup.value = nil
     }
 
     private var plusAction: (() -> Void)? {
@@ -246,19 +269,21 @@ struct DesktopView: View {
         switch nav.section {
         case .clipboard where !clipboard.clips.isEmpty:
             EmptyState(symbol: "line.3.horizontal.decrease.circle", tint: .secondary, title: "No matches",
-                       message: "Nothing in your history fits these filters.",
-                       actionTitle: "Clear filters", actionSymbol: "xmark.circle") {
-                clipboard.filter = .all; clipboard.time = .any; clipboard.appFilter = nil
-            }
+                       message: "Nothing in your history fits " + (filterScope.map { "“\($0)”." } ?? "these filters."),
+                       actionTitle: "Show everything", actionSymbol: "xmark.circle", action: showEverything)
         case .clipboard:
             EmptyState(symbol: "doc.on.clipboard", tint: .blue, title: "Nothing copied yet",
                        message: "Everything you copy lands here, with previews for text, links, pictures and files. Copy something, then click it to paste.",
                        hint: "Scroll down on the menu bar to open Transom from any app.")
         case .pinned where clipboard.clips.contains(where: \.pinned):
-            EmptyState(symbol: "line.3.horizontal.decrease.circle", tint: .secondary, title: "No matches",
-                       message: "None of your pinned clips fit these filters.",
-                       actionTitle: "Clear filters", actionSymbol: "xmark.circle") {
-                clipboard.filter = .all; clipboard.time = .any; clipboard.appFilter = nil
+            if let g = pinGroup.value, !g.isEmpty, clipboard.filterSummary == nil {
+                EmptyState(symbol: "square.stack", tint: .orange, title: "Nothing in \(g) yet",
+                           message: "Right-click a clip and choose Move to Group, or drag clips onto “\(g)” in the sidebar.",
+                           actionTitle: "Show all pinned", actionSymbol: "pin", action: showEverything)
+            } else {
+                EmptyState(symbol: "line.3.horizontal.decrease.circle", tint: .secondary, title: "No matches",
+                           message: "None of your pinned clips fit " + (filterScope.map { "“\($0)”." } ?? "these filters."),
+                           actionTitle: "Show everything", actionSymbol: "xmark.circle", action: showEverything)
             }
         case .pinned where !clipboard.clips.isEmpty:
             EmptyState(symbol: "pin", tint: .orange, title: "Nothing pinned",
@@ -475,8 +500,20 @@ struct DesktopView: View {
                 .padding(.horizontal, 32).padding(.top, 58).padding(.bottom, Look.headerGap)
             ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
-                    if !pinned.isEmpty {
-                        section("Pinned", target: .pinned, count: pinned.count) { clipboardItems(Array(pinned.prefix(6))) }
+                    let plain = pinned.filter { $0.pinGroup == nil }
+                    if !plain.isEmpty {
+                        section("Pinned", target: .pinned, count: plain.count, seeAll: { go(.pinned); pinGroup.value = "" }) {
+                            clipboardItems(Array(plain.prefix(6)))
+                        }
+                    }
+                    ForEach(clipboard.groups, id: \.self) { name in
+                        let items = pinned.filter { $0.pinGroup == name }
+                        if !items.isEmpty {
+                            section(name, key: "group:" + name, symbol: "square.stack.fill", target: .pinned, count: items.count,
+                                    seeAll: { go(.pinned); pinGroup.value = name }) {
+                                clipboardItems(Array(items.prefix(6)))
+                            }
+                        }
                     }
                     section("Clipboard", target: .clipboard, count: recent.count) { clipboardItems(Array(recent.prefix(6))) }
                     section("Notes", target: .notes, count: savedNotes.count) { notesItems(Array(savedNotes.prefix(6))) }
@@ -488,20 +525,25 @@ struct DesktopView: View {
     }
 
     /// A collapsible section: chevron, title, count, and a link to the full page.
-    private func section<C: View>(_ title: String, target: DesktopSection, count: Int, @ViewBuilder cards: () -> C) -> some View {
-        let isOpen = !collapsed.value.contains(title)
+    private func section<C: View>(_ title: String, key: String? = nil, symbol: String? = nil, target: DesktopSection, count: Int,
+                                  seeAll: (() -> Void)? = nil, @ViewBuilder cards: () -> C) -> some View {
+        let key = key ?? title
+        let isOpen = !collapsed.value.contains(key)
         return VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
                         .rotationEffect(.degrees(isOpen ? 0 : -90)).frame(width: 14)
+                    if let symbol {
+                        Image(systemName: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(DesktopSection.pinned.color)
+                    }
                     Text(title).font(Look.sectionTitle)
                     Text("\(count)").font(Look.meta).foregroundStyle(.tertiary)
                 }
                 .contentShape(Rectangle())
                 .accessibleTap("\(title), \(count) items, \(isOpen ? "expanded" : "collapsed")", hint: "Shows or hides the section", combine: false) {
                     withAnimation(.easeOut(duration: 0.18)) {
-                        if isOpen { collapsed.value.insert(title) } else { collapsed.value.remove(title) }
+                        if isOpen { collapsed.value.insert(key) } else { collapsed.value.remove(key) }
                     }
                 }
                 Spacer()
@@ -510,7 +552,7 @@ struct DesktopView: View {
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(Color.primary.opacity(0.06), in: Capsule())
                         .contentShape(Capsule())
-                        .accessibleTap("See all \(title)", combine: false) { go(target) }
+                        .accessibleTap("See all \(title)", combine: false) { if let seeAll { seeAll() } else { go(target) } }
                 }
             }
             if isOpen {
