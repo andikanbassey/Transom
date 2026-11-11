@@ -42,3 +42,37 @@ import Testing
         #expect(sections.map(\.title) == ["Pinned", "Code", "Past Hour"])
     }
 }
+
+/// Search reaches the whole text, and copies that differ only in spacing or tracking links count as one item.
+@Suite struct SearchAndDuplicateTests {
+    @Test func searchFindsTextPastTheTitle() {
+        var long = Clip(kind: .text)
+        long.text = String(repeating: "filler ", count: 60) + "the needle is here"
+        #expect(long.title.count <= 160)
+        #expect(ClipboardStore.matches(long, "needle"))
+        #expect(ClipboardStore.matches(long, "NEEDLE"))
+        #expect(!ClipboardStore.matches(long, "haystack"))
+    }
+
+    @Test func searchNeverLooksInsideSensitiveItems() {
+        var secret = Clip(kind: .text)
+        secret.text = "sk-live-hunter2"
+        secret.sensitive = true
+        #expect(!ClipboardStore.matches(secret, "hunter2"))
+    }
+
+    @Test func searchMatchesFileNames() {
+        var file = Clip(kind: .file)
+        file.paths = ["/Users/someone/Desktop/Invoice March.pdf", "/tmp/Brand colours.txt"]
+        #expect(ClipboardStore.matches(file, "brand colours"))
+    }
+
+    @Test func sameContentIgnoresSpacingAndTracking() {
+        #expect(Clip.contentKey("  hello\n") == Clip.contentKey("hello"))
+        #expect(Clip.contentKey("hello world") != Clip.contentKey("hello  world"))
+        #expect(Clip.contentKey("https://example.com/post?utm_source=x&id=4&fbclid=abc") == Clip.contentKey("https://example.com/post?id=4"))
+        #expect(Clip.contentKey("https://Example.com/a/") == Clip.contentKey("https://example.com/a"))
+        #expect(Clip.contentKey("https://example.com/a?id=4") != Clip.contentKey("https://example.com/a?id=5"))
+        #expect(Clip.contentKey("https://open.spotify.com/track/1?si=xyz") == "https://open.spotify.com/track/1")
+    }
+}

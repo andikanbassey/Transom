@@ -59,6 +59,7 @@ struct TransomView: View {
         switch p {
         case .clipboard: ClipboardColumn(store: AppModel.shared.clipboard, showsGear: gear, cards: settings.v.clipboardCards)
             .overlay(alignment: .bottom) { ClearConfirmBar(store: AppModel.shared.clipboard) }
+            .overlay(alignment: .bottom) { UndoToast(store: AppModel.shared.clipboard) }
         case .files: FilesColumn(store: AppModel.shared.files, showsGear: gear)
         case .notes: NotesColumn(store: AppModel.shared.notes, showsGear: gear)
         }

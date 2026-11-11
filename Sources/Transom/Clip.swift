@@ -176,6 +176,26 @@ extension Clip {
         }
     }
 
+    /// What makes two copied texts the same item: surrounding spaces and line breaks do not count, and for a lone web link
+    /// neither do tracking parameters (utm_…, fbclid, gclid and the like) or a trailing slash. Copying it again moves
+    /// the older copy to the top instead of adding a second one.
+    static func contentKey(_ text: String) -> String {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.contains(where: \.isWhitespace), var parts = URLComponents(string: t),
+              ["http", "https"].contains(parts.scheme?.lowercased() ?? ""), parts.host != nil else { return t }
+        let tracking: Set<String> = ["fbclid", "gclid", "dclid", "msclkid", "mc_eid", "mc_cid", "igshid", "si", "ref_src", "_hsenc", "_hsmi"]
+        if let items = parts.queryItems {
+            let kept = items.filter { !$0.name.lowercased().hasPrefix("utm_") && !tracking.contains($0.name.lowercased()) }
+            parts.queryItems = kept.isEmpty ? nil : kept
+        }
+        if parts.fragment?.isEmpty == true { parts.fragment = nil }
+        parts.host = parts.host?.lowercased()
+        parts.scheme = parts.scheme?.lowercased()
+        var out = parts.string ?? t
+        if parts.query == nil, parts.fragment == nil, out.hasSuffix("/") { out.removeLast() }
+        return out
+    }
+
     static func hexColor(_ s: String) -> Color? {
         guard s.hasPrefix("#") else { return nil }
         var h = String(s.dropFirst())
