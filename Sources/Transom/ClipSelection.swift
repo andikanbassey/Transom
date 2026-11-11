@@ -8,16 +8,37 @@ extension ClipboardStore {
     /// The picked items that still exist.
     var selectedClips: [Clip] { clips.filter { selection.contains($0.id) } }
 
+    /// The picked items in the order they were picked; any picked in bulk (Select All) follow in the order shown.
+    var pickedInOrder: [Clip] {
+        let byID = Dictionary(clips.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return Self.pickOrder(selection, recorded: selectionOrder, shown: window.map(\.id)).compactMap { byID[$0] }
+    }
+
+    /// The order behind `pickedInOrder`, on its own so it can be tested.
+    static func pickOrder(_ selection: Set<UUID>, recorded: [UUID], shown: [UUID]) -> [UUID] {
+        var seen = Set<UUID>()
+        let first = recorded.filter { selection.contains($0) && seen.insert($0).inserted }
+        let rest = (shown + Array(selection)).filter { selection.contains($0) && seen.insert($0).inserted }
+        return first + rest
+    }
+
+    /// Notes ids as picked, for "Order picked".
+    func recordPicked(_ ids: [UUID]) {
+        selectionOrder.removeAll { ids.contains($0) }
+        selectionOrder += ids
+    }
+
     func beginSelecting(_ id: UUID? = nil) {
         selecting = true
         cursor = nil
         expanded = nil
-        if let id { selection.insert(id); selectionAnchor = id }
+        if let id { selection.insert(id); selectionAnchor = id; recordPicked([id]) }
     }
 
     func endSelecting() {
         selecting = false
         selection = []
+        selectionOrder = []
         selectionAnchor = nil
         pendingDelete = nil
     }
@@ -25,10 +46,11 @@ extension ClipboardStore {
     /// A click on an item while selecting: on its own it flips that item; with ⇧ it adds everything from the last click to this one.
     func clickSelect(_ id: UUID, extend: Bool) {
         if extend, let anchor = selectionAnchor, let run = Self.run(from: anchor, to: id, in: window.map(\.id)) {
+            recordPicked(run.first == anchor ? run : Array(run.reversed()))
             selection.formUnion(run)
             return
         }
-        if selection.contains(id) { selection.remove(id) } else { selection.insert(id) }
+        if selection.contains(id) { selection.remove(id) } else { selection.insert(id); recordPicked([id]) }
         selectionAnchor = id
     }
 
@@ -66,10 +88,17 @@ extension ClipboardStore {
 
     /// Copies the picked items as one and, in the drawer, pastes them into the app underneath.
     func useSelection(paste: Bool) {
-        let items = selectedClips
+        let items = pickedInOrder
         guard copyTogether(items) else { NSSound.beep(); return }
         endSelecting()
         if paste { AppModel.shared.pasteCurrent() } else if Settings.shared.v.sounds { NSSound(named: "Pop")?.play() }
+    }
+
+    /// Paste One by One: the picked items go onto the clipboard one at a time, the next after each ⌘V. Closes the drawer.
+    func pasteOneByOne() {
+        guard PasteStack.shared.start(pickedInOrder) else { return }
+        endSelecting()
+        AppModel.shared.hideDrawer()
     }
 
     /// Asks before deleting (at the bottom of the panel, so the drawer stays open).
@@ -177,6 +206,7 @@ extension View {
                         guard let run = ClipboardStore.run(from: start, to: now, in: order) else { return }
                         let base = state.base ?? []
                         store.selection = state.adding ? base.union(run) : base.subtracting(run)
+                        if state.adding { store.recordPicked(run.first == start ? run : Array(run.reversed())) }
                         store.selectionAnchor = now
                     }
                     .onEnded { _ in state.base = nil; state.start = nil },
@@ -240,8 +270,14 @@ struct DrawerSelectionBar: View {
                     DrawerPill(title: "Group", symbol: "square.stack", chevron: true, iconOnly: narrow)
                 }
                 .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
-                Button { store.useSelection(paste: true) } label: { DrawerPill(title: "Paste Together", symbol: "doc.on.clipboard", iconOnly: narrow) }
-                    .buttonStyle(.plain).disabled(!items.contains { $0.kind != .image && !$0.sensitive })
+                Menu {
+                    Button("Paste Together") { store.useSelection(paste: true) }
+                        .disabled(!items.contains { $0.kind != .image && !$0.sensitive })
+                    Button("Paste One by One") { store.pasteOneByOne() }
+                    Divider()
+                    JoinOptions()
+                } label: { DrawerPill(title: "Paste", symbol: "doc.on.clipboard", chevron: true, iconOnly: narrow) }
+                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize().focusEffectDisabled()
                 Button { store.askDeleteSelection() } label: { DrawerPill(title: "Delete", symbol: "trash", tint: .red, iconOnly: narrow) }
                     .buttonStyle(.plain)
             }
@@ -299,6 +335,8 @@ struct SelectionMenuItems: View {
         Section("\(n) Selected") {
             Button("Paste Together") { store.useSelection(paste: true) }.disabled(!items.contains { $0.kind != .image && !$0.sensitive })
             Button("Copy Together") { store.useSelection(paste: false) }.disabled(!items.contains { $0.kind != .image && !$0.sensitive })
+            Button("Paste One by One") { store.pasteOneByOne() }
+            Menu("Paste Options") { JoinOptions() }
             Button(store.selectionAllPinned ? "Unpin \(n == 1 ? "Item" : "\(n) Items")" : "Pin \(n == 1 ? "Item" : "\(n) Items")") { store.pinSelection() }
             Menu("Move to Group") { GroupMenuItems(store: store, ids: Set(items.map(\.id))) }
             Button("Delete \(n == 1 ? "Item" : "\(n) Items")…") { store.askDeleteSelection() }
@@ -408,5 +446,21 @@ struct GroupNameBar: View {
     private func cancel() {
         withAnimation { store.naming = nil }
         name.value = ""
+    }
+}
+
+/// The separator and order for Paste Together and Paste One by One, as ticked menu items (also in Settings › Clipboard).
+struct JoinOptions: View {
+    @ObservedObject var settings = Settings.shared
+    var body: some View {
+        Section("Between items") {
+            ForEach(JoinSeparator.allCases, id: \.self) { sep in
+                CheckButton(sep.label, settings.v.joinSeparator == sep) { settings.v.joinSeparator = sep }
+            }
+        }
+        Section("Order") {
+            CheckButton("Copy Order", settings.v.joinOrder == .copied) { settings.v.joinOrder = .copied }
+            CheckButton("Order Picked", settings.v.joinOrder == .picked) { settings.v.joinOrder = .picked }
+        }
     }
 }
