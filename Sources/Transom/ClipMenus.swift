@@ -19,6 +19,9 @@ struct ClipMenu: View {
     @ViewBuilder private var single: some View {
         Button("Open in Full") { store.expanded = clip }
         Button("Paste") { AppModel.shared.use(clip, paste: true) }
+        if clip.kind == .text, clip.markdown != nil, !clip.sensitive {
+            Button("Paste as Plain Text") { AppModel.shared.use(clip, paste: true, plain: true) }
+        }
         Divider()
         if !clip.sensitive {
             Button(clip.pinned ? "Unpin" : "Pin") { store.togglePin(clip) }

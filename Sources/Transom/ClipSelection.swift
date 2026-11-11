@@ -124,11 +124,26 @@ struct ClipFrames: PreferenceKey {
 }
 
 /// Drag-to-select bookkeeping. Not published: a drag changes the store's selection, and that redraws what needs it.
+///
+/// The rule while selecting: a drag that starts on an item not yet picked picks every item it passes; ⌥-drag unpicks them;
+/// a drag that starts on a picked item carries all the picked items out to another app (Finder, Notes, Mail).
+/// Near the edge of the strip or list, the drawer scrolls on by itself so a drag can reach items out of sight.
 final class DragSelect: ObservableObject {
+    enum Mode { case pick, unpick, out }
     var frames: [UUID: CGRect] = [:]
     var base: Set<UUID>?
     var start: UUID?
-    var adding = true
+    var mode = Mode.pick
+    var dragStart: CGPoint?
+    /// Where the scrolling content's top left corner is, and where the visible part of the scroll view is, on screen.
+    var contentOrigin = CGPoint.zero
+    var viewport = CGRect.zero
+    /// The pointer on screen (global coordinates), kept for auto-scroll while the mouse holds still.
+    var pointer: CGPoint?
+    var horizontal = true
+    var scroll: ((UUID, UnitPoint) -> Void)?
+    private var timer: Timer?
+    private weak var store: ClipboardStore?
 
     /// The item under the point, or the nearest one when the point is in a gap between them.
     func item(at p: CGPoint) -> UUID? {
@@ -140,6 +155,91 @@ final class DragSelect: ObservableObject {
         let dy = max(r.minY - p.y, 0, p.y - r.maxY)
         return dx * dx + dy * dy
     }
+
+    /// -1 near the leading (or top) edge, 1 near the trailing (or bottom) edge, 0 elsewhere.
+    static func edgeDirection(pointer p: CGPoint, viewport v: CGRect, horizontal: Bool, margin: CGFloat = 40) -> Int {
+        guard v.width > 0, v.height > 0 else { return 0 }
+        let (pos, lo, hi) = horizontal ? (p.x, v.minX, v.maxX) : (p.y, v.minY, v.maxY)
+        if pos > hi - margin { return 1 }
+        if pos < lo + margin { return -1 }
+        return 0
+    }
+
+    func changed(_ g: DragGesture.Value, store: ClipboardStore) {
+        guard store.selecting else { return }
+        // A new drag (AppKit may never report the end of one that became a drag out).
+        if dragStart != g.startLocation { reset(); dragStart = g.startLocation }
+        if base == nil {
+            guard let s = item(at: g.startLocation) else { return }
+            start = s
+            base = store.selection
+            let flags = NSEvent.modifierFlags
+            if store.selection.contains(s) && !flags.contains(.option) {
+                mode = .out
+                MultiDrag.begin(store.selectedClips)
+                return
+            }
+            mode = flags.contains(.option) ? .unpick : .pick
+        }
+        guard mode != .out else { return }
+        self.store = store
+        pointer = CGPoint(x: g.location.x + contentOrigin.x, y: g.location.y + contentOrigin.y)
+        apply(at: g.location)
+        let dir = Self.edgeDirection(pointer: pointer!, viewport: viewport, horizontal: horizontal)
+        if dir != 0, timer == nil {
+            timer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in self?.autoScroll() }
+        } else if dir == 0 {
+            stopTimer()
+        }
+    }
+
+    func ended() {
+        reset()
+        dragStart = nil
+    }
+
+    private func reset() {
+        base = nil
+        start = nil
+        mode = .pick
+        pointer = nil
+        stopTimer()
+    }
+
+    private func stopTimer() { timer?.invalidate(); timer = nil }
+
+    private func apply(at p: CGPoint) {
+        guard let store, let start, let now = item(at: p) else { return }
+        guard let run = ClipboardStore.run(from: start, to: now, in: store.window.map(\.id)) else { return }
+        let base = base ?? []
+        store.selection = mode == .unpick ? base.subtracting(run) : base.union(run)
+        store.selectionAnchor = now
+    }
+
+    /// One step past the edge: show the next item, then pick up to whatever is now under the pointer.
+    private func autoScroll() {
+        guard let store, let pointer, mode != .out else { stopTimer(); return }
+        let dir = Self.edgeDirection(pointer: pointer, viewport: viewport, horizontal: horizontal)
+        guard dir != 0 else { stopTimer(); return }
+        let order = store.window.map(\.id)
+        let local = CGPoint(x: pointer.x - contentOrigin.x, y: pointer.y - contentOrigin.y)
+        guard let now = item(at: local), let i = order.firstIndex(of: now) else { return }
+        let j = i + dir
+        guard order.indices.contains(j) else { stopTimer(); return }
+        let edge: UnitPoint = horizontal ? (dir > 0 ? .trailing : .leading) : (dir > 0 ? .bottom : .top)
+        withAnimation(.easeOut(duration: 0.1)) { scroll?(order[j], edge) }
+        // The content has moved under a pointer that has not: read the frames again once they have settled.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.11) { [weak self] in
+            guard let self, let pointer = self.pointer else { return }
+            self.apply(at: CGPoint(x: pointer.x - self.contentOrigin.x, y: pointer.y - self.contentOrigin.y))
+        }
+    }
+}
+
+/// Where the scrolling content sits on screen, so a drag can tell how far it has scrolled.
+struct ContentOrigin: PreferenceKey {
+    static var defaultValue = CGPoint.zero
+    static func reduce(value: inout CGPoint, nextValue: () -> CGPoint) { value = nextValue() }
 }
 
 extension View {
@@ -154,34 +254,35 @@ extension View {
         }
     }
 
-    /// Drag the item out into another app, except while selecting, when a drag picks items instead.
+    /// Drag the item out into another app, except while selecting, when a drag picks items (or carries all the picked ones).
     @ViewBuilder func dragOut(_ clip: Clip, enabled: Bool) -> some View {
         if enabled { onDrag { dragProvider(clip) } } else { self }
     }
 
-    /// A drag across the cards or rows picks (or, starting on a picked one, unpicks) every item between start and pointer.
-    func dragToSelect(store: ClipboardStore, state: DragSelect) -> some View {
-        coordinateSpace(name: DrawerSelect.space)
+    /// Put on the content inside the scroll view: picks with a drag (see `DragSelect` for the rule) and scrolls at the edges.
+    /// `scroll` brings an item into view at an edge (a ScrollViewReader's `scrollTo`).
+    func dragToSelect(store: ClipboardStore, state: DragSelect, horizontal: Bool, scroll: @escaping (UUID, UnitPoint) -> Void) -> some View {
+        state.horizontal = horizontal
+        state.scroll = scroll
+        return coordinateSpace(name: DrawerSelect.space)
+            .background(GeometryReader { g in Color.clear.preference(key: ContentOrigin.self, value: g.frame(in: .global).origin) })
             .onPreferenceChange(ClipFrames.self) { state.frames = $0 }
+            .onPreferenceChange(ContentOrigin.self) { state.contentOrigin = $0 }
             .simultaneousGesture(
                 DragGesture(minimumDistance: 6, coordinateSpace: .named(DrawerSelect.space))
-                    .onChanged { g in
-                        guard store.selecting, let start = state.start ?? state.item(at: g.startLocation),
-                              let now = state.item(at: g.location) else { return }
-                        if state.base == nil {
-                            state.base = store.selection
-                            state.start = start
-                            state.adding = !store.selection.contains(start)
-                        }
-                        let order = store.window.map(\.id)
-                        guard let run = ClipboardStore.run(from: start, to: now, in: order) else { return }
-                        let base = state.base ?? []
-                        store.selection = state.adding ? base.union(run) : base.subtracting(run)
-                        store.selectionAnchor = now
-                    }
-                    .onEnded { _ in state.base = nil; state.start = nil },
+                    .onChanged { g in state.changed(g, store: store) }
+                    .onEnded { _ in state.ended() },
                 including: store.selecting ? .all : .subviews
             )
+    }
+
+    /// Put on the scroll view itself: records the visible area, so a drag knows when it is near an edge.
+    func dragViewport(_ state: DragSelect) -> some View {
+        background(GeometryReader { g in
+            Color.clear
+                .onAppear { state.viewport = g.frame(in: .global) }
+                .onChange(of: g.frame(in: .global)) { _, f in state.viewport = f }
+        })
     }
 }
 

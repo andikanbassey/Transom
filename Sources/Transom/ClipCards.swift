@@ -63,6 +63,8 @@ struct ClipRow: View {
         .padding(.horizontal, 8).padding(.vertical, 6)
         .background(store.cursor == clip.id || picked == true ? Color.accentColor.opacity(0.22) : (hovering.value ? Color.primary.opacity(0.08) : .clear),
                     in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .strokeBorder(Color.primary.opacity(picked != nil && store.cursor == clip.id ? 0.55 : 0), lineWidth: 1.5))
         .contentShape(Rectangle())
         .onHover { hovering.value = $0 }
         .accessibleTap(hint: picked == nil ? "Pastes or copies the item" : "Selects the item") {

@@ -162,15 +162,25 @@ final class TransomController {
 
     // MARK: Keys
 
+    /// The ⇧-arrow run in progress, if any.
+    private let keySelect = KeySelect()
+
     /// Quick paste: modifier + 1…9 pastes the nth item in the list.
     /// Keyboard use of the drawer: arrows move through clipboard items, Return pastes (⌥Return pastes plain text),
-    /// Space previews, Esc steps back, ⌘F searches, and just typing starts a search. Returns true if the key was used.
+    /// Space previews, Esc steps back, ⌘F searches, and just typing starts a search. ⇧-arrows pick a run of items; in select
+    /// mode the arrows move the cursor and Space picks or unpicks the item under it. Returns true if the key was used.
     private func navigate(_ event: NSEvent) -> Bool {
         guard !(panel.firstResponder is NSTextView) || event.keyCode == 53 else { return false }
         let store = AppModel.shared.clipboard
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let cards = settings.clipboardCards
         if event.keyCode == 53, store.naming != nil { withAnimation { store.naming = nil }; return true }
+        // ⇧ with an arrow along the strip (or list) picks a run of items, entering select mode if needed.
+        let along: [UInt16: Int] = cards ? [123: -1, 124: 1] : [126: -1, 125: 1]
+        if let delta = along[event.keyCode], store.expanded == nil {
+            if flags == .shift { keySelect.extend(delta, store: store); return true }
+            keySelect.reset()
+        }
         // Select mode: Esc leaves it, ⌘A picks everything shown, Delete asks to delete the picked items, Return pastes them together.
         if store.selecting, !(panel.firstResponder is NSTextView) {
             switch event.keyCode {
@@ -179,6 +189,10 @@ final class TransomController {
                 return true
             case 0 where flags == .command: store.selectAllShown(); return true
             case 51, 117: store.askDeleteSelection(); return true
+            case 49 where flags.isEmpty:
+                // Space flips the item under the cursor.
+                if let id = store.cursor { store.clickSelect(id, extend: false) }
+                return true
             case 36, 76:
                 if let ids = store.pendingDelete { store.delete(ids: ids); store.endSelecting() } else { store.useSelection(paste: true) }
                 return true
