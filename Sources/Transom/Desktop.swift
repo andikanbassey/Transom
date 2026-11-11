@@ -467,7 +467,7 @@ struct DesktopView: View {
         default:
             noun = count == 1 ? "clipboard item" : "clipboard items"
             let pinned = clipboard.clips.filter { ids.contains($0.id.uuidString) && $0.pinned }.count
-            alert.informativeText = "This can't be undone." + (pinned > 0 ? " \(pinned) of them \(pinned == 1 ? "is" : "are") pinned." : "")
+            alert.informativeText = "You can undo this for a few seconds." + (pinned > 0 ? " \(pinned) of them \(pinned == 1 ? "is" : "are") pinned." : "")
         }
         alert.messageText = "Delete \(count) \(noun)?"
         alert.alertStyle = .warning
