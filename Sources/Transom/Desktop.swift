@@ -408,6 +408,7 @@ struct DesktopView: View {
                 Button(allPinned ? "Unpin" : "Pin") { clipboard.setPinned(!allPinned, ids: ids); picked.value = [] }
                 Menu("Move to Group") { GroupMenuItems(store: clipboard, ids: ids) { endSelecting() } }
                 Button("Copy Together") { clipboard.copyTogether(clipboard.clips.filter { ids.contains($0.id) }) }
+                Button("Paste One by One") { if PasteStack.shared.start(clipboard.clips.filter { ids.contains($0.id) }) { endSelecting() } }
                 Button("Delete…") { deleteSelection() }
             }
             Button("Done Selecting") { endSelecting() }

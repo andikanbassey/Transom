@@ -29,6 +29,8 @@ final class ClipboardStore: ObservableObject {
     @Published var selecting = false
     @Published var selection = Set<UUID>()
     var selectionAnchor: UUID?
+    /// The order items were picked in (may hold ids no longer picked; see `pickedInOrder`).
+    var selectionOrder: [UUID] = []
     /// "Delete n items?" waiting for a yes at the bottom of the panel, like `pendingClear`.
     @Published var pendingDelete: Set<UUID>?
     /// A group name being typed: for a new group holding `ids`, or a new name for `renaming`.
@@ -698,22 +700,22 @@ final class ClipboardStore: ObservableObject {
         setGroup(nil, ids: Set(clips.filter { $0.group == name }.map(\.id)))
     }
 
-    /// Puts several items on the clipboard as one, oldest first (the order they were copied): text joined line by line, or
-    /// all the files together. Pictures and sensitive items are left out of joined text. False when there was nothing to copy.
+    /// Puts several items on the clipboard as one: text joined with the separator chosen in Settings, or all the files
+    /// together. `items` come in the order picked; with "Copy order" they are sorted oldest first. Pictures and sensitive
+    /// items are left out of joined text. False when there was nothing to copy.
     @discardableResult
-    func copyTogether(_ items: [Clip]) -> Bool {
+    func copyTogether(_ items: [Clip], separator: JoinSeparator = Settings.shared.v.joinSeparator,
+                      order: JoinOrder = Settings.shared.v.joinOrder) -> Bool {
         let pb = NSPasteboard.general
-        let items = items.sorted { $0.date < $1.date }
+        let items = Joining.ordered(items, by: order)
         if !items.isEmpty, items.allSatisfy({ $0.kind == .file && !$0.sensitive }) {
-            let files = items.flatMap(\.fileURLs)
             pb.clearContents()
-            pb.writeObjects(files as [NSURL])
+            pb.writeObjects(items.flatMap(\.fileURLs) as [NSURL])
             return true
         }
-        let texts = items.filter { $0.kind == .text && !$0.sensitive }.compactMap(\.text)
-        guard !texts.isEmpty else { return false }
+        guard let text = Joining.text(items, separator: separator) else { return false }
         pb.clearContents()
-        pb.setString(texts.joined(separator: "\n"), forType: .string)
+        pb.setString(text, forType: .string)
         return true
     }
 
