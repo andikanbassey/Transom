@@ -246,6 +246,21 @@ struct SettingsView: View {
                     toggle(\.quickPaste)
                 }
             }
+            RowDivider()
+            Row("Between items", subtitle: "What goes between several items when you paste them together.") {
+                Picker("", selection: bind(\.joinSeparator)) {
+                    ForEach(JoinSeparator.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .labelsHidden().frame(width: 150)
+            }
+            RowDivider()
+            Row("Order", subtitle: "For Paste Together and Paste One by One.") {
+                Picker("", selection: bind(\.joinOrder)) {
+                    Text("Copy order").tag(JoinOrder.copied)
+                    Text("Order picked").tag(JoinOrder.picked)
+                }
+                .labelsHidden().frame(width: 150)
+            }
         }
     }
 

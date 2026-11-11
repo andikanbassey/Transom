@@ -20,6 +20,8 @@ jobs:
       run: swift test
     - name: Store test on scratch data (partial history, sync, retention, restore)
       run: TRANSOM_STORAGE_TESTS=1 TRANSOM_SUPPORT_DIR=/tmp/transom-storage-${{ github.run_id }} swift test --filter HistoryStoreIntegrationTests
+    - name: Undo delete test
+      run: TRANSOM_STORAGE_TESTS=1 TRANSOM_SUPPORT_DIR=/tmp/transom-undo-${{ github.run_id }} swift test --filter UndoDeleteIntegrationTests
     - name: Build the app and the zip
       run: ./build.sh zip
     - name: Check the bundle

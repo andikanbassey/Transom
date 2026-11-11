@@ -39,19 +39,21 @@ struct ClipboardColumn: View {
     @FocusState private var searchFocused: Bool
     @ObservedObject var settings = Settings.shared
     @StateObject private var columnWidth = Box<CGFloat>(900)
+    @StateObject private var drag = DragSelect()
 
     var body: some View {
         let visible = store.window
+        // The group switcher only ever shows pins, and those are all in memory: nothing is held back behind "Show older".
         let hidden = store.hiddenCount
-        let now = Date()
         let index = Dictionary(uniqueKeysWithValues: visible.enumerated().map { ($1.id, $0) })
-        let groups = TimeGroup.allCases.compactMap { g -> (TimeGroup, [Clip])? in
-            let items = visible.filter { TimeGroup.of($0, now: now) == g }
-            return items.isEmpty ? nil : (g, items)
-        }
+        let groups = ClipSection.sections(of: visible, groups: store.groups)
         VStack(spacing: 0) {
             // Title on the left, the three filters in the middle, the actions on the right: search first and filled so it
-            // stands out, then pinned-only, pause and the menu.
+            // stands out, then pinned-only, pause and the menu. While selecting, the selection bar takes the whole row.
+            Group {
+            if store.selecting {
+                DrawerSelectionBar(store: store, width: columnWidth.value)
+            } else {
             HStack(spacing: 0) {
                 Text("Clipboard History").font(.system(size: fs(13), weight: .semibold)).foregroundStyle(.primary.opacity(0.7)).lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -67,13 +69,15 @@ struct ClipboardColumn: View {
                         if !store.searching { store.query = "" }
                     }
                     .help("Search clipboard (⌘F)")
-                    HeaderIcon(symbol: store.pinnedOnly ? "star.fill" : "star", active: store.pinnedOnly) { store.pinnedOnly.toggle() }
-                        .help("Pinned only")
+                    GroupSwitcher(store: store)
                     HeaderIcon(symbol: settings.v.paused ? "pause.circle.fill" : "record.circle", active: settings.v.paused) {
                         settings.v.paused.toggle()
                     }
                     .help(settings.v.paused ? "Clipboard capture paused" : "Pause clipboard capture")
                     PanelMenu {
+                        Button("Select Items") { store.beginSelecting() }.disabled(visible.isEmpty)
+                        Button("New Group…") { withAnimation { store.naming = .init() } }
+                        Divider()
                         Button(settings.v.paused ? "Resume Capture" : "Pause Capture") { settings.v.paused.toggle() }
                         ClearUnpinnedButton(store: store)
                         Divider()
@@ -83,6 +87,8 @@ struct ClipboardColumn: View {
                     if showsGear { HeaderIcon(symbol: "gearshape") { AppModel.shared.openSettings(nil) }.help("Settings") }
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            }
             }
             .padding(.horizontal, 14)
             .frame(height: 40)
@@ -103,6 +109,10 @@ struct ClipboardColumn: View {
             }
             if let clip = store.expanded {
                 ExpandedClipView(clip: clip, store: store)
+            } else if visible.isEmpty, !store.loading, !store.clips.isEmpty, store.narrowingSummary != nil {
+                Spacer()
+                FilteredEmptyState(store: store)
+                Spacer()
             } else if visible.isEmpty {
                 Spacer()
                 VStack(spacing: 6) {
@@ -122,13 +132,12 @@ struct ClipboardColumn: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(alignment: .top, spacing: 0) {
                             if sections {
-                                ForEach(Array(groups.enumerated()), id: \.element.0) { n, entry in
+                                ForEach(Array(groups.enumerated()), id: \.element.id) { n, section in
                                     if n > 0 {
                                         Rectangle().fill(Color.primary.opacity(0.12)).frame(width: 1)
                                             .padding(.vertical, 6).padding(.horizontal, 14)
                                     }
-                                    cardSection(entry.0.title, symbol: entry.0 == .pinned ? "pin.fill" : "clock",
-                                                items: entry.1, index: index, scale: scale)
+                                    cardSection(section.title, symbol: section.symbol, items: section.items, index: index, scale: scale)
                                 }
                             } else {
                                 cardSection(nil, symbol: "", items: visible, index: index, scale: scale)
@@ -136,7 +145,9 @@ struct ClipboardColumn: View {
                             if hidden > 0 { showOlderCard(hidden, scale: scale) }
                         }
                         .padding(.horizontal, 14).padding(.vertical, 4)
+                        .dragToSelect(store: store, state: drag, horizontal: true) { id, edge in proxy.scrollTo(id, anchor: edge) }
                     }
+                    .dragViewport(drag)
                     .mask(edgeFade)
                     .onChange(of: store.cursor) { _, id in
                         if let id { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id, anchor: .center) } }
@@ -147,23 +158,56 @@ struct ClipboardColumn: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 3) {
-                            ForEach(groups, id: \.0) { group, items in
-                                GroupHeader(title: group.title)
-                                ForEach(items) { clip in
+                            ForEach(groups) { section in
+                                GroupHeader(title: section.title)
+                                ForEach(section.items) { clip in
                                     let n = index[clip.id] ?? 99
-                                    ClipRow(clip: clip, store: store, quickKey: settings.v.quickPaste && n < 9 ? n + 1 : nil).id(clip.id)
+                                    ClipRow(clip: clip, store: store, quickKey: settings.v.quickPaste && n < 9 ? n + 1 : nil,
+                                            picked: store.selecting ? store.selection.contains(clip.id) : nil)
+                                        .selectFrame(clip.id, active: store.selecting)
+                                        .id(clip.id)
                                 }
                             }
                             if hidden > 0 { showOlderRow(hidden) }
                         }
                         .padding(.horizontal, 8).padding(.bottom, 10)
+                        .dragToSelect(store: store, state: drag, horizontal: false) { id, edge in proxy.scrollTo(id, anchor: edge) }
                     }
+                    .dragViewport(drag)
                     .onChange(of: store.cursor) { _, id in
                         if let id { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id, anchor: .center) } }
                     }
                 }
             }
         }
+        .contentShape(Rectangle())
+        .contextMenu { ClipboardPanelMenu(store: store) }
+    }
+}
+
+/// A run of items under one caption in the drawer: plain pins, each group, then by age.
+struct ClipSection: Identifiable {
+    let id: String
+    let title: String
+    let symbol: String
+    let items: [Clip]
+
+    static func sections(of visible: [Clip], groups: [String], now: Date = Date()) -> [ClipSection] {
+        var out: [ClipSection] = []
+        let pins = visible.filter { $0.pinned && $0.pinGroup == nil }
+        if !pins.isEmpty { out.append(.init(id: "pinned", title: "Pinned", symbol: "pin.fill", items: pins)) }
+        for name in groups {
+            let items = visible.filter { $0.pinGroup == name }
+            if !items.isEmpty { out.append(.init(id: "group:" + name, title: name, symbol: "square.stack.fill", items: items)) }
+        }
+        let grouped = Set(groups)
+        let strays = visible.filter { $0.pinGroup.map { !grouped.contains($0) } ?? false }
+        if !strays.isEmpty { out.append(.init(id: "pinned-more", title: "Pinned", symbol: "pin.fill", items: strays)) }
+        for g in TimeGroup.allCases where g != .pinned {
+            let items = visible.filter { !$0.pinned && TimeGroup.of($0, now: now) == g }
+            if !items.isEmpty { out.append(.init(id: "time:\(g)", title: g.title, symbol: "clock", items: items)) }
+        }
+        return out
     }
 }
 
@@ -205,15 +249,28 @@ extension ClipboardColumn {
             LazyHStack(spacing: 10) {
                 ForEach(items) { clip in
                     let n = index[clip.id] ?? 99
-                    ClipCard(clip: clip, store: store, quickKey: settings.v.quickPaste && n < 9 ? n + 1 : nil)
-                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(Color.accentColor, lineWidth: store.cursor == clip.id ? 3 : 0))
+                    ClipCard(clip: clip, store: store, quickKey: settings.v.quickPaste && n < 9 ? n + 1 : nil,
+                             picked: store.selecting ? store.selection.contains(clip.id) : nil)
+                        .overlay(cursorRing(on: store.cursor == clip.id))
                         .id(clip.id)
                         .frame(width: ClipCard.baseWidth, height: ClipCard.baseHeight)
                         .scaleEffect(scale, anchor: .topLeading)
                         .frame(width: ClipCard.baseWidth * scale, height: ClipCard.baseHeight * scale, alignment: .topLeading)
+                        .selectFrame(clip.id, active: store.selecting)
+                        .testFrame("card:\(clip.id)")
                 }
             }
+        }
+    }
+
+    /// The keyboard's place in the strip. While selecting, the picked cards carry the accent ring, so the cursor is a
+    /// quieter outline just outside the card instead.
+    @ViewBuilder fileprivate func cursorRing(on: Bool) -> some View {
+        if store.selecting {
+            RoundedRectangle(cornerRadius: 17, style: .continuous)
+                .strokeBorder(Color.primary.opacity(on ? 0.6 : 0), lineWidth: 2).padding(-4)
+        } else {
+            RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.accentColor, lineWidth: on ? 3 : 0)
         }
     }
 

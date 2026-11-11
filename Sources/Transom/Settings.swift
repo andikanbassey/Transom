@@ -84,6 +84,18 @@ enum Retention: Int, Codable, CaseIterable {
 }
 
 enum PasteMode: String, Codable { case activeApp, clipboard, expand }
+/// What goes between items when several are pasted together.
+enum JoinSeparator: String, Codable, CaseIterable {
+    case newline, blankLine, comma, space, tab
+    var label: String {
+        switch self { case .newline: "New line"; case .blankLine: "Blank line"; case .comma: "Comma"; case .space: "Space"; case .tab: "Tab" }
+    }
+    var string: String {
+        switch self { case .newline: "\n"; case .blankLine: "\n\n"; case .comma: ", "; case .space: " "; case .tab: "\t" }
+    }
+}
+/// The order several items are pasted in: the order they were copied (oldest first), or the order they were picked.
+enum JoinOrder: String, Codable, CaseIterable { case copied, picked }
 enum ScrollZone: String, Codable, CaseIterable {
     case menuBar, topEdge
     var label: String { self == .menuBar ? "Anywhere on the menu bar" : "Only the top edge" }
@@ -224,6 +236,11 @@ struct SettingsValues: Codable, Equatable {
     var quickPaste = true
     var quickPasteModifier = Mod.command
     var sounds = true
+    /// Names of the groups pinned clipboard items can be sorted into, in the order they are shown.
+    var clipGroups: [String] = []
+    /// Paste Together and the paste stack: what goes between items, and in which order they go.
+    var joinSeparator = JoinSeparator.newline
+    var joinOrder = JoinOrder.copied
 
     // Privacy
     var ignoreConfidential = true

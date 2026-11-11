@@ -38,9 +38,13 @@ Transom takes its layout from [Unclutter](https://unclutterapp.com) and its clip
 - Every item gets a **cover image and a type pill**: text, link, colour, image, GIF, video, audio, PDF, folder or file.
 - Real previews: first frame of videos and GIFs, first page of PDFs, page title and image for links,
   swatches for hex colours.
-- Grouped by recency: Pinned, Past Hour, Today, Yesterday, This Week, This Month, Older.
+- Grouped by recency: Pinned, your groups of pins, Past Hour, Today, Yesterday, This Week, This Month, Older.
+- **Groups for pins:** sort pinned items into named groups (Replies, Code, Screenshots) and switch between them from the ★ menu.
+- **Select several items:** click the circle in a card's corner, ⇧-click or drag across cards, then pin, group, delete
+  (with Undo), paste them together or **paste them one by one** (each ⌘V pastes the next). Right-click follows the selection
+  and the filters.
 - **Paste straight into the app you were using**, or just copy. ⌘1–⌘9 quick paste.
-- Pin, search, and filter by **time, type and app** with three dropdowns; each item shows which app it came from.
+- Pin, search the full text, and filter by **time, type and app** with three dropdowns; each item shows which app it came from.
 - **Drag an item** onto Quick Access to keep it, or onto Notes to make a note from it (pictures are embedded).
 - Copying the same picture again moves the earlier item to the top instead of storing it twice.
 - History kept for a day, week, month, year or forever. Time is the only limit.
@@ -282,7 +286,7 @@ iCloud sync, updates from GitHub, links and AppleScript.
 
 **Now:** speed at any history size, more tests, a cleaner codebase, and checking on more setups.
 
-**Next:** plain-text paste everywhere, text recognition in screenshots, pinboards, paste stack, a few text transforms, one-time
+**Next:** plain-text paste everywhere, text recognition in screenshots, a few text transforms, one-time
 code handling, per-app rules, export, and Shortcuts.
 
 **Later:** notarized releases, an iPhone and iPad companion, shared pinboards.

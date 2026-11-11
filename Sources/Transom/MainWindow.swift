@@ -206,22 +206,60 @@ enum DesktopSection: String, CaseIterable {
     }
 }
 
-/// Dropping a clipboard card on "Notes" or "Quick Access" in the sidebar keeps it there.
+/// Dropping a clipboard card on "Notes" or "Quick Access" in the sidebar keeps it there; on "Pinned" it pins it, and on a group
+/// it moves it into that group. `ids` says what a drop moves (all the picked items when the dragged one is among them).
 struct SidebarDrop: ViewModifier {
     let section: DesktopSection
+    var group: String?
     let notes: NotesStore
     let files: FilesStore
+    var clipboard: ClipboardStore?
+    var ids: (Clip) -> Set<UUID> = { [$0.id] }
     @StateObject private var targeted = Box(false)
 
     func body(content: Content) -> some View {
-        if section == .notes || section == .files {
+        if section == .notes || section == .files || (section == .pinned && clipboard != nil) {
             content
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.accentColor.opacity(targeted.value ? 0.9 : 0), lineWidth: 2))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.accentColor.opacity(targeted.value ? 0.9 : 0), lineWidth: 2))
                 .clipDrop(targeted: $targeted.value) { clip in
-                    if section == .notes { notes.addClip(clip) } else { files.addClip(clip) }
+                    switch section {
+                    case .notes: notes.addClip(clip)
+                    case .files: files.addClip(clip)
+                    default:
+                        guard let clipboard else { return }
+                        let picked = ids(clip)
+                        if let group {
+                            clipboard.setGroup(group, ids: picked)
+                        } else {
+                            clipboard.setPinned(true, ids: picked)
+                            clipboard.setGroup(nil, ids: picked)
+                        }
+                    }
                 }
         } else {
             content
         }
+    }
+}
+
+/// The line under a clipboard page's header while a filter is on: what the page is narrowed to, and one way back.
+struct FilterHint: View {
+    let scope: String
+    let clear: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal.decrease.circle.fill").font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+            (Text("Showing ").foregroundColor(.secondary) + Text(scope).foregroundColor(.primary))
+                .font(.system(size: 12.5, weight: .medium)).lineLimit(1).truncationMode(.tail)
+            Text("·").foregroundStyle(.tertiary)
+            Text("Show everything").font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Color.accentColor)
+                .contentShape(Rectangle())
+                .accessibleTap("Show everything", hint: "Clears the filters", combine: false, clear)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 6)
+        .background(Color.accentColor.opacity(0.09), in: Capsule())
     }
 }

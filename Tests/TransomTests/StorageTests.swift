@@ -504,3 +504,38 @@ import Testing
         #expect(store.clips.count == 599)
     }
 }
+
+
+/// Deleting waits a few seconds so it can be undone, and only then writes anything.
+@Suite(.serialized) @MainActor struct UndoDeleteIntegrationTests {
+    // Its own scratch folder (/tmp/transom-undo-…): run beside the storage suite, the two would write into each other's.
+    @Test(.enabled(if: Env["STORAGE_TESTS"] == "1" && Env["SUPPORT_DIR"]?.hasPrefix("/tmp/transom-undo-") == true))
+    func undoBringsItemsBackAndCommitRemovesThem() async throws {
+        Settings.shared.v.paused = true
+        Settings.shared.v.linkPreviews = false
+        ClipboardFolder.prepare()
+        let store = ClipboardStore(monitoring: false)
+        for _ in 0..<500 { if !store.loading { break }; try await Task.sleep(for: .milliseconds(10)) }
+        let before = store.clips.count
+        var a = Clip(kind: .text); a.text = "undo fixture a \(UUID())"
+        var b = Clip(kind: .text); b.text = "undo fixture b \(UUID())"
+        store.clips.insert(contentsOf: [a, b], at: 0)
+        store.delete(ids: [a.id, b.id])
+        #expect(store.clips.count == before)
+        #expect(store.undoable?.clips.count == 2)
+        store.undoDelete()
+        #expect(store.clips.contains { $0.id == a.id } && store.clips.contains { $0.id == b.id })
+        #expect(store.undoable == nil)
+        // Copied again while its delete waited: Undo keeps the new copy and does not bring back a second one.
+        store.delete(ids: [b.id])
+        var again = Clip(kind: .text); again.text = b.text
+        store.clips.insert(again, at: 0)
+        store.undoDelete()
+        #expect(store.clips.filter { $0.text == b.text }.count == 1)
+        store.delete(ids: [a.id])
+        store.commitPendingDelete(wait: true)
+        #expect(store.undoable == nil)
+        #expect(!store.clips.contains { $0.id == a.id })
+        #expect(ClipboardFolder.tombstones()[a.id] != nil)
+    }
+}

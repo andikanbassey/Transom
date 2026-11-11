@@ -11,6 +11,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let headerItem = NSMenuItem()
     let activateItem = NSMenuItem(title: "", action: #selector(makeActive), keyEquivalent: "")
     let updateItem = NSMenuItem(title: "", action: #selector(installUpdate), keyEquivalent: "")
+    let stackItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    let stackSkipItem = NSMenuItem(title: "Skip This Item", action: #selector(skipStack), keyEquivalent: "")
+    let stackStopItem = NSMenuItem(title: "Stop Paste Stack", action: #selector(stopStack), keyEquivalent: "")
+    private var stackWatch: AnyCancellable?
     var updateCheckTimer: Timer?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -53,6 +57,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateItem.image = NSImage(systemSymbolName: "arrow.down.circle.fill", accessibilityDescription: nil)
         updateItem.isHidden = true
         menu.addItem(updateItem)
+        // While a paste stack runs: where it is, and a way to skip or stop it.
+        stackItem.isEnabled = false
+        stackItem.image = NSImage(systemSymbolName: "square.stack.3d.down.right", accessibilityDescription: nil)
+        stackSkipItem.target = self
+        stackStopItem.target = self
+        stackStopItem.image = NSImage(systemSymbolName: "stop.circle", accessibilityDescription: nil)
+        for item in [stackItem, stackSkipItem, stackStopItem] { item.isHidden = true; menu.addItem(item) }
         menu.addItem(.separator())
         func add(_ title: String, _ symbol: String, _ action: Selector, key: String = "") {
             let item = menu.addItem(withTitle: title, action: action, keyEquivalent: key)
@@ -72,6 +83,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let quit = menu.addItem(withTitle: "Quit \(Brand.name)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.image = NSImage(systemSymbolName: "power", accessibilityDescription: nil)
         statusItem.menu = menu
+        // The menu bar icon says "2/5" while a paste stack runs, so it is clear the next ⌘V pastes the next item.
+        stackWatch = PasteStack.shared.objectWillChange.receive(on: DispatchQueue.main).sink { [weak self] _ in
+            DispatchQueue.main.async { self?.showStackProgress() }
+        }
 
         // A new release shows up in the menu; the check runs at launch and then every few hours (at most one request a day).
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) { Updater.shared.checkIfDue() }
@@ -125,6 +140,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 run(0)
             }
+        }
+        if Env["UI_TEST"] != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { UITest.start(drawer: self.drawer) }
         }
         if Env["THUMB_TEST"] != nil {
             // Debug aid (scratch TRANSOM_SUPPORT_DIR with many pictures): loads every picture's card thumbnail, as scrolling the
@@ -193,6 +211,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         if let path = Env["SNAPSHOT"] {
+            // TRANSOM_SELECT=1 with a drawer snapshot: shows select mode with the first three items picked.
+            if Env["SELECT"] != nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    let store = AppModel.shared.clipboard
+                    store.beginSelecting()
+                    store.selection = Set(store.window.prefix(3).map(\.id))
+                }
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + (Double(Env["SNAPSHOT_DELAY"] ?? "") ?? 3)) { self.drawer.snapshot(to: path); exit(0) }
         }
         if let path = Env["SNAPSHOT_VIEW"] {
@@ -276,6 +302,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         activateItem.title = "Make \(Brand.name) the Active Copy"
         activateItem.isHidden = !standby
         pauseItem.isEnabled = !standby
+        let stack = PasteStack.shared
+        for item in [stackItem, stackSkipItem, stackStopItem] { item.isHidden = !stack.isActive }
+        if stack.isActive { stackItem.title = "Paste stack: item \(stack.position + 1) of \(stack.items.count) is next" }
+        stackSkipItem.isEnabled = stack.position + 1 < stack.items.count
     }
 
     @objc func installUpdate() { Updater.shared.install() }
@@ -303,6 +333,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { self.drawer.toggle() }
     }
     @objc func togglePause() { Settings.shared.v.paused.toggle() }
+    @objc func skipStack() { PasteStack.shared.skip() }
+    @objc func stopStack() { PasteStack.shared.stop() }
+
+    private func showStackProgress() {
+        let stack = PasteStack.shared
+        guard let button = statusItem.button else { return }
+        if stack.isActive {
+            statusItem.length = NSStatusItem.variableLength
+            button.title = " " + stack.progress
+            button.imagePosition = .imageLeft
+            button.setAccessibilityLabel("\(Brand.name), paste stack \(stack.position + 1) of \(stack.items.count)")
+        } else {
+            button.title = ""
+            button.imagePosition = .imageOnly
+            statusItem.length = NSStatusItem.squareLength
+            button.setAccessibilityLabel(Brand.name)
+        }
+    }
     @objc func clearClipboard() { AppModel.shared.clipboard.clearUnpinned() }
     @objc func showSettings() { SettingsWindow.shared.show() }
     @objc func openSearch() {

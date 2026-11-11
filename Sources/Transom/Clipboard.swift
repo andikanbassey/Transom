@@ -7,21 +7,53 @@ import QuickLookThumbnailing
 final class ClipboardStore: ObservableObject {
     @Published var clips: [Clip] = []
     // Filter state lives here so quick paste (⌘1–9) sees the same list the column shows.
-    @Published var query = "" { didSet { fullHistoryDemandChanged() } }
+    @Published var query = "" { didSet { fullHistoryDemandChanged(); pruneSelection() } }
     @Published var searching = false
-    @Published var pinnedOnly = false
-    @Published var filter = Category.Filter.all { didSet { fullHistoryDemandChanged() } }
+    @Published var pinnedOnly = false { didSet { pruneSelection() } }
+    /// Narrows the list to pins in one group (a name), to pins in no group (""), or nil for no group filter.
+    @Published var groupFilter: String? { didSet { pruneSelection() } }
+    @Published var filter = Category.Filter.all { didSet { fullHistoryDemandChanged(); pruneSelection() } }
     /// Library only: show clips copied from one app (see `appKey`). Nil shows every app.
-    @Published var appFilter: String? { didSet { fullHistoryDemandChanged() } }
+    @Published var appFilter: String? { didSet { fullHistoryDemandChanged(); pruneSelection() } }
     /// Narrow the Library's clipboard page to a window of time.
-    @Published var time = TimeFilter.any { didSet { fullHistoryDemandChanged() } }
+    @Published var time = TimeFilter.any { didSet { fullHistoryDemandChanged(); pruneSelection() } }
     /// The item the keyboard has selected in the drawer (arrows move it, Return pastes it).
     @Published var cursor: UUID?
     /// The clip shown in full in place of the list, when clicking is set to expand.
     @Published var expanded: Clip?
     /// A filtered "Clear Unpinned" waiting for a yes, asked inside the window (a system alert would take focus and close the drawer).
     @Published var pendingClear: PendingClear?
-    struct PendingClear: Equatable { var scope: String; var count: Int }
+    struct PendingClear: Equatable {
+        var scope: String
+        var count: Int
+        /// Only items copied before this, for "Clear Unpinned Older Than…".
+        var before: Date?
+    }
+
+    /// Select mode in the drawer: the items picked for a batch action, and the last one clicked (⇧-click selects from there).
+    @Published var selecting = false
+    @Published var selection = Set<UUID>()
+    var selectionAnchor: UUID?
+    /// The order items were picked in (may hold ids no longer picked; see `pickedInOrder`).
+    var selectionOrder: [UUID] = []
+    /// "Delete n items?" waiting for a yes at the bottom of the panel, like `pendingClear`.
+    @Published var pendingDelete: Set<UUID>?
+    /// A group name being typed: for a new group holding `ids`, or a new name for `renaming`.
+    struct GroupNaming: Equatable { var ids = Set<UUID>(); var renaming: String? }
+    @Published var naming: GroupNaming?
+
+    /// Picked items a new filter hides are let go, so a batch action never reaches items you cannot see.
+    private func pruneSelection() {
+        guard selecting, !selection.isEmpty else { return }
+        let shown = Set(visible.map(\.id))
+        if !selection.isSubset(of: shown) { selection.formIntersection(shown) }
+    }
+
+    /// Deleted items wait here for a few seconds so Undo can bring them back; only then are they really removed.
+    struct PendingUndo: Equatable { var id = UUID(); var clips: [Clip] }
+    @Published private(set) var undoable: PendingUndo?
+    private var undoTimer: DispatchWorkItem?
+    static let undoSeconds: TimeInterval = 6
 
     /// Months whose Markdown file needs rewriting, and the folder and file state the clips were loaded from.
     private var dirtyMonths = Set<String>()
@@ -40,6 +72,9 @@ final class ClipboardStore: ObservableObject {
         load()
         cancellable = Settings.shared.$v.sink { [weak self] _ in
             DispatchQueue.main.async { self?.folderMayHaveChanged() }
+        }
+        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.commitPendingDelete(wait: true)
         }
         guard monitoring else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in self?.poll() }
@@ -189,7 +224,9 @@ final class ClipboardStore: ObservableObject {
         // A copy, pin or deletion made during the read wins over the read's older snapshot.
         let changed = clips.filter { $0.modified >= started || $0.sensitive }
         let changedIDs = Set(changed.map(\.id))
-        clips = (changed + read.clips.filter { !changedIDs.contains($0.id) && !removedDuringLoad.contains($0.id) }).sorted { $0.date > $1.date }
+        let waiting = Set(undoable?.clips.map(\.id) ?? [])
+        clips = (changed + read.clips.filter { !changedIDs.contains($0.id) && !removedDuringLoad.contains($0.id) && !waiting.contains($0.id) })
+            .sorted { $0.date > $1.date }
         removedDuringLoad = []
         deferred = read.deferred
         loadedRetention = retention
@@ -274,8 +311,9 @@ final class ClipboardStore: ObservableObject {
 
     /// The clips the column shows: filtered, pinned first.
     var visible: [Clip] {
-        let filtered = Self.filtered(clips, filter: filter, time: time, app: appFilter, pinnedOnly: pinnedOnly, query: query)
-        return filtered.filter(\.pinned) + filtered.filter { !$0.pinned }
+        var filtered = Self.filtered(clips, filter: filter, time: time, app: appFilter, pinnedOnly: pinnedOnly, query: query)
+        if let g = groupFilter { filtered = filtered.filter { $0.pinned && ($0.pinGroup ?? "") == g } }
+        return Self.pinnedByGroup(filtered.filter(\.pinned), groups: groups) + filtered.filter { !$0.pinned }
     }
 
     /// How many unpinned items the drawer draws before "Show older". Drawing the whole history made the drawer hold tens of
@@ -287,7 +325,7 @@ final class ClipboardStore: ObservableObject {
     var window: [Clip] { Self.window(of: visible, limit: windowLimit) }
     /// Unpinned items still hidden behind "Show older".
     var hiddenCount: Int {
-        max(0, visible.filter { !$0.pinned }.count - windowLimit) + (isFiltered || !query.isEmpty || pinnedOnly ? 0 : deferred.count)
+        max(0, visible.filter { !$0.pinned }.count - windowLimit) + (isFiltered || !query.isEmpty || pinnedOnly || groupFilter != nil ? 0 : deferred.count)
     }
     func showOlder() { showNewest(windowLimit + Self.windowStep) }
     /// Widens the window to at least `count` items, reading them from disk if they are not in memory.
@@ -298,6 +336,16 @@ final class ClipboardStore: ObservableObject {
     func resetWindow() {
         if windowLimit != Self.windowStep { windowLimit = Self.windowStep }
         dropOlderItems()
+    }
+
+    /// Plain pins first, then each group in its order; within each, the order they came in.
+    static func pinnedByGroup(_ pinned: [Clip], groups: [String]) -> [Clip] {
+        let rank = Dictionary(groups.enumerated().map { ($1, $0 + 1) }, uniquingKeysWith: { a, _ in a })
+        return pinned.enumerated().sorted { a, b in
+            let ra = a.element.pinGroup.map { rank[$0] ?? Int.max } ?? 0
+            let rb = b.element.pinGroup.map { rank[$0] ?? Int.max } ?? 0
+            return ra != rb ? ra < rb : a.offset < b.offset
+        }.map(\.element)
     }
 
     /// The window on its own, so it can be tested: `visible` is pinned first, then unpinned.
@@ -316,9 +364,18 @@ final class ClipboardStore: ObservableObject {
                 && time.includes(clip.date, now: now)
                 && (app == nil || appKey(clip) == app)
                 && (!pinnedOnly || clip.pinned)
-                && (q.isEmpty || clip.title.localizedCaseInsensitiveContains(q)
-                    || (clip.sourceApp ?? "").localizedCaseInsensitiveContains(q))
+                && (q.isEmpty || matches(clip, q))
         }
+    }
+
+    /// Search looks at the whole text (not only the first lines the title shows), link titles, file names and the app.
+    /// A sensitive item is matched by its masked title only, never by what it hides.
+    static func matches(_ clip: Clip, _ q: String) -> Bool {
+        let opts: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        func has(_ s: String?) -> Bool { s.map { $0.range(of: q, options: opts) != nil } ?? false }
+        if has(clip.title) || has(clip.sourceApp) { return true }
+        guard !clip.sensitive else { return false }
+        return has(clip.text) || has(clip.linkTitle) || clip.fileURLs.contains { has($0.lastPathComponent) }
     }
 
     /// How long a sensitive item stays in the list. It lives in memory only: it is never written to disk or synced.
@@ -369,7 +426,8 @@ final class ClipboardStore: ObservableObject {
             clip.sensitive = s.keepSensitiveMasked && (concealed || SecretPatterns.looksSecret(str))
             if clip.sensitive { clip.sensitiveSince = Date() }
             clip.markdown = clip.sensitive ? nil : Self.richMarkdown(pb)
-            insert(clip, replacing: { $0.kind == .text && $0.text == str })
+            let key = Clip.contentKey(str)
+            insert(clip, replacing: { $0.kind == .text && Clip.contentKey($0.text ?? "") == key })
             log.add(app: who, result: clip.sensitive ? "Stored: sensitive text, masked and kept in memory only" : "Stored: text (\(str.count) characters)")
             if s.linkPreviews, clips.first?.category == .link, clips.first?.linkTitle == nil,
                let url = URL(string: str.trimmingCharacters(in: .whitespacesAndNewlines)), let id = clips.first?.id {
@@ -391,11 +449,17 @@ final class ClipboardStore: ObservableObject {
     /// the earlier item moves to the top and keeps its file.
     func storeImage(_ data: Data, alreadyPNG: Bool, base: Clip, who: String) {
         ClipboardFolder.prepare()
-        let name = UUID().uuidString + ".png"
-        let dest = ClipboardFolder.imageWriteFolder.appendingPathComponent(name)
+        let folder = ClipboardFolder.imageWriteFolder
         let candidates = clips.filter { $0.kind == .image }.prefix(60).compactMap(\.imageFile)
         imageQueue.async { [weak self] in
-            guard let png = alreadyPNG ? data : NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:]) else {
+            // Some apps put JPEG (or HEIC) bytes on the pasteboard as public.png. Keep those bytes as they are, under the
+            // extension they really have, so previews and pasting back see the right format.
+            let real = Thumbs.pictureType(of: data)
+            let keepAsIs = alreadyPNG && real != nil
+            let ext = keepAsIs ? (real?.preferredFilenameExtension ?? "png") : "png"
+            let name = UUID().uuidString + "." + ext
+            let dest = folder.appendingPathComponent(name)
+            guard let png = keepAsIs ? data : NSBitmapImageRep(data: data)?.representation(using: .png, properties: [:]) else {
                 DispatchQueue.main.async { CaptureLog.shared.add(app: who, result: "Failed: could not save the image") }
                 return
             }
@@ -435,6 +499,7 @@ final class ClipboardStore: ObservableObject {
         }
         if let i = clips.firstIndex(where: match) {
             clip.pinned = clips[i].pinned
+            clip.group = clips[i].group
             clip.linkTitle = clips[i].linkTitle
             clip.linkImageFile = clips[i].linkImageFile
             dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
@@ -575,8 +640,11 @@ final class ClipboardStore: ObservableObject {
         case .image:
             // Put the stored PNG back as it is. Handing macOS an NSImage instead makes it offer uncompressed TIFF,
             // so Finder pasted a 27 MB .tiff for a 2 MB screenshot.
-            if let url = clip.imageURL, let data = try? Data(contentsOf: url) { pb.setData(data, forType: .png) }
-            else if let data = clip.heldImage { pb.setData(data, forType: .png) }
+            // The type follows the bytes: older versions saved JPEG data under .png names.
+            if let data = clip.imageURL.flatMap({ try? Data(contentsOf: $0) }) ?? clip.heldImage {
+                let type = Thumbs.pictureType(of: data).map { NSPasteboard.PasteboardType($0.identifier) } ?? .png
+                pb.setData(data, forType: type)
+            }
         }
         // Tells other clipboard managers (and Transom itself) not to record the copy again.
         if clip.sensitive { pb.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")) }
@@ -595,33 +663,141 @@ final class ClipboardStore: ObservableObject {
     func togglePin(_ clip: Clip) {
         guard let i = clips.firstIndex(of: clip), !clip.sensitive else { return }
         clips[i].pinned.toggle()
+        if !clips[i].pinned { clips[i].group = nil }
         clips[i].modified = Date()
         dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
         save()
     }
 
-    func delete(_ clip: Clip) {
-        guard let i = clips.firstIndex(of: clip) else { return }
-        remove(at: i, tombstone: true)
-        save()
+    func delete(_ clip: Clip) { delete(ids: [clip.id]) }
+
+    /// Deletes items with a few seconds to undo: they leave the list at once, and are removed for good (files, tombstones,
+    /// a rewrite of their months) when the time is up, when something else is deleted, or when Transom quits.
+    func delete(ids: Set<UUID>) {
+        let doomed = clips.filter { ids.contains($0.id) }
+        guard !doomed.isEmpty else { return }
+        commitPendingDelete()
+        clips.removeAll { ids.contains($0.id) }
+        selection.subtract(ids)
+        if expanded.map({ ids.contains($0.id) }) == true { expanded = nil }
+        undoable = PendingUndo(clips: doomed)
+        let work = DispatchWorkItem { [weak self] in self?.commitPendingDelete() }
+        undoTimer = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.undoSeconds, execute: work)
     }
 
-    /// Delete many at once (Library selection): one save for the lot.
-    func delete(ids: Set<UUID>) {
-        removeAll(tombstone: true) { ids.contains($0.id) }
+    /// Brings back what the last delete took. Nothing has been written yet, so the items return exactly as they were.
+    func undoDelete() {
+        guard let pending = undoable else { return }
+        undoTimer?.cancel()
+        undoTimer = nil
+        undoable = nil
+        let ids = Set(pending.clips.map(\.id))
+        // Anything copied again while the delete waited is already back as a new item: keep that one, not both.
+        let present = Set(clips.compactMap(ClipRecord.identity(of:)))
+        let back = pending.clips.filter { ClipRecord.identity(of: $0).map { !present.contains($0) } ?? true }
+        for clip in pending.clips where !back.contains(clip) {
+            ClipboardFolder.addTombstone(clip.id)
+            discardFiles(of: clip, tombstone: false)
+        }
+        clips = (clips.filter { !ids.contains($0.id) } + back).sorted { $0.date > $1.date }
+        if back.count < pending.clips.count { save() }
+    }
+
+    /// Finishes a waiting delete now.
+    func commitPendingDelete(wait: Bool = false) {
+        guard let pending = undoable else { return }
+        undoTimer?.cancel()
+        undoTimer = nil
+        undoable = nil
+        ClipboardFolder.addTombstones(pending.clips.map(\.id))
+        for clip in pending.clips { discardFiles(of: clip, tombstone: false) }
         save()
+        if wait { diskQueue.sync {} }
     }
 
     func setPinned(_ pinned: Bool, ids: Set<UUID>) {
-        for i in clips.indices where ids.contains(clips[i].id) && clips[i].pinned != pinned {
+        for i in clips.indices where ids.contains(clips[i].id) && clips[i].pinned != pinned && !clips[i].sensitive {
             clips[i].pinned = pinned
+            if !pinned { clips[i].group = nil }
             clips[i].modified = Date()
             dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
         }
         save()
     }
 
+    // MARK: Groups
+
+    /// Every group name: the saved order first, then any that arrived with items from another Mac.
+    var groups: [String] {
+        var names = Settings.shared.v.clipGroups
+        for clip in clips { if let g = clip.pinGroup, !names.contains(g) { names.append(g) } }
+        return names
+    }
+
+    /// Puts items in a group (pinning them, since groups hold pins) or, with nil, takes them out and leaves them pinned.
+    func setGroup(_ name: String?, ids: Set<UUID>) {
+        let name = name.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
+        if let name, !Settings.shared.v.clipGroups.contains(name) { Settings.shared.v.clipGroups.append(name) }
+        for i in clips.indices where ids.contains(clips[i].id) && !clips[i].sensitive {
+            guard clips[i].group != name || (name != nil && !clips[i].pinned) else { continue }
+            clips[i].group = name
+            if name != nil { clips[i].pinned = true }
+            clips[i].modified = Date()
+            dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
+        }
+        save()
+    }
+
+    /// Adds an empty group (it shows in menus and the Library until it is deleted).
+    func addGroup(_ name: String) {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, !groups.contains(name) else { return }
+        Settings.shared.v.clipGroups.append(name)
+    }
+
+    func renameGroup(_ old: String, to new: String) {
+        let new = new.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !new.isEmpty, new != old else { return }
+        var names = groups
+        if let i = names.firstIndex(of: old) { names[i] = new } else { names.append(new) }
+        var seen = Set<String>()
+        Settings.shared.v.clipGroups = names.filter { seen.insert($0).inserted }
+        for i in clips.indices where clips[i].group == old {
+            clips[i].group = new
+            clips[i].modified = Date()
+            dirtyMonths.insert(ClipboardFolder.monthKey(clips[i].date))
+        }
+        save()
+    }
+
+    /// Removes a group. Its items stay pinned, as plain pins.
+    func deleteGroup(_ name: String) {
+        Settings.shared.v.clipGroups.removeAll { $0 == name }
+        setGroup(nil, ids: Set(clips.filter { $0.group == name }.map(\.id)))
+    }
+
+    /// Puts several items on the clipboard as one: text joined with the separator chosen in Settings, or all the files
+    /// together. `items` come in the order picked; with "Copy order" they are sorted oldest first. Pictures and sensitive
+    /// items are left out of joined text. False when there was nothing to copy.
+    @discardableResult
+    func copyTogether(_ items: [Clip], separator: JoinSeparator = Settings.shared.v.joinSeparator,
+                      order: JoinOrder = Settings.shared.v.joinOrder) -> Bool {
+        let pb = NSPasteboard.general
+        let items = Joining.ordered(items, by: order)
+        if !items.isEmpty, items.allSatisfy({ $0.kind == .file && !$0.sensitive }) {
+            pb.clearContents()
+            pb.writeObjects(items.flatMap(\.fileURLs) as [NSURL])
+            return true
+        }
+        guard let text = Joining.text(items, separator: separator) else { return false }
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+        return true
+    }
+
     func clearUnpinned() {
+        commitPendingDelete()
         guard isFullyLoaded else { requireFullHistory { [weak self] in self?.clearUnpinned() }; return }
         removeAll(tombstone: true) { !$0.pinned }
         save()
@@ -635,9 +811,10 @@ final class ClipboardStore: ObservableObject {
 
     /// Clears the unpinned items that match the current filters, so with Claude selected only Claude's items go.
     /// With no filter on it is the same as `clearUnpinned()`. Pinned items always stay.
-    func clearUnpinnedShown() {
-        guard isFullyLoaded else { requireFullHistory { [weak self] in self?.clearUnpinnedShown() }; return }
-        let ids = Set(unpinnedShown.map(\.id))
+    func clearUnpinnedShown(before cutoff: Date? = nil) {
+        commitPendingDelete()
+        guard isFullyLoaded else { requireFullHistory { [weak self] in self?.clearUnpinnedShown(before: cutoff) }; return }
+        let ids = Set(unpinnedShown.filter { clip in cutoff.map { clip.date < $0 } ?? true }.map(\.id))
         guard !ids.isEmpty else { return }
         removeAll(tombstone: true) { ids.contains($0.id) }
         save()
@@ -692,7 +869,7 @@ final class ClipboardStore: ObservableObject {
         c.modified = Date()
         if let data = c.heldImage {
             ClipboardFolder.prepare()
-            let name = UUID().uuidString + ".png"
+            let name = UUID().uuidString + "." + (Thumbs.pictureType(of: data)?.preferredFilenameExtension ?? "png")
             if (try? data.write(to: ClipboardFolder.imageWriteFolder.appendingPathComponent(name))) != nil { c.imageFile = name }
             c.heldImage = nil
         }
@@ -702,6 +879,7 @@ final class ClipboardStore: ObservableObject {
     }
 
     func eraseAll() {
+        commitPendingDelete()
         guard isFullyLoaded else { requireFullHistory { [weak self] in self?.eraseAll() }; return }
         removeAll(tombstone: true) { _ in true }
         diskQueue.async { ClipboardIndex.erase() }

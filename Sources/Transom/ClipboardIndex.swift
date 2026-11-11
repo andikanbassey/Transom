@@ -27,7 +27,7 @@ struct ClipRecord: Codable, Equatable {
     /// Two items with the same identity are the same copied thing. Pictures have none: they are compared by their files.
     static func identity(of clip: Clip) -> UUID? {
         switch clip.kind {
-        case .text: return clip.text.map { hash("text\0" + $0) }
+        case .text: return clip.text.map { hash("text\0" + Clip.contentKey($0)) }
         case .file: return clip.paths.map { hash("file\0" + $0.joined(separator: "\0")) }
         case .image: return nil
         }
@@ -109,7 +109,8 @@ struct ClipboardIndex: Codable {
     private var changed = false
 
     private enum CodingKeys: String, CodingKey { case version, files }
-    private static let currentVersion = 1
+    // 2: text identity uses `Clip.contentKey`, so near-identical copies count as the same item.
+    private static let currentVersion = 2
     private static var url: URL { supportDir.appendingPathComponent("clipboard-index.json") }
 
     var fileCount: Int { files.count }

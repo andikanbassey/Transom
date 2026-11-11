@@ -2,10 +2,33 @@
 
 Each release is written as what you can now do.
 
-## Unreleased
+## 0.8 (2026-11-11): select several items, groups for pins, paste one by one
+
+**New**
+- **Select several items in the drawer.** Hover a card and click the circle in its top left corner (or ⌘-click or ⇧-click a card, or right-click › Select). Then click to add items, ⇧-click to pick everything in between, or drag across the cards. The header becomes a bar with Pin, Group, Paste Together and Delete. Esc leaves select mode, ⌘A picks everything shown, Delete asks first, and Return pastes the items together.
+- **Groups for pins.** Sort pinned items into named groups, such as Replies, Code or Screenshots. Groups show as their own sections in the drawer and under Pinned in the Library sidebar, and the Pinned page can filter by group. Use Move to Group on any item or selection, or ⋯ › New Group. Right-click a group in the sidebar to rename or delete it; deleting a group keeps its items pinned. If you sync history between Macs, update them all: an older Transom keeps the pins but drops their groups when it saves.
+- **Right-click follows what you are doing.** With items selected, right-clicking anywhere in the clipboard panel offers actions for the selection. With a filter on (an app, a type or a time), it offers Select All Shown, Clear Unpinned, Never Record from that app and Show Everything. Right-clicking one of several selected items acts on all of them, as in Finder.
+- ⇧-click selects a run of items in the Library's Select mode too.
+- **Paste One by One.** Pick several items and choose Paste ▾ › Paste One by One: each ⌘V pastes the next one. The menu bar shows "2/5" while it runs, with Skip and Stop in its menu. Needs the Accessibility permission.
+- **Paste Together options:** separate items with a new line, a blank line, a comma, a space or a tab, in copy order or the order you picked them (Settings › Clipboard).
+- **Undo a delete.** Deleting shows "Deleted · Undo" for a few seconds (⌘Z works too), in the drawer and the Library.
+- **More ways to pick.** ⇧-arrows extend a selection, Space picks the item under the cursor, a drag near the edge scrolls, ⌥-drag unpicks, and dragging a picked card carries all the picked items into Finder, Notes or Mail.
+- **Group switcher in the drawer.** The ★ button is now a menu: everything, pinned only, pins in no group, or one group.
+- **Groups in the Library:** each group gets its own section on the All page, and you can drop cards on Pinned or a group in the sidebar.
+- **Filters say so.** A filtered page shows what it is narrowed to, with Show Everything, and an empty result says why.
+- **Clear Unpinned Older Than** a day, a week or a month, for what the filters show (for example, only Ghostty's old items).
+- Paste as Plain Text (drawer) and Copy as Plain Text (Library) in the right-click menu for formatted text.
+
+**Fixed**
+- **Search finds text anywhere in an item**, not only in its first lines, as well as link titles and file names. It never looks inside sensitive items.
+- **Pictures show their thumbnail.** Some apps put JPEG data on the clipboard labelled as PNG; those cards showed a generic file icon. New pictures are saved with their real type and older ones are read correctly.
+- **Copying the same thing again moves it to the top** even if it differs only in surrounding spaces, or for a link in tracking tags (utm_, fbclid…) or a trailing slash. The first launch rebuilds the local index once.
+- **Arrow keys work in the drawer.** Keyboard navigation never moved: macOS marks arrow keys as function keys, and that counted as a modifier.
+- **Keys the drawer handles stop there.** Esc used to leave a preview or select mode and then close the drawer as well.
+- Picked items that a new filter hides are let go, so a batch action never reaches items you cannot see.
 
 
-## 0.7.3 (2026-11-04): lighter with a long history
+## 0.7.3 (2026-11-04, first published in 0.8): lighter with a long history
 
 **Faster**
 - **Transom keeps less of a long history in memory.** It holds your pins and newest 200 items, and reads the rest from disk when you press Show older, search, filter or open the Library. With 20,000 items, memory with the drawer open dropped from over 42 MB to about 32 MB, and to about 27 MB with it closed. Copying something old still moves it to the top, and retention and restore still cover every month.

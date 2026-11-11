@@ -21,6 +21,8 @@ struct Clip: Codable, Identifiable, Equatable {
     var linkImageFile: String?
     var date = Date()
     var pinned = false
+    /// The named group a pinned item belongs to (a pinboard: "Replies", "Screenshots"). Nil for plain pins; ignored when unpinned.
+    var group: String?
     /// When this item last changed (copied again, pinned, preview fetched). Newest wins when two Macs disagree.
     var modified = Date()
     /// A password or secret: shown masked, never written to disk or synced, and removed after `ClipboardStore.sensitiveLifetime`.
@@ -34,8 +36,11 @@ struct Clip: Codable, Identifiable, Equatable {
     var heldImage: Data?
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, text, markdown, imageFile, paths, sourceApp, sourceBundleID, linkTitle, linkImageFile, date, pinned
+        case id, kind, text, markdown, imageFile, paths, sourceApp, sourceBundleID, linkTitle, linkImageFile, date, pinned, group
     }
+
+    /// The group this item shows under: only pinned items are grouped.
+    var pinGroup: String? { pinned && !sensitive ? group : nil }
 
     /// The saved cover image of a link, if it is on this Mac (see `LinkPreviews`).
     var linkImageURL: URL? {
@@ -169,6 +174,27 @@ extension Clip {
             guard let first = fileURLs.first else { return "File" }
             return fileURLs.count > 1 ? "\(first.lastPathComponent) + \(fileURLs.count - 1) more" : first.lastPathComponent
         }
+    }
+
+    /// What makes two copied texts the same item: surrounding spaces and line breaks do not count, and for a lone web link
+    /// neither do tracking parameters (utm_…, fbclid, gclid and the like) or a trailing slash. Copying it again moves
+    /// the older copy to the top instead of adding a second one.
+    static func contentKey(_ text: String) -> String {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.contains(where: \.isWhitespace), var parts = URLComponents(string: t),
+              ["http", "https"].contains(parts.scheme?.lowercased() ?? ""), parts.host != nil else { return t }
+        let tracking: Set<String> = ["fbclid", "gclid", "dclid", "msclkid", "mc_eid", "mc_cid", "igshid", "si", "ref_src", "_hsenc", "_hsmi"]
+        // Percent-encoded items, so "%2B" and "+" stay different (decoding them would make two different links one).
+        if let items = parts.percentEncodedQueryItems {
+            let kept = items.filter { !$0.name.lowercased().hasPrefix("utm_") && !tracking.contains($0.name.lowercased()) }
+            parts.percentEncodedQueryItems = kept.isEmpty ? nil : kept
+        }
+        if parts.fragment?.isEmpty == true { parts.fragment = nil }
+        parts.host = parts.host?.lowercased()
+        parts.scheme = parts.scheme?.lowercased()
+        var out = parts.string ?? t
+        if parts.query == nil, parts.fragment == nil, out.hasSuffix("/") { out.removeLast() }
+        return out
     }
 
     static func hexColor(_ s: String) -> Color? {

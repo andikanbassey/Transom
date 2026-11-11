@@ -50,7 +50,12 @@ final class TransomController {
             self?.handleLocalScroll(event)
             return self?.horizontalForWheel(event) ?? event
         }
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in self?.handleKey(event) ?? event }
+        // Not `self?.handleKey(event) ?? event`: that turns "used it" (nil) back into the event, so every handled key went on to
+        // the panel too, and Esc left select mode and then closed the drawer.
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            return self.handleKey(event)
+        }
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             if self?.isVisible == true { self?.hide(restoreFocus: false) }
         }
@@ -162,15 +167,47 @@ final class TransomController {
 
     // MARK: Keys
 
+    /// The ⇧-arrow run in progress, if any.
+    private let keySelect = KeySelect()
+
     /// Quick paste: modifier + 1…9 pastes the nth item in the list.
     /// Keyboard use of the drawer: arrows move through clipboard items, Return pastes (⌥Return pastes plain text),
-    /// Space previews, Esc steps back, ⌘F searches, and just typing starts a search. Returns true if the key was used.
+    /// Space previews, Esc steps back, ⌘F searches, and just typing starts a search. ⇧-arrows pick a run of items; in select
+    /// mode the arrows move the cursor and Space picks or unpicks the item under it. Returns true if the key was used.
     private func navigate(_ event: NSEvent) -> Bool {
         guard !(panel.firstResponder is NSTextView) || event.keyCode == 53 else { return false }
         let store = AppModel.shared.clipboard
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        // Only the keys a person holds: arrow keys always carry .function (and .numericPad), which made every arrow look
+        // like it had a modifier, so keyboard navigation in the drawer never moved.
+        let flags = event.modifierFlags.intersection([.shift, .control, .option, .command])
         let cards = settings.clipboardCards
+        if event.keyCode == 53, store.naming != nil { withAnimation { store.naming = nil }; return true }
+        // ⇧ with an arrow along the strip (or list) picks a run of items, entering select mode if needed.
+        let along: [UInt16: Int] = cards ? [123: -1, 124: 1] : [126: -1, 125: 1]
+        if let delta = along[event.keyCode], store.expanded == nil {
+            if flags == .shift { keySelect.extend(delta, store: store); return true }
+            keySelect.reset()
+        }
+        // Select mode: Esc leaves it, ⌘A picks everything shown, Delete asks to delete the picked items, Return pastes them together.
+        if store.selecting, !(panel.firstResponder is NSTextView) {
+            switch event.keyCode {
+            case 53:
+                if store.pendingDelete != nil { store.pendingDelete = nil } else { store.endSelecting() }
+                return true
+            case 0 where flags == .command: store.selectAllShown(); return true
+            case 51, 117: store.askDeleteSelection(); return true
+            case 49 where flags.isEmpty:
+                // Space flips the item under the cursor.
+                if let id = store.cursor { store.clickSelect(id, extend: false) }
+                return true
+            case 36, 76:
+                if let ids = store.pendingDelete { store.delete(ids: ids); store.endSelecting() } else { store.useSelection(paste: true) }
+                return true
+            default: break
+            }
+        }
         switch event.keyCode {
+        case 0 where flags == .command && store.expanded == nil: store.selectAllShown()
         case 123 where cards && flags.isEmpty: store.moveCursor(-1)
         case 124 where cards && flags.isEmpty: store.moveCursor(1)
         case 126 where !cards && flags.isEmpty: store.moveCursor(-1)
@@ -183,6 +220,7 @@ final class TransomController {
             store.expanded = store.expanded == nil ? clip : nil
         case 53 where store.expanded != nil: store.expanded = nil
         case 3 where flags == .command: store.searching = true
+        case 6 where flags == .command && store.undoable != nil: store.undoDelete()
         default:
             // A plain letter or number starts a search, as in Spotlight.
             guard flags.isEmpty || flags == .shift, store.expanded == nil, let chars = event.characters, !chars.isEmpty,
@@ -198,7 +236,9 @@ final class TransomController {
         guard isVisible, panel.isKeyWindow else { return event }
         if navigate(event) { return nil }
         guard settings.quickPaste else { return event }
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        // Only the keys a person holds: arrow keys always carry .function (and .numericPad), which made every arrow look
+        // like it had a modifier, so keyboard navigation in the drawer never moved.
+        let flags = event.modifierFlags.intersection([.shift, .control, .option, .command])
         guard flags == settings.quickPasteModifier.flag, let ch = event.charactersIgnoringModifiers,
               let n = Int(ch), (1...9).contains(n) else { return event }
         let list = AppModel.shared.clipboard.visible
