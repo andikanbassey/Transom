@@ -48,9 +48,9 @@ final class PasteStack: ObservableObject {
         items = queue
         position = 0
         put(items[0])
+        // Only ⌘V in other apps counts: pasting into Transom's own search field or notes must not move the stack on.
         let onKey: (NSEvent) -> Void = { [weak self] e in self?.keyDown(e) }
         if let g = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: onKey) { monitors.append(g) }
-        if let l = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { onKey($0); return $0 }) { monitors.append(l) }
         // Anything else landing on the clipboard (the user copied something) ends the stack.
         watch = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             guard let self, !self.advancing, NSPasteboard.general.changeCount != self.expectedChange else { return }
@@ -100,9 +100,14 @@ final class PasteStack: ObservableObject {
 
     private func advance() {
         guard isActive else { return }
-        guard let n = Self.next(after: position, count: items.count) else { stop(); return }
-        position = n
-        put(items[n])
+        // Items deleted since the stack started are skipped, not pasted from the stack's old copy.
+        var n = Self.next(after: position, count: items.count)
+        while let i = n, !AppModel.shared.clipboard.clips.contains(where: { $0.id == items[i].id }) {
+            n = Self.next(after: i, count: items.count)
+        }
+        guard let next = n else { stop(); return }
+        position = next
+        put(items[next])
         advancing = false
     }
 

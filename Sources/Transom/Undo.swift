@@ -14,7 +14,6 @@ struct UndoToast: View {
                         .font(.system(size: 12, weight: .medium)).lineLimit(1).truncationMode(.tail)
                     Button("Undo") { withAnimation(.easeOut(duration: 0.2)) { store.undoDelete() } }
                         .buttonStyle(.plain).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.accentColor)
-                        .keyboardShortcut("z", modifiers: .command)
                         .accessibilityHint("Brings back what was just deleted")
                 }
                 .padding(.horizontal, 14).padding(.vertical, 8)

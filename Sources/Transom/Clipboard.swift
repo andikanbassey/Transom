@@ -693,7 +693,15 @@ final class ClipboardStore: ObservableObject {
         undoTimer = nil
         undoable = nil
         let ids = Set(pending.clips.map(\.id))
-        clips = (clips.filter { !ids.contains($0.id) } + pending.clips).sorted { $0.date > $1.date }
+        // Anything copied again while the delete waited is already back as a new item: keep that one, not both.
+        let present = Set(clips.compactMap(ClipRecord.identity(of:)))
+        let back = pending.clips.filter { ClipRecord.identity(of: $0).map { !present.contains($0) } ?? true }
+        for clip in pending.clips where !back.contains(clip) {
+            ClipboardFolder.addTombstone(clip.id)
+            discardFiles(of: clip, tombstone: false)
+        }
+        clips = (clips.filter { !ids.contains($0.id) } + back).sorted { $0.date > $1.date }
+        if back.count < pending.clips.count { save() }
     }
 
     /// Finishes a waiting delete now.
@@ -789,6 +797,7 @@ final class ClipboardStore: ObservableObject {
     }
 
     func clearUnpinned() {
+        commitPendingDelete()
         guard isFullyLoaded else { requireFullHistory { [weak self] in self?.clearUnpinned() }; return }
         removeAll(tombstone: true) { !$0.pinned }
         save()
@@ -803,6 +812,7 @@ final class ClipboardStore: ObservableObject {
     /// Clears the unpinned items that match the current filters, so with Claude selected only Claude's items go.
     /// With no filter on it is the same as `clearUnpinned()`. Pinned items always stay.
     func clearUnpinnedShown(before cutoff: Date? = nil) {
+        commitPendingDelete()
         guard isFullyLoaded else { requireFullHistory { [weak self] in self?.clearUnpinnedShown(before: cutoff) }; return }
         let ids = Set(unpinnedShown.filter { clip in cutoff.map { clip.date < $0 } ?? true }.map(\.id))
         guard !ids.isEmpty else { return }
@@ -859,7 +869,7 @@ final class ClipboardStore: ObservableObject {
         c.modified = Date()
         if let data = c.heldImage {
             ClipboardFolder.prepare()
-            let name = UUID().uuidString + ".png"
+            let name = UUID().uuidString + "." + (Thumbs.pictureType(of: data)?.preferredFilenameExtension ?? "png")
             if (try? data.write(to: ClipboardFolder.imageWriteFolder.appendingPathComponent(name))) != nil { c.imageFile = name }
             c.heldImage = nil
         }
@@ -869,6 +879,7 @@ final class ClipboardStore: ObservableObject {
     }
 
     func eraseAll() {
+        commitPendingDelete()
         guard isFullyLoaded else { requireFullHistory { [weak self] in self?.eraseAll() }; return }
         removeAll(tombstone: true) { _ in true }
         diskQueue.async { ClipboardIndex.erase() }

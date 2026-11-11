@@ -526,6 +526,12 @@ import Testing
         store.undoDelete()
         #expect(store.clips.contains { $0.id == a.id } && store.clips.contains { $0.id == b.id })
         #expect(store.undoable == nil)
+        // Copied again while its delete waited: Undo keeps the new copy and does not bring back a second one.
+        store.delete(ids: [b.id])
+        var again = Clip(kind: .text); again.text = b.text
+        store.clips.insert(again, at: 0)
+        store.undoDelete()
+        #expect(store.clips.filter { $0.text == b.text }.count == 1)
         store.delete(ids: [a.id])
         store.commitPendingDelete(wait: true)
         #expect(store.undoable == nil)

@@ -74,5 +74,7 @@ import Testing
         #expect(Clip.contentKey("https://Example.com/a/") == Clip.contentKey("https://example.com/a"))
         #expect(Clip.contentKey("https://example.com/a?id=4") != Clip.contentKey("https://example.com/a?id=5"))
         #expect(Clip.contentKey("https://open.spotify.com/track/1?si=xyz") == "https://open.spotify.com/track/1")
+        // An encoded plus is not a space: these are two different searches.
+        #expect(Clip.contentKey("https://example.com/s?q=1%2B2") != Clip.contentKey("https://example.com/s?q=1+2"))
     }
 }

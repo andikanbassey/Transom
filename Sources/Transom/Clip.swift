@@ -184,9 +184,10 @@ extension Clip {
         guard !t.contains(where: \.isWhitespace), var parts = URLComponents(string: t),
               ["http", "https"].contains(parts.scheme?.lowercased() ?? ""), parts.host != nil else { return t }
         let tracking: Set<String> = ["fbclid", "gclid", "dclid", "msclkid", "mc_eid", "mc_cid", "igshid", "si", "ref_src", "_hsenc", "_hsmi"]
-        if let items = parts.queryItems {
+        // Percent-encoded items, so "%2B" and "+" stay different (decoding them would make two different links one).
+        if let items = parts.percentEncodedQueryItems {
             let kept = items.filter { !$0.name.lowercased().hasPrefix("utm_") && !tracking.contains($0.name.lowercased()) }
-            parts.queryItems = kept.isEmpty ? nil : kept
+            parts.percentEncodedQueryItems = kept.isEmpty ? nil : kept
         }
         if parts.fragment?.isEmpty == true { parts.fragment = nil }
         parts.host = parts.host?.lowercased()
